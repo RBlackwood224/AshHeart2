@@ -100,15 +100,6 @@ R.drawWorld = function (G, v) {
   }
   // props
   if (G.scene === 'mine') this.drawMineProps(G, v);
-  if (G.scene === 'mine') for (const vn of m.veins || []) if (vn.hp > 0 && vn.hp < 3 && this.inView(v, vn.x, vn.y)) {
-    // cracks spread with every blow
-    const X = vn.tx * AH.T, Y = vn.ty * AH.T + 4, sh = vn.hitT > 0 ? (Math.random() < 0.5 ? -1 : 1) : 0;
-    ctx.fillStyle = '#060408';
-    const cr = [[7, 0], [7, 1], [6, 2], [6, 3], [7, 4], [8, 5], [8, 6], [9, 7], [5, 3], [4, 4], [3, 4], [9, 5], [10, 4], [11, 4]];
-    const n = vn.hp === 2 ? 8 : cr.length;
-    for (let k = 0; k < n; k++) ctx.fillRect(X + cr[k][0] + sh, Y + cr[k][1], 1, 1);
-    if (vn.hp === 1) { ctx.fillRect(X + 2 + sh, Y + 8, 3, 1); ctx.fillRect(X + 12 + sh, Y + 1, 1, 3); }
-  }
   // telegraphs
   for (const f of G.fx) if (f.k === 'tele') {
     const k = 1 - f.life / f.max; ctx.fillStyle = '#ff3b1f';
@@ -145,6 +136,7 @@ R.drawWorld = function (G, v) {
     ctx.fillStyle = AH.OUT; ctx.fillRect(pr.x - 5, pr.y - 12 + b, 10, 9); ctx.fillStyle = '#e8dcc4'; ctx.fillRect(pr.x - 4, pr.y - 11 + b, 8, 7); ctx.fillStyle = '#8a6a3a'; ctx.fillRect(pr.x - 3, pr.y - 9 + b, 6, 1); ctx.fillRect(pr.x - 3, pr.y - 7 + b, 4, 1);
     if (Math.floor(G.time * 4) % 2) { ctx.fillStyle = '#e8d0ff'; ctx.fillRect(pr.x + 4, pr.y - 15 + b, 1, 1); ctx.fillRect(pr.x - 6, pr.y - 10 + b, 1, 1); }
   } });
+  if (G.scene === 'mine') for (const vn of m.veins || []) if (vn.hp > 0 && this.inView(v, vn.x, vn.y)) list.push({ y: vn.y - 2, d: () => this.drawOreRock(ctx, G, vn) });
   for (const p of G.players) list.push({ y: p.y, d: () => p.draw(ctx, G) });
   for (const e of G.enemies) if (this.inView(v, e.x, e.y, 40)) list.push({ y: e.y, d: () => e.draw(ctx, G) });
   for (const pt of G.pets) if (pt.active) list.push({ y: pt.y + (pt.kind === 'canary' ? 30 : 0), d: () => this.drawPet(G, pt) });
@@ -278,7 +270,7 @@ R.collectLights = function (G, v) {
     }
     if (G.map.forge) add(G.map.forge.x, G.map.forge.y, 56, 0.9, [1.0, 0.62, 0.32]);
   }
-  if (G.scene === 'mine') for (const vn of G.map.veins || []) if (vn.hp > 0) add(vn.x, vn.y - 6, vn.gem ? 30 : 22, vn.gem ? 0.5 : 0.32, vn.gem ? [0.7, 1.05, 1.3] : [1.25, 0.95, 0.55]);
+  if (G.scene === 'mine') for (const vn of G.map.veins || []) if (vn.hp > 0) add(vn.x, vn.y - 8, vn.gem ? 30 : 22, vn.gem ? 0.5 : 0.3, vn.gem ? [0.7, 1.05, 1.3] : [1.25, 0.95, 0.55]);
   if (G.scene === 'mine' && G.map.biome.id === 'ashen') add(v.camX + v.w / 2, v.camY - 40, 220, 0.18, [1.3, 0.6, 0.4]);
   return L;
 };
@@ -353,18 +345,17 @@ R.drawEmissive = function (G, v) {
   }
   for (const e of G.enemies) if (this.inView(v, e.x, e.y, 40)) e.drawEm(ctx, G);
   if (G.scene === 'mine') for (const p of m.props) if (p.type === 'tablet' && this.inView(v, p.x, p.y)) AH.drawSprEm(ctx, AH.SPR.tablet, p.x - 6, p.y - 8);
-  // ore glints so veins catch the eye even in the dark
+  // ore glints so rocks catch the eye even in the dark
   if (G.scene === 'mine') (m.veins || []).forEach((vn, i) => {
     if (vn.hp <= 0 || !this.inView(v, vn.x, vn.y)) return;
-    if (vn.hitT > 0) vn.hitT -= 1 / 60;
-    const X = vn.tx * AH.T, Y = vn.ty * AH.T + 4, ph = (G.time * 0.7 + i * 0.37) % 1.6;
-    const pts = [[3, 2], [10, 3], [5, 7], [12, 7]], q = pts[(Math.floor(G.time * 0.7 + i * 0.37)) % 4];
-    ctx.fillStyle = vn.gem ? '#6fd6e8' : '#d8a048'; ctx.fillRect(X + 3, Y + 2, 1, 1); ctx.fillRect(X + 10, Y + 3, 1, 1);
+    const X = vn.x - 7, Y = vn.y - 13, ph = (G.time * 0.7 + i * 0.37) % 1.6;
+    const pts = vn.gem ? [[3, 1], [9, 0], [12, 4], [6, 5]] : [[3, 5], [9, 3], [11, 8], [5, 9]], q = pts[(Math.floor(G.time * 0.7 + i * 0.37)) % 4];
     if (ph < 0.35) {
       const r = ph < 0.12 || ph > 0.24 ? 1 : 2, gx = X + q[0], gy = Y + q[1];
       ctx.fillStyle = '#ffffff'; ctx.fillRect(gx, gy, 1, 1);
       ctx.fillStyle = vn.gem ? '#bff4ff' : '#fff0b8'; for (let d = 1; d <= r; d++) { ctx.fillRect(gx - d, gy, 1, 1); ctx.fillRect(gx + d, gy, 1, 1); ctx.fillRect(gx, gy - d, 1, 1); ctx.fillRect(gx, gy + d, 1, 1); }
     }
+    if (vn.gem) { ctx.fillStyle = '#6fd6e8'; ctx.fillRect(X + 4, Y + 1, 1, 2); ctx.fillRect(X + 9, Y, 1, 2); }
   });
   // glowing projectiles
   for (const pr of G.projs) {
@@ -396,10 +387,11 @@ R.drawEmissive = function (G, v) {
   for (const p of v.players) {
     const it = p.interactable;
     if (!it || !it.label || p.dead) continue;
-    const label = it.label, tw = AH.textW(label) + 16;
+    const key = p.device === 'kb1' ? 'J' : p.device === 'kb2' ? 'N1' : 'A';
+    const label = it.label, kw = AH.textW(key), tw = AH.textW(label) + kw + 12;
     const x = Math.round(it.x - tw / 2), y = Math.round(it.y - 34);
     AH.frame(ctx, x, y, tw, 12, { fill: '#15121b', edge: '#c9a24a', hi: '#f2e3b3' });
-    AH.text(ctx, x + 4, y + 3, 'A', '#ffb347'); AH.text(ctx, x + 12, y + 3, label, '#f2e3b3');
+    AH.text(ctx, x + 4, y + 3, key, '#ffb347'); AH.text(ctx, x + 8 + kw, y + 3, label, '#f2e3b3');
   }
   ctx.restore();
 };
@@ -583,6 +575,34 @@ R.drawLamp = function (ctx, l, i, lit, t, emissive, night) {
       ctx.fillStyle = '#f2e3c0'; ctx.fillRect(Math.round(cx + Math.cos(a) * (6 + mth * 2)), Math.round(cy + Math.sin(a * 1.3) * 5), 1, 1);
     }
   }
+};
+// free-standing ore boulder: stone tinted by the biome, ore nuggets or crystal shards, cracks per blow
+R.drawOreRock = function (ctx, G, vn) {
+  if (vn.hitT > 0) vn.hitT -= 1 / 60;
+  const b = G.map.biome.brick, sh = vn.hitT > 0 ? (Math.random() < 0.5 ? -1 : 1) : 0;
+  const X = vn.x - 7 + sh, Y = vn.y - 13;
+  const R2 = (a, c, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(X + a, Y + c, w, h); };
+  ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillRect(vn.x - 7, vn.y - 1, 15, 2);
+  const shape = ['....######....', '..##########..', '.############.', '##############', '##############', '##############', '.############.', '.############.', '..##########..', '...########...', '....######....'];
+  const lite = AH.mix(b[3], '#9a92a4', 0.35), mid = AH.mix(b[2], '#6a6274', 0.3), dark = AH.mix(b[1], '#2a2432', 0.3);
+  shape.forEach((row, j) => { for (let i = 0; i < row.length; i++) if (row[i] === '#') {
+    const edge = row[i - 1] !== '#' || row[i + 1] !== '#' || !shape[j - 1] || shape[j - 1][i] !== '#' || !shape[j + 1] || shape[j + 1][i] !== '#';
+    R2(i, j + 2, 1, 1, edge ? AH.OUT : (j < 4 && i < 9) ? lite : (j > 7 || i > 10) ? dark : mid);
+  } });
+  R2(4, 4, 3, 1, AH.mix(lite, '#ffffff', 0.25));
+  if (vn.gem) {
+    // crystal shards growing out of the top
+    const cr = [[3, -1, 2, 5], [7, -3, 2, 7], [10, 0, 2, 4]];
+    for (const [a, c, w, h] of cr) { R2(a - 1, c - 1, w + 2, h + 1, AH.OUT); R2(a, c, w, h, '#2a96b8'); R2(a, c, 1, h, '#6fd6e8'); R2(a, c, 1, 1, '#e8fbff'); }
+  } else {
+    const nug = [[3, 5, 3, 2], [8, 4, 3, 3], [5, 9, 3, 2], [10, 8, 2, 2]];
+    for (const [a, c, w, h] of nug) { R2(a, c, w, h, '#5a3a14'); R2(a, c, w - 1, h - 1, '#d8a048'); R2(a, c, 1, 1, '#fff0b8'); }
+  }
+  // cracks spread with every blow
+  const dmg = (vn.max || 3) - vn.hp;
+  if (dmg >= 1) { R2(7, 3, 1, 2, AH.OUT); R2(6, 5, 1, 2, AH.OUT); R2(7, 7, 1, 1, AH.OUT); }
+  if (dmg >= 2) { R2(8, 8, 1, 2, AH.OUT); R2(3, 7, 3, 1, AH.OUT); R2(11, 5, 1, 2, AH.OUT); }
+  if (dmg >= 3) { R2(2, 4, 1, 2, AH.OUT); R2(9, 11, 2, 1, AH.OUT); R2(12, 9, 1, 2, AH.OUT); }
 };
 R.hotbar = function (G, p) {
   const ctx = this.ctx;

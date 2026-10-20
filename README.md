@@ -1,4 +1,4 @@
-# ASHHEART — The Mines of Dunmere BETA
+# ASHHEART — The Mines of Dunmere
 
 A pixel-art action roguelite for the browser. Dive 100 floors below the town of Dunmere, keep its lamps burning, and silence the Heart of Ash.
 
@@ -32,13 +32,13 @@ English, Français and Magyar — switch under Options → Language (the first s
 - 100 floors in 10 biomes, a boss every 10 floors, ASHHEART on floor 100, then endless depths and a daily time attack.
 - 26 item sets (2/3/4/5-piece bonuses and unique set powers), legendary and mythic items, runes and runewords.
 - Four story quest chains from the people of Dunmere, with unique rewards.
-- Mining: glittering ore and crystal veins in the walls break after a few blows. Ore upgrades and reforges gear at the smith, crystals add sockets.
+- Mining: ore and crystal rocks stand in the mine's rooms and break after a few blows (any weapon, bows and staves too). Ore upgrades and reforges gear at the smith, crystals add sockets.
 - Gravestones: where a hero falls, a grave stays on that floor. Read it to see who died there, to what, and with which stats.
 - Nemesis system, legendary beasts, floor events, bounties, a town that remembers what you did.
 
 ## Co-op
 - **Local:** up to 3 players. Press START on another controller (or NumEnter for the second keyboard player) to join with your own hero. Together you share one screen; wander apart and it splits, with arrows pointing at your friends.
-- **Online:** Title → Online co-op → Host. Friends choose Join and type the 5-letter code. The host runs the game; everyone keeps their own loot and their own save.
+- **Online:** Title → Online co-op → Host a game opens a lobby with the 5-letter room code. Friends choose Join a game and type the code; they wait in the lobby until the host starts. Nobody can join a game that has already started. The host runs the game; everyone keeps their own loot and their own save.
 
 ## Music
 Drop your own tracks into the `music` folder: `title.mp3`, `town.mp3`, `mine.mp3`, `mine2.mp3`, `mine3.mp3`, `boss.mp3`. The mine plays its tracks one after another. Missing files are simply skipped. Music and sound volume are under Options.

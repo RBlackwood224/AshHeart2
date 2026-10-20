@@ -45,7 +45,7 @@ GP.meleeSwing = function (p, mult, range, arc, heavy) {
   // ore veins and secret walls
   const tx = Math.floor((p.x + Math.cos(p.aim) * 14) / AH.T), ty = Math.floor((p.y - 4 + Math.sin(p.aim) * 14) / AH.T);
   if (this.map && !this.map.town) {
-    for (const [ox, oy] of [[0, 0], [0, -1], [1, 0], [-1, 0]]) {
+    for (const [ox, oy] of [[0, 0], [0, -1], [0, 1], [1, 0], [-1, 0]]) {
       const X = tx + ox, Y = ty + oy;
       const v = (this.map.veins || []).find(v => v.tx === X && v.ty === Y && v.hp > 0);
       if (v) { this.mineVein(p, v); break; }
@@ -63,9 +63,8 @@ GP.mineVein = function (p, v) {
     AH.Audio.sfx('break'); this.shake(3); AH.fx.dust(this, v.x, v.y, '#8a8296', 16);
     this.dropItem(v.x, v.y + 6, AH.makeCons(v.gem ? 'gem' : 'ore', n), p.pid);
     if (Math.random() < 0.06) this.dropItem(v.x, v.y + 6, AH.genRune(AH.rand, this.floorNo), p.pid);
-    // redraw vein as plain wall
-    const x = this.map.canvas.getContext('2d');
-    const b = this.map.biome; x.fillStyle = b.brick[2]; x.fillRect(v.tx * AH.T + 1, v.ty * AH.T + 5, AH.T - 2, 10);
+    this.map.set(v.tx, v.ty, AH.TILE.FLOOR);
+    for (let k = 0; k < 8; k++) this.fx.push({ k: 'px', x: v.x + (Math.random() - 0.5) * 12, y: v.y - 6 - Math.random() * 6, vx: (Math.random() - 0.5) * 60, vy: -30 - Math.random() * 40, col: Math.random() < 0.5 ? this.map.biome.brick[3] : (v.gem ? '#6fd6e8' : '#d8a048'), life: 0.6 });
   }
 };
 GP.breakSecret = function (X, Y, p) {
@@ -108,7 +107,9 @@ GP.updateProjs = function (dt) {
       continue;
     }
     pr.x += pr.vx * dt; pr.y += pr.vy * dt;
-    if (this.map.solidAt(pr.x, pr.y + 6)) { pr.life = 0; if (pr.k === 'fire') this.explosion(pr.x, pr.y, 26, pr.dmg, 'player', false, pr.owner); AH.fx.spark(this, pr.x, pr.y, pr.col, 3); continue; }
+    if (this.map.solidAt(pr.x, pr.y + 6)) {
+      if (!pr.enemy && pr.owner && pr.owner.ch && this.map.veins) { const tx = Math.floor(pr.x / AH.T), ty = Math.floor((pr.y + 6) / AH.T); const v = this.map.veins.find(v => v.hp > 0 && v.tx === tx && v.ty === ty); if (v) this.mineVein(pr.owner, v); }
+      pr.life = 0; if (pr.k === 'fire') this.explosion(pr.x, pr.y, 26, pr.dmg, 'player', false, pr.owner); AH.fx.spark(this, pr.x, pr.y, pr.col, 3); continue; }
     if (pr.enemy) {
       for (const p of this.players) {
         if (p.dead) continue;

@@ -344,6 +344,10 @@ P.update = function (G, dt, pad) {
   // input (keyboard/pad, or mouse goals for the PC player)
   let ax = pad.ax, ay = pad.ay, mouseAtk = false;
   if (Math.hypot(ax, ay) > 0.2) { this.mTarget = this.mInter = this.mDest = this.mVein = null; }
+  else if (this.mStand && this.mCursor && G.scene !== 'town') {
+    // Shift + click: stand still and attack toward the cursor
+    const c = this.mCursor; this.aim = Math.atan2(c.y - (this.y - 6), c.x - this.x); this.face = c.x >= this.x ? 1 : -1; this.mAimLock = 0.25; mouseAtk = true;
+  }
   else if (this.mTarget || this.mInter || this.mDest || this.mVein) {
     const steer = (tx, ty) => {
       // follow a grid path around walls, recomputed now and then
@@ -356,7 +360,7 @@ P.update = function (G, dt, pad) {
     if (this.mTarget && (this.mTarget.dead || this.mTarget.hidden || this.mTarget.gone)) this.mTarget = null;
     if (this.mTarget) {
       const e = this.mTarget, b = this.wbase(), d = Math.hypot(e.x - this.x, (e.y - 4) - (this.y - 6));
-      const reach = b.ranged ? 150 : b.range + e.r - 3;
+      const reach = b.ranged ? 165 : b.range + e.r - 3;
       if (d > reach || (b.ranged && !G.map.los(this.x, this.y - 6, e.x, e.y - 4))) steer(e.x, e.y);
       else {
         this.aim = Math.atan2(e.y - 4 - (this.y - 6), e.x - this.x); this.face = e.x >= this.x ? 1 : -1; this.mAimLock = 0.25;
@@ -369,12 +373,13 @@ P.update = function (G, dt, pad) {
       else if (Math.hypot(it.x - this.x, it.y - this.y) < 6) this.mInter = null;
       else steer(it.x, it.y);
     } else if (this.mVein) {
-      // walk up to the rock face and swing at it until it breaks
-      const vn = this.mVein, fx = vn.x, fy = (vn.ty + 1) * AH.T + 6;
+      // walk up to the ore rock and hit it until it breaks (ranged heroes shoot it from a distance)
+      const vn = this.mVein, cy = vn.y - 6, d = Math.hypot(vn.x - this.x, cy - (this.y - 4)), b = this.wbase();
+      const ok = b.ranged ? d < 110 && G.map.los(this.x, this.y - 6, vn.x, cy + 4) || d < 18 : d < 19;
       if (vn.hp <= 0) this.mVein = null;
-      else if (Math.hypot(fx - this.x, fy - this.y) > 9) { steer(fx, fy); this.mStuck = Math.hypot(this.x - this.lastPosX, this.y - this.lastPosY) < 0.05 ? (this.mStuck || 0) + dt : 0; if (this.mStuck > 1.2) { this.mVein = null; this.mStuck = 0; } }
+      else if (!ok) { steer(vn.x, vn.y + 10); this.mStuck = Math.hypot(this.x - this.lastPosX, this.y - this.lastPosY) < 0.05 ? (this.mStuck || 0) + dt : 0; if (this.mStuck > 1.2) { this.mVein = null; this.mStuck = 0; } }
       else {
-        this.aim = Math.atan2(vn.ty * AH.T + 10 - (this.y - 4), vn.x - this.x); this.face = vn.x >= this.x ? 1 : -1; this.mAimLock = 0.25;
+        this.aim = Math.atan2(cy - (this.y - 6), vn.x - this.x); this.face = vn.x >= this.x ? 1 : -1; this.mAimLock = 0.25;
         mouseAtk = true;
       }
     } else if (this.mDest) {
@@ -441,6 +446,7 @@ P.autoAim = function (G, r) {
   if (e) { this.aim = Math.atan2(e.y - 4 - (this.y - 6), e.x - this.x); this.face = e.x >= this.x ? 1 : -1; }
 };
 P.tryAttack = function (G, auto) {
+  if (G.scene === 'town') return;
   if (this.cd.atk > 0 || this.state === 'dodge' || this.state === 'heavyWind' || this.state === 'heavy') return;
   this.autoAim(G, this.wbase().ranged ? 150 : 50);
   const b = this.wbase(), t = this.atkTime();
@@ -455,6 +461,7 @@ P.tryAttack = function (G, auto) {
   }
 };
 P.tryHeavy = function (G) {
+  if (G.scene === 'town') return;
   if (this.cd.atk > 0 || this.state === 'dodge' || this.state === 'heavyWind') return;
   this.autoAim(G, this.wbase().ranged ? 150 : 60);
   this.state = 'heavyWind'; this.st = 0.22; this.stMax = 0.22; this.cd.atk = this.atkTime() * 2.1;
@@ -478,6 +485,7 @@ P.tryDodge = function (G) {
   if (this.S.powers.has('frostdodge')) G.nova(this, this.x, this.y, 40, this.spellPower(6) * 0.6, 'frost');
 };
 P.trySkill = function (G, slot) {
+  if (G.scene === 'town') return;
   const id = this.ch.slots[slot]; if (!id) return;
   const sk = AH.SKILLS[id], rank = this.ch.skills[id] || 1;
   if ((this.skillCd[id] || 0) > 0) return;

@@ -113,7 +113,7 @@ G.heart = AH.sprite(["....rr...rr....", "...rRRr.rRRr...", "..rRyyRrRyyRr..", ".
 
 // ---- companions ----
 G.dog = AH.sprite(["........DD...", ".......Dlld..", "D......dlkdn.", "dD...cclddD..", ".dllllldD....", ".dddddddD....", ".dD.d.dD.....", ".DD.D.DD....."], { d: '#9a6436', D: '#6a4024', l: '#c48c56', k: '#120e16', n: '#2a1a10', c: '#c23b3b' });
-G.pet_rat = AH.sprite([".....pR...", "..rrrrrkR.", ".rrrrrrrrp", "p.R..R.R..", "pp........"], { r: '#8e8898', R: '#5e5868', p: '#e8a0b0', k: '#120e16' });
+G.pet_rat = AH.sprite([".....pR...", "..rrrrrkR.", ".rrrrrrrrp", "p.R..R.R..", "pp........"], { r: '#f2f0f4', R: '#b4aec2', p: '#f0a8b8', k: '#c8304a' });
 G.canary = AH.sprite(["..yy..", ".yykyo", "yyyyy.", "YyyY..", ".Y.Y.."], { y: '#f8d83c', Y: '#c9a020', o: '#f08a24', k: '#120e16' });
 
 // ---- npcs ----

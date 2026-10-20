@@ -42,7 +42,8 @@ U.hint = function (ctx, s) {
   AH.text(ctx, UW / 2, UH - 11, t, '#6a6274', { align: 'center' });
 };
 U.btnName = function (G, m, b) {
-  const d = m.dev || '';
+  // name the buttons of whatever the player is actually using right now
+  const d = (m && m.dev) || (AH.Input.lastDevice && AH.Input.lastDevice()) || '';
   const kb1 = { a: 'ENTER', b: 'ESC', x: 'K', y: '1', lb: '2', rb: '3', start: 'ESC', select: 'TAB' };
   const kb2 = { a: 'NUM1', b: 'NUM2', x: 'NUM4', y: 'NUM5', lb: 'NUM7', rb: 'NUM8', start: 'NUMENTER', select: 'NUM+' };
   if (d === 'kb1') return kb1[b]; if (d === 'kb2') return kb2[b];
@@ -259,11 +260,13 @@ U.nameInput = function (G, m, show) {
   el = document.createElement('input');
   el.id = 'nameInput'; el.type = 'text'; el.maxLength = 10; el.value = m.name; el.autocomplete = 'off'; el.spellcheck = false;
   el.setAttribute('autocapitalize', 'characters');
-  el.style.cssText = 'position:fixed;left:50%;top:18%;transform:translateX(-50%);width:60vw;max-width:340px;font:bold 22px monospace;text-align:center;text-transform:uppercase;background:#16101c;color:#ffb347;border:2px solid #c9a24a;padding:8px;z-index:50;outline:none;border-radius:0;';
+  el.style.cssText = 'position:fixed;left:50%;top:46%;transform:translateX(-50%);width:60vw;max-width:340px;font:bold 22px monospace;text-align:center;text-transform:uppercase;background:#16101c;color:#ffb347;border:2px solid #c9a24a;padding:8px;z-index:50;outline:none;border-radius:0;';
   el.placeholder = AH.tr('NAME YOUR HERO');
   el.addEventListener('input', () => { const v = el.value.toUpperCase().split('').filter(c => U.NAME_CHAR.test(c)).join('').slice(0, 10); if (v !== el.value) el.value = v; m.name = v; });
   el.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); if (m.name.length) { m.step = 2; m.sel = 0; m.skipA = true; U.nameInput(G, m, false); } } });
   document.body.appendChild(el);
+  // touching the stick or the buttons closes the phone keyboard instead of typing into it
+  if (!U.nameBlurHooked) { U.nameBlurHooked = true; const t = document.getElementById('touch'); if (t) t.addEventListener('touchstart', () => { const e2 = document.getElementById('nameInput'); if (e2) e2.blur(); }, { passive: true }); }
 };
 U.update.create = function (G, m, dt) {
   const n = U.nav(G, m, dt);
@@ -276,7 +279,15 @@ U.update.create = function (G, m, dt) {
     if (n.p.a) { m.step = 1; AH.Audio.sfx('select'); }
     if (n.p.b || n.p.start) { window.removeEventListener('keydown', m.keyHandler); G.closeMenu(); }
   } else if (m.step === 1) {
-    if (AH.isTouch) U.nameInput(G, m, true);
+    if (AH.isTouch) {
+      // phones: only the real text box; the stick and letter grid stay out of it
+      U.nameInput(G, m, true);
+      const el = document.getElementById('nameInput');
+      if (n.p.y) { m.name = AH.rand.pick(U.NAMES); if (el) el.value = m.name; AH.Audio.sfx('move'); }
+      if (n.p.a && m.name.length) { m.step = 2; m.sel = 0; AH.Audio.sfx('select'); }
+      if (n.p.b || n.p.start) { m.step = 0; AH.Audio.sfx('back'); }
+      return;
+    }
     // keyboard players type directly (handled in keyHandler); only gamepads and touch use the grid here
     if (m.kbTyping || (m.dev && m.dev.startsWith('kb')) || (m.lastDev && m.lastDev.startsWith('kb'))) return;
     const cols = 10;
@@ -329,14 +340,17 @@ U.draw.create = function (G, ctx, m) {
   if (m.step >= 1) {
     AH.frame(ctx, 90, 120, 300, 140, { fill: '#120e14', edge: '#c9a24a', hi: '#f2e3b3' });
     if (m.step === 1) {
-      AH.text(ctx, UW / 2, 128, m.name + (Math.floor(G.time * 2) % 2 ? '_' : ' '), '#ffb347', { align: 'center', scale: 2 });
-      U.GRID.forEach((k, i) => {
+      if (AH.isTouch) {
+        AH.text(ctx, UW / 2, 196, 'TAP THE BOX ABOVE TO TYPE', '#cfc6b4', { align: 'center' });
+        AH.text(ctx, UW / 2, 214, 'A: DONE   Y: RANDOM NAME   B: BACK', '#8d8494', { align: 'center' });
+      } else AH.text(ctx, UW / 2, 128, m.name + (Math.floor(G.time * 2) % 2 ? '_' : ' '), '#ffb347', { align: 'center', scale: 2 });
+      if (!AH.isTouch) U.GRID.forEach((k, i) => {
         const cx = 102 + (i % 10) * 28, cy = 156 + Math.floor(i / 10) * 18;
         if (i === m.gridSel) AH.frame(ctx, cx - 4, cy - 4, k.length > 1 ? 30 : 18, 15, { fill: '#2e2638', edge: '#c9a24a', hi: '#f2e3b3' });
         AH.text(ctx, cx, cy, k, i === m.gridSel ? '#ffb347' : '#cfc6b4');
       });
       const kb = m.kbTyping || (m.dev && m.dev.startsWith('kb')) || (m.lastDev && m.lastDev.startsWith('kb'));
-      AH.text(ctx, UW / 2, 244, AH.isTouch ? 'TAP THE BOX ABOVE TO TYPE' : kb ? 'TYPE A NAME   ENTER: DONE   ESC: BACK' : 'PICK LETTERS   ' + U.btnName(G, m, 'y') + ' RANDOM', '#6a6274', { align: 'center' });
+      if (!AH.isTouch) AH.text(ctx, UW / 2, 244, kb ? 'TYPE A NAME   ENTER: DONE   ESC: BACK' : 'PICK LETTERS   ' + U.btnName(G, m, 'y') + ' RANDOM', '#6a6274', { align: 'center' });
     } else {
       const pets = ['canary', 'dog', 'rat'];
       const rows = [{ label: 'COMPANION', right: '< ' + AH.PETS[pets[m.pet]].name + ' >' }, { label: 'PERMADEATH', right: m.hc ? 'ON - ONE LIFE ONLY' : 'OFF', rcol: m.hc ? '#ff6a5a' : '#8d8494' }, { label: 'BEGIN THE DESCENT', col: '#ffb347' }];
@@ -374,19 +388,17 @@ U.draw.options = function (G, ctx, m) {
   const o = AH.options, bar = v => '#'.repeat(Math.round(v * 10)) + '-'.repeat(10 - Math.round(v * 10)) + ' ' + Math.round(v * 100) + '%';
   const ln = (AH.LANGS.find(l => l.id === (o.lang || 'en')) || AH.LANGS[0]).name;
   U.list(ctx, [{ label: 'LANGUAGE', right: '< ' + ln + ' >' }, { label: 'MUSIC', right: bar(o.music) }, { label: 'SOUND', right: bar(o.sfx) }, { label: 'SCREEN SHAKE', right: o.shake ? 'ON' : 'OFF' }, { label: 'FULLSCREEN' }, { label: 'BACK' }], m.sel, 120, 70, 240, { lh: 18 });
-  AH.text(ctx, UW / 2, 200, 'PUT YOUR OWN MUSIC IN THE MUSIC FOLDER:', '#6a6274', { align: 'center' });
-  AH.text(ctx, UW / 2, 210, 'TITLE  TOWN  MINE MINE2 MINE3  BOSS (.MP3)', '#6a6274', { align: 'center' });
 };
 U.update.help = function (G, m, dt) { const n = U.nav(G, m, dt); if (n.p.a || n.p.b || n.p.start) G.closeMenu(); };
 U.draw.help = function (G, ctx, m) {
   U.bg(ctx); U.title(ctx, 'HOW TO PLAY', 12);
   const L = [
     ['MOVE', 'STICK / WASD'], ['ATTACK / USE', 'A / J / LEFT CLICK'], ['HEAVY ATTACK', 'X / K / RIGHT CLICK'], ['DODGE ROLL', 'B / SPACE'],
-    ['SKILLS', 'Y  LB  RB  /  1  2  3'], ['POTIONS', 'D-PAD UP & DOWN / Q & E'], ['INVENTORY', 'SELECT / TAB'], ['MENU', 'START / ESC'], ['MOUSE (PC)', 'LEFT: MOVE / ATTACK  RIGHT: HEAVY'],
+    ['SKILLS', 'Y  LB  RB  /  1  2  3'], ['POTIONS', 'D-PAD UP & DOWN / Q & E'], ['INVENTORY', 'SELECT / TAB'], ['MENU', 'START / ESC'], ['MOUSE (PC)', 'LEFT: MOVE / ATTACK  RIGHT: HEAVY'], ['SHIFT + LEFT CLICK', 'ATTACK IN PLACE'],
   ];
   L.forEach(([a, b], i) => { AH.text(ctx, 60, 36 + i * 12, a, '#ffb347'); AH.text(ctx, 190, 36 + i * 12, b, '#cfc6b4'); });
-  const tips = ['DIVE INTO THE MINE BELOW DUNMERE. EVERY 10TH FLOOR HIDES A BOSS. FLOOR 100 HIDES ASHHEART.', 'FROM FLOOR 6 IT IS DARK: KEEP TORCHES. LIFTS EVERY 5 FLOORS TAKE YOU BACK DOWN.', 'DYING PUTS OUT A LAMP OF DUNMERE AND MAY BIRTH A NEMESIS. KEEP THE TOWN HOPEFUL.', 'WHEN YOU DIE, YOUR GEAR STAYS IN YOUR GRAVE. GO BACK FOR IT. THE TOWN STASH IS ALWAYS SAFE.', 'CO-OP: PRESS START ON ANOTHER PAD TO JOIN. STAY CLOSE FOR ONE SCREEN, WANDER OFF TO SPLIT.'];
-  let y = 152; for (const t of tips) { for (const l of AH.wrap(t, 440)) { AH.text(ctx, UW / 2, y, l, '#a39bb0', { align: 'center' }); y += 9; } y += 2; }
+  const tips = ['DIVE INTO THE MINE BELOW DUNMERE. EVERY 10TH FLOOR HIDES A BOSS. FLOOR 100 HIDES ASHHEART.', 'FROM FLOOR 6 IT IS DARK: KEEP TORCHES. LIFTS EVERY 5 FLOORS TAKE YOU BACK DOWN.', 'DYING PUTS OUT A LAMP OF DUNMERE AND MAY BIRTH A NEMESIS. KEEP THE TOWN HOPEFUL.', 'WHEN YOU DIE, YOUR GEAR STAYS IN YOUR GRAVE. GO BACK FOR IT. THE TOWN STASH IS ALWAYS SAFE.', 'NO FIGHTING IN DUNMERE. HIT THE GLITTERING ROCKS IN THE MINE FOR ORE AND CRYSTALS.', 'CO-OP: PRESS START ON ANOTHER PAD TO JOIN. STAY CLOSE FOR ONE SCREEN, WANDER OFF TO SPLIT.'];
+  let y = 158; for (const t of tips) { for (const l of AH.wrap(t, 440)) { AH.text(ctx, UW / 2, y, l, '#a39bb0', { align: 'center' }); y += 9; } y += 2; }
 };
 
 // ---------- PAUSE ----------
@@ -423,8 +435,40 @@ U.init.inv = function (G, m) {
   m.tab = m.tab || 0; m.area = 'bag'; m.i = 0; m.eq = 'weapon'; m.pnode = { paladin: 'p0', rogue: 'r0', wizard: 'm0' }[m.p.ch.cls]; m.ssel = 0; m.csel = 0; m.socket = null; m.bsel = 0;
 };
 U.invItem = function (m) { const ch = m.p.ch; return m.area === 'bag' ? ch.bag[m.i] : ch.equip[m.eq]; };
+// mouse in the character screens: tabs, bag and gear slots, stats, passive nodes, skills, lists
+U.invMouse = function (G, m, n) {
+  const M = AH.Mouse; if (!M || !M.active || AH.isTouch || (AH.Mouse.player && AH.Mouse.player(G) !== m.p)) return false;
+  const c = M.uiPos(); if (!c) return false;
+  const click = M.leftPressed, rclick = M.rightPressed, mv = M.moved || click;
+  M.leftPressed = M.rightPressed = false; M.moved = false;
+  const inR = (x, y, w, h) => c.x >= x && c.x < x + w && c.y >= y && c.y < y + h;
+  if (rclick) { n.p.b = true; return false; }
+  if (click && U._tabRects) { const t = U._tabRects.findIndex(r => inR(r.x, r.y, r.w, r.h)); if (t >= 0) { if (t !== m.tab) { m.tab = t; m.socket = null; AH.Audio.sfx('move'); } return true; } }
+  if (!mv) return false;
+  const ch = m.p.ch;
+  if (m.tab === 0) {
+    for (let i = 0; i < 40; i++) { const x = 162 + (i % 8) * 24, y = 36 + Math.floor(i / 8) * 24; if (inR(x, y, 22, 22)) { m.area = 'bag'; m.i = i; if (click) n.p.a = true; return false; } }
+    for (const slot of AH.EQUIP_SLOTS) { const [sx, sy] = U.EQ_POS[slot]; if (inR(sx, sy + 2, 22, 22)) { m.area = 'eq'; m.eq = slot; if (click) n.p.a = true; return false; } }
+  } else if (m.tab === 1) {
+    for (let i = 0; i < 4; i++) if (inR(162, 36 + i * 26, 152, 24)) { m.csel = i; if (click) n.p.a = true; }
+  } else if (m.tab === 2) {
+    let best = null, bd = 1e9;
+    for (const id in AH.PASSIVES) { const q = AH.PASSIVES[id], d = Math.hypot(q.x - c.x, q.y - c.y), r = q.t === 'key' ? 9 : q.t === 'notable' || q.t === 'heart' ? 8 : 6; if (d < r && d < bd) { bd = d; best = id; } }
+    if (best) { if (best !== m.pnode) AH.Audio.sfx('move'); m.pnode = best; if (click) n.p.a = true; }
+  } else if (m.tab === 3) {
+    const known = Object.keys(ch.skills);
+    known.forEach((id, i) => { if (inR(8, 26 + i * 28, 292, 28)) m.ssel = i; });
+    if (click) for (let i = 0; i < 3; i++) if (inR(310, 40 + i * 30, 164, 28)) n.p[['y', 'x', 'a'][i]] = true;
+  } else if (m.tab === 4 || m.tab === 5) {
+    const all = m.tab === 4 ? Object.values(AH.CREATURES).reduce((a, b) => a.concat(b), []) : AH.SETS;
+    const cur = m.tab === 4 ? m.bsel : (m.setSel || 0), start = AH.clamp(cur - 10, 0, all.length - 22);
+    for (let i = 0; i < 22 && start + i < all.length; i++) if (inR(8, 39 + i * 10, 236, 10) && click) { if (m.tab === 4) m.bsel = start + i; else m.setSel = start + i; AH.Audio.sfx('move'); }
+  }
+  return false;
+};
 U.update.inv = function (G, m, dt) {
   const n = U.nav(G, m, dt), p = m.p, ch = p.ch;
+  if (U.invMouse(G, m, n)) return;
   if (n.p.lb) { m.tab = (m.tab + U.TABS.length - 1) % U.TABS.length; AH.Audio.sfx('move'); m.socket = null; return; }
   if (n.p.rb) { m.tab = (m.tab + 1) % U.TABS.length; AH.Audio.sfx('move'); m.socket = null; return; }
   if (n.p.b || n.p.select || n.p.start) { if (m.socket) { m.socket = null; AH.Audio.sfx('back'); return; } G.closeMenu(); G.saveAll(); return; }
@@ -514,9 +558,9 @@ U.sortBag = function (ch) {
   ch.bag = items.concat(new Array(40 - items.length).fill(null));
 };
 U.drawTabs = function (G, ctx, m) {
-  let x = 4;
+  let x = 4; U._tabRects = [];
   U.TABS.forEach((t, i) => {
-    const w = AH.textW(t) + 12;
+    const w = AH.textW(t) + 12; U._tabRects.push({ x, y: 2, w, h: 14 });
     if (i === m.tab) { AH.frame(ctx, x, 2, w, 14, { fill: '#2e2638', edge: '#c9a24a', hi: '#f2e3b3' }); AH.text(ctx, x + 6, 5, t, '#ffb347'); }
     else { AH.frame(ctx, x, 2, w, 14); AH.text(ctx, x + 6, 5, t, '#8d8494'); }
     x += w + 2;
@@ -584,8 +628,13 @@ U.drawInvTab = function (G, ctx, m) {
     AH.wrap(AH.PETS[pt.kind].desc, 155).forEach((l, i) => AH.text(ctx, 196, 201 + i * 9, l, '#6f6880'));
   }
   const b = k => U.btnName(G, m, k);
-  AH.text(ctx, 164, 228, b('a') + ' USE/EQUIP   ' + b('x') + ' DROP', '#6a6274');
-  AH.text(ctx, 164, 238, b('y') + ' SORT   ' + b('b') + ' CLOSE', '#6a6274');
+  if (AH.Mouse && AH.Mouse.active && !AH.isTouch && (m.dev === 'kb1' || !m.dev)) {
+    AH.text(ctx, 164, 228, 'CLICK: USE/EQUIP   ' + b('x') + ' DROP', '#6a6274');
+    AH.text(ctx, 164, 238, b('y') + ' SORT   RIGHT CLICK / ESC: CLOSE', '#6a6274');
+  } else {
+    AH.text(ctx, 164, 228, b('a') + ' USE/EQUIP   ' + b('x') + ' DROP', '#6a6274');
+    AH.text(ctx, 164, 238, b('y') + ' SORT   ' + b('b') + ' CLOSE', '#6a6274');
+  }
   AH.text(ctx, 164, 248, 'PTS: ' + ch.pts + ' STAT  ' + ch.ppts + ' PASSIVE', ch.pts || ch.ppts ? '#f2c94c' : '#6a6274');
   // tooltip
   const it = U.invItem(m);
@@ -669,18 +718,19 @@ U.drawSkillTab = function (G, ctx, m) {
     AH.text(ctx, 36, y, sk.name + ' ' + 'I'.repeat(Math.min(5, ch.skills[id])) + (ch.skills[id] > 5 ? '+' : ''), on ? '#ffb347' : '#cfc6b4');
     AH.wrap(sk.desc, 222).slice(0, 2).forEach((l, k) => AH.text(ctx, 36, y + 9 + k * 8, l, '#6f6880'));
     const sl = ch.slots.indexOf(id);
-    if (sl >= 0) AH.text(ctx, 296, y, ['Y', 'LB', 'RB'][sl], '#8ae08e', { align: 'right' });
+    if (sl >= 0) AH.text(ctx, 296, y, (m.dev === 'kb1' ? ['1', '2', '3'] : m.dev === 'kb2' ? ['N5', 'N7', 'N8'] : ['Y', 'LB', 'RB'])[sl], '#8ae08e', { align: 'right' });
     AH.text(ctx, 296, y + 9, sk.mp + ' MP', '#4a7bd1', { align: 'right' });
   });
   AH.frame(ctx, 308, 20, 168, 246);
   AH.text(ctx, 314, 26, 'SKILL SLOTS', '#f2e3b3');
-  ['Y', 'LB', 'RB'].forEach((k, i) => {
+  const slotKeys = m.dev === 'kb1' ? ['1', '2', '3'] : m.dev === 'kb2' ? ['N5', 'N7', 'N8'] : ['Y', 'LB', 'RB'];
+  slotKeys.forEach((k, i) => {
     const id = ch.slots[i]; const y = 44 + i * 30;
     AH.slot(ctx, 314, y, 22, '#5a4e66'); if (id) AH.iconIn(ctx, AH.ICON[AH.SKILLS[id].icon], 314, y, 22);
     AH.text(ctx, 342, y + 3, k, '#ffb347'); AH.text(ctx, 342, y + 12, id ? AH.SKILLS[id].name : '-', '#cfc6b4');
   });
   const b = k => U.btnName(G, m, k);
-  AH.wrap('PICK A SKILL, THEN PRESS ' + b('y') + ' / ' + b('x') + ' / ' + b('a') + ' TO PUT IT IN SLOT Y / LB / RB.', 156).forEach((l, i) => AH.text(ctx, 314, 150 + i * 9, l, '#6a6274'));
+  AH.wrap(AH.Mouse && AH.Mouse.active && !AH.isTouch ? 'PICK A SKILL, THEN CLICK A SLOT.' : 'PICK A SKILL, THEN PRESS ' + b('y') + ' / ' + b('x') + ' / ' + b('a') + ' TO PUT IT IN SLOT Y / LB / RB.', 156).forEach((l, i) => AH.text(ctx, 314, 150 + i * 9, l, '#6a6274'));
   AH.wrap('FIND TOMES IN THE MINE TO LEARN NEW SKILLS AND RAISE THEIR RANK.', 156).forEach((l, i) => AH.text(ctx, 314, 190 + i * 9, l, '#6a6274'));
 };
 U.drawBestiary = function (G, ctx, m) {

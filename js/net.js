@@ -17,14 +17,14 @@ N.host = function (cb) {
   const G = this.G;
   this.isHost = true; this.code = AH.netCode(); this.status = 'CONNECTING...';
   AH.loadPeer(ok => {
-    if (!ok) { this.status = 'COULD NOT LOAD PEERJS'; cb && cb(false); return; }
+    if (!ok) { this.status = 'NO CONNECTION. CHECK YOUR INTERNET.'; cb && cb(false); return; }
     try {
       this.peer = new window.Peer('ashheart-' + this.code.toLowerCase());
-    } catch (e) { this.status = 'PEER ERROR'; cb && cb(false); return; }
+    } catch (e) { this.status = 'CONNECTION ERROR. TRY AGAIN.'; cb && cb(false); return; }
     this.peer.on('open', () => { this.status = 'WAITING FOR FRIENDS'; cb && cb(true); });
-    this.peer.on('error', e => { this.status = 'ERROR: ' + String(e.type || e).toUpperCase(); if (e.type === 'unavailable-id') { this.code = AH.netCode(); } });
+    this.peer.on('error', e => { this.status = e && e.type === 'peer-unavailable' ? 'NO GAME WITH THIS CODE' : 'CONNECTION ERROR. TRY AGAIN.'; if (e.type === 'unavailable-id') { this.code = AH.netCode(); } });
     this.peer.on('connection', conn => this.onConn(conn));
-    this.peer.on('disconnected', () => { this.status = 'LOST THE BROKER, RETRYING'; try { this.peer.reconnect(); } catch (e) { /* ignore */ } });
+    this.peer.on('disconnected', () => { this.status = 'RECONNECTING...'; try { this.peer.reconnect(); } catch (e) { /* ignore */ } });
   });
 };
 N.onConn = function (conn) {
@@ -40,14 +40,23 @@ N.onConn = function (conn) {
 N.dropConn = function (conn) {
   const G = this.G;
   const i = this.conns.indexOf(conn); if (i >= 0) this.conns.splice(i, 1);
+  if (this.pending) { const k = this.pending.indexOf(conn); if (k >= 0) { this.pending.splice(k, 1); this.sendLobby(); AH.Audio.sfx('back'); } }
   if (conn.player) { G.toast(null, conn.player.ch.name + ' LEFT', '#ff8a8a'); const p = conn.player; G.players.splice(G.players.indexOf(p), 1); G.pets = G.pets.filter(x => x.owner !== p); G.players.forEach((q, k) => { q.pid = k; q.color = AH.PLAYER_COLORS[k]; }); G.assignPets(); this.sendRoster(); }
 };
 N.hostRecv = function (conn, d) {
   const G = this.G;
   if (!d || !d.t) return;
   if (d.t === 'hello') {
-    if (conn.player || G.players.length >= 3) return;
     const ch = d.ch; if (!ch || !AH.CLASSES[ch.cls]) return;
+    // friends join in the lobby before the game starts, never in the middle of it
+    if (this.lobby) {
+      if (this.pending.indexOf(conn) >= 0) return;
+      if (this.pending.length >= 2) { conn.send({ t: 'full' }); setTimeout(() => conn.close(), 300); return; }
+      conn.lobbyCh = ch; this.pending.push(conn); this.sendLobby(); AH.Audio.sfx('levelup');
+      return;
+    }
+    if (!d.admit) { conn.send({ t: 'started' }); setTimeout(() => conn.close(), 300); return; }
+    if (conn.player || G.players.length >= 3) return;
     const pid = G.players.length;
     const p = new AH.Player(pid, ch, null); p.remote = true; p.conn = conn; p.pad = AH.Net.emptyPad();
     const lead = G.players[0]; p.x = lead.x + 12; p.y = lead.y + 8; G.placeSafe(p);
@@ -76,6 +85,13 @@ AH.Net.emptyPad = function () {
   pad.pressed = b => { if (pad.fresh[b]) { pad.fresh[b] = false; return true; } return false; };
   pad.held = b => !!pad.hm[b];
   return pad;
+};
+N.lobbyNames = function () { return [{ name: this.hostCh ? this.hostCh.name : '?', cls: this.hostCh ? this.hostCh.cls : 'paladin' }].concat(this.pending.map(c => ({ name: c.lobbyCh.name, cls: c.lobbyCh.cls }))); };
+N.sendLobby = function () { const names = this.lobbyNames(); for (const c of this.pending) { try { c.send({ t: 'lobby', names }); } catch (e) { /* ignore */ } } };
+N.startFromLobby = function () {
+  this.lobby = false;
+  for (const c of this.pending) if (this.conns.indexOf(c) >= 0) this.hostRecv(c, { t: 'hello', ch: c.lobbyCh, admit: 1 });
+  this.pending = [];
 };
 N.worldLite = function () { const W = this.G.world; return { day: W.day, hour: W.hour, weather: W.weather, trust: W.trust, pop: W.pop, storyDone: W.storyDone }; };
 N.sendRoster = function () {
@@ -139,9 +155,9 @@ N.join = function (code, cb) {
   const G = this.G;
   this.isHost = false; this.code = code.toUpperCase(); this.status = 'CONNECTING...';
   AH.loadPeer(ok => {
-    if (!ok) { this.status = 'COULD NOT LOAD PEERJS'; cb && cb(false); return; }
+    if (!ok) { this.status = 'NO CONNECTION. CHECK YOUR INTERNET.'; cb && cb(false); return; }
     this.peer = new window.Peer();
-    this.peer.on('error', e => { this.status = 'ERROR: ' + String(e.type || e).toUpperCase(); cb && cb(false); });
+    this.peer.on('error', e => { this.status = e && e.type === 'peer-unavailable' ? 'NO GAME WITH THIS CODE' : 'CONNECTION ERROR. TRY AGAIN.'; cb && cb(false); });
     this.peer.on('open', () => {
       const conn = this.peer.connect('ashheart-' + this.code.toLowerCase(), { reliable: true });
       this.conn = conn;
@@ -155,6 +171,8 @@ N.join = function (code, cb) {
 N.guestRecv = function (d) {
   const G = this.G;
   if (d.t === 'full') { this.status = 'THE GAME IS FULL'; return; }
+  if (d.t === 'started') { this.status = 'THAT GAME HAS ALREADY STARTED'; return; }
+  if (d.t === 'lobby') { this.status = 'IN THE LOBBY'; this.lobbyList = d.names; return; }
   if (d.t === 'welcome') {
     this.welcomed = true; this.me = d.pid;
     G.guestStart(d);
@@ -275,7 +293,7 @@ GG.guestSnap = function (d) {
       for (const i of ps.c) { const p = this.map.props[i]; if (p) { if (p.type === 'chest') p.open = true; if (p.type === 'shrine') p.used = true; if (p.type === 'dig') p.dug = true; } }
       if (ps.sf && this.map.get(ps.sf[0], ps.sf[1]) === AH.TILE.SECRET) { this.map.set(ps.sf[0], ps.sf[1], AH.TILE.FLOOR); const x = this.map.canvas.getContext('2d'); x.fillStyle = this.map.biome.floor[2]; x.fillRect(ps.sf[0] * AH.T, ps.sf[1] * AH.T, AH.T, AH.T); this.map.secret.found = true; }
       if (this.map.secret && ps.ss) this.map.secret.sniffed = true;
-      for (const i of ps.v) { const v = this.map.veins[i]; if (v && v.hp > 0) { v.hp = 0; } }
+      for (const i of ps.v) { const v = this.map.veins[i]; if (v && v.hp > 0) { v.hp = 0; this.map.set(v.tx, v.ty, AH.TILE.FLOOR); } }
     }
   }
   this.time = d.tm;
@@ -326,7 +344,7 @@ GG.netLost = function () {
 };
 
 // ---------- ONLINE MENU ----------
-U.init.online = function (G, m) { m.step = 'menu'; m.sel = 0; m.code = ''; m.gsel = 0; };
+U.init.online = function (G, m) { m.step = m.step || 'menu'; m.sel = 0; m.code = ''; m.gsel = 0; };
 U.update.online = function (G, m, dt) {
   const n = U.nav(G, m, dt);
   if (m.step === 'menu') {
@@ -337,9 +355,9 @@ U.update.online = function (G, m, dt) {
       const dev = m.dev || m.lastDev || 'kb1';
       G.openMenu('slots', null, { dev, purpose: 'online', onDone: idx => {
         if (it.id === 'host') {
-          G.net = new AH.Net(G); G.isHost = true;
-          G.startSession(idx, dev);
-          G.net.host(ok => { if (ok) G.banner('ONLINE: CODE ' + G.net.code, '#9ec0ff', 'FRIENDS JOIN WITH THIS CODE'); else G.toast(null, G.net.status, '#ff8a8a'); });
+          G.net = new AH.Net(G); G.isHost = true; G.net.lobby = true; G.net.pending = []; G.net.hostCh = AH.Save.load()[idx].ch;
+          G.net.host(ok => { if (!ok) G.toast(null, G.net.status, '#ff8a8a'); });
+          G.openMenu('online', null, { dev, step: 'lobby', slotIdx: idx });
         } else {
           G.openMenu('online', null, { dev, step: 'code', slotIdx: idx });
         }
@@ -364,6 +382,17 @@ U.update.online = function (G, m, dt) {
     m.go = false;
     return;
   }
+  if (m.step === 'lobby') {
+    const net = G.net;
+    const ready = net && net.peer && net.status === 'WAITING FOR FRIENDS';
+    if (n.p.a && ready) {
+      AH.Audio.sfx('select');
+      G.closeAllMenus(); G.startSession(m.slotIdx, m.dev || 'kb1'); net.startFromLobby();
+      return;
+    }
+    if (n.p.b) { net && net.close(); G.net = null; G.closeAllMenus(); G.openMenu('title', null); }
+    return;
+  }
   if (m.step === 'wait') { if (n.p.b) { G.net && G.net.close(); G.net = null; G.closeAllMenus(); G.openMenu('title', null); } }
 };
 U.draw.online = function (G, ctx, m) {
@@ -376,9 +405,33 @@ U.draw.online = function (G, ctx, m) {
     AH.text(ctx, UW / 2, 80, (m.code + '_____').slice(0, 5).split('').join(' '), '#ffb347', { align: 'center', scale: 3 });
     const grid = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'.split('').concat(['DEL', 'GO']);
     grid.forEach((k, i) => { const x = 110 + (i % 9) * 30, y = 130 + Math.floor(i / 9) * 18; if (i === m.gsel) AH.frame(ctx, x - 4, y - 4, k.length > 1 ? 26 : 16, 15, { fill: '#2e2638', edge: '#c9a24a', hi: '#f2e3b3' }); AH.text(ctx, x, y, k, i === m.gsel ? '#ffb347' : '#cfc6b4'); });
+  } else if (m.step === 'lobby') {
+    const net = G.net, ready = net && net.peer && net.status === 'WAITING FOR FRIENDS';
+    AH.text(ctx, UW / 2, 44, 'ROOM CODE', '#8d8494', { align: 'center' });
+    AH.frame(ctx, UW / 2 - 90, 56, 180, 40, { fill: '#120e14', edge: '#c9a24a', hi: '#f2e3b3' });
+    AH.text(ctx, UW / 2, 64, ready ? net.code.split('').join(' ') : '. . .', '#ffb347', { align: 'center', scale: 3 });
+    AH.text(ctx, UW / 2, 104, ready ? 'TELL YOUR FRIENDS THIS CODE' : (net ? net.status : ''), ready ? '#cfc6b4' : '#a39bb0', { align: 'center' });
+    U.drawLobby(ctx, net ? net.lobbyNames() : [], G);
+    U.hint(ctx, (ready ? U.btnName(G, m, 'a') + ' START THE GAME   ' : '') + U.btnName(G, m, 'b') + ' CANCEL');
   } else {
-    AH.text(ctx, UW / 2, 110, G.net ? G.net.status : '', '#cfc6b4', { align: 'center' });
-    AH.text(ctx, UW / 2, 130, 'CODE ' + m.code, '#8d8494', { align: 'center' });
+    const inLobby = G.net && G.net.lobbyList;
+    AH.text(ctx, UW / 2, inLobby ? 60 : 110, G.net ? G.net.status : '', '#cfc6b4', { align: 'center' });
+    AH.text(ctx, UW / 2, inLobby ? 72 : 130, 'CODE ' + m.code, '#8d8494', { align: 'center' });
+    if (inLobby) { U.drawLobby(ctx, G.net.lobbyList, G); AH.text(ctx, UW / 2, 236, 'WAITING FOR THE HOST TO START...', Math.floor(G.time * 2) % 2 ? '#f2c94c' : '#a38a4a', { align: 'center' }); }
     U.hint(ctx, U.btnName(G, m, 'b') + ' CANCEL');
+  }
+};
+U.drawLobby = function (ctx, names, G) {
+  for (let i = 0; i < 3; i++) {
+    const x = UW / 2 - 165 + i * 112, y = 120, who = names[i];
+    AH.frame(ctx, x, y, 106, 96, who ? { fill: '#1a1420', edge: '#c9a24a', hi: '#f2e3b3' } : {});
+    if (who) {
+      if (!U.lobbyPrev) U.lobbyPrev = {};
+      const P = U.lobbyPrev[who.cls] || (U.lobbyPrev[who.cls] = new AH.Player(0, AH.newCharacter(who.cls, 'X', 'dog'), null));
+      const s = P.spr[Math.floor(G.time * 3 + i) % 2];
+      AH.drawSpr(ctx, s, x + 53 - s.w * 1.5, y + 10, false, 3);
+      AH.text(ctx, x + 53, y + 70, who.name, AH.PLAYER_COLORS[i], { align: 'center' });
+      AH.text(ctx, x + 53, y + 81, i === 0 ? 'HOST' : AH.CLASSES[who.cls].name, '#8d8494', { align: 'center' });
+    } else AH.text(ctx, x + 53, y + 44, Math.floor(G.time * 2 + i) % 2 ? 'FREE SLOT' : '...', '#4e4858', { align: 'center' });
   }
 };

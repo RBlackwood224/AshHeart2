@@ -1,8 +1,10 @@
 'use strict';
 // World maps: tile grid, mine floor generator, town layout, pre-rendering
 const T = AH.T;
-AH.TILE = { WALL: 0, FLOOR: 1, WATER: 2, LAVA: 3, ICE: 4, SECRET: 5, GRASS: 7, ROAD: 8, BUILD: 9, VOID: 6, TREE: 10 };
-AH.solidTile = t => t === 0 || t === 5 || t === 9 || t === 10;
+AH.TILE = { WALL: 0, FLOOR: 1, WATER: 2, LAVA: 3, ICE: 4, SECRET: 5, GRASS: 7, ROAD: 8, BUILD: 9, VOID: 6, TREE: 10, ROCK: 11 };
+AH.solidTile = t => t === 0 || t === 5 || t === 9 || t === 10 || t === 11;
+// walls for drawing purposes (ore rocks block movement but are not walls)
+AH.wallTile = t => t === 0 || t === 5 || t === 9 || t === 10;
 
 // ---------- procedural tile textures ----------
 AH.texCache = {};
@@ -257,14 +259,6 @@ AH.genFloor = function (seed, floor, event) {
     m.props.push({ type: 'torchWall', x: x * T + 5, y: y * T + 2 });
     torches++;
   }
-  // ore veins (mineable faces)
-  m.veins = [];
-  for (let k = 0; k < 400 && m.veins.length < 6 + (floor % 5); k++) {
-    const x = rng.int(1, W - 2), y = rng.int(1, H - 2);
-    if (!isFace(x, y)) continue;
-    if (m.veins.some(v => v.tx === x && v.ty === y) || m.lights.some(l => l.tx === x && l.ty === y)) continue;
-    m.veins.push({ tx: x, ty: y, x: x * T + 8, y: y * T + 14, hp: 3, gem: biome.id === 'crystal' || rng() < 0.15 });
-  }
   if (biome.deco === 'crystal') for (let k = 0; k < 400 && m.lights.length < 22; k++) {
     const x = rng.int(1, W - 2), y = rng.int(1, H - 2);
     if (!isFace(x, y)) continue;
@@ -291,6 +285,23 @@ AH.genFloor = function (seed, floor, event) {
     if (r) for (let k = 0; k < 5; k++) { const p = m.randomFloorIn(r, rng); m.props.push({ type: 'chest', x: p.x, y: p.y, mimic: rng() < 0.35, rare: rng() < 0.4 }); }
   }
   if (event === 'shrine' || (!isBoss && rng() < 0.08)) { const r = rng.pick(rooms.filter(x => x !== start)) || start; const p = m.randomFloorIn(r, rng); m.props.push({ type: 'shrine', x: p.x, y: p.y, used: false }); }
+  // ore rocks: free-standing boulders in the rooms, broken with any attack
+  m.veins = [];
+  if (!isBoss) {
+    const free = (x, y) => { for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) if (m.get(x + i, y + j) !== 1) return false; return true; };
+    const want = 7 + (floor % 5) + (floor > 20 ? 2 : 0);
+    for (let k = 0; k < 600 && m.veins.length < want; k++) {
+      const r = rng.pick(rooms); if (r === start) continue;
+      const x = rng.int(r.x + 1, r.x + r.w - 2), y = rng.int(r.y + 1, r.y + r.h - 2);
+      if (!free(x, y)) continue;
+      const cx = x * T + 8, cy = y * T + 8;
+      if (Math.hypot(cx - m.stairs.x, cy - m.stairs.y) < 32 || Math.hypot(cx - m.rope.x, cy - m.rope.y) < 32) continue;
+      if (m.props.some(p => Math.abs(p.x - cx) < 20 && Math.abs(p.y - cy) < 20) || m.veins.some(v => Math.abs(v.tx - x) < 3 && Math.abs(v.ty - y) < 3)) continue;
+      const gem = biome.id === 'crystal' || (floor >= 6 && rng() < 0.18);
+      m.veins.push({ tx: x, ty: y, x: cx, y: y * T + 14, hp: gem ? 4 : 3, max: gem ? 4 : 3, gem, seed: rng.int(0, 999) });
+      m.set(x, y, AH.TILE.ROCK);
+    }
+  }
   // enemy spawns per room
   if (!isBoss) for (const r of rooms) {
     if (r === start) continue;
@@ -326,7 +337,7 @@ AH.renderMap = function (m) {
     const t = m.get(i, j), X = i * T, Y = j * T;
     if (t === 0 || t === 5) {
       x.drawImage(tx.top[(i * 7 + j * 3) & 3], X, Y);
-      if (!AH.solidTile(m.get(i, j + 1))) {
+      if (!AH.wallTile(m.get(i, j + 1))) {
         x.drawImage(tx.brick[(i * 5 + j * 11) % 6], X, Y + 4);
         x.fillStyle = AH.shade(b.brick[3], 1.15); x.fillRect(X, Y + 4, T, 1);
         if (t === 5) { // secret wall: subtly cracked
@@ -334,9 +345,9 @@ AH.renderMap = function (m) {
         }
       }
       // side edges
-      if (!AH.solidTile(m.get(i - 1, j))) { x.fillStyle = '#07050a'; x.fillRect(X, Y, 1, T); }
-      if (!AH.solidTile(m.get(i + 1, j))) { x.fillStyle = '#07050a'; x.fillRect(X + T - 1, Y, 1, T); }
-      if (!AH.solidTile(m.get(i, j - 1))) { x.fillStyle = AH.shade(b.brick[3], 0.9); x.fillRect(X, Y, T, 1); }
+      if (!AH.wallTile(m.get(i - 1, j))) { x.fillStyle = '#07050a'; x.fillRect(X, Y, 1, T); }
+      if (!AH.wallTile(m.get(i + 1, j))) { x.fillStyle = '#07050a'; x.fillRect(X + T - 1, Y, 1, T); }
+      if (!AH.wallTile(m.get(i, j - 1))) { x.fillStyle = AH.shade(b.brick[3], 0.9); x.fillRect(X, Y, T, 1); }
     } else {
       { const r = rnd(); x.drawImage(tx.floor[r < 0.45 ? 4 : r < 0.6 ? 0 : r < 0.7 ? 5 : ((r * 100) | 0) % tx.floor.length], X, Y); }
       if (t === 2) { // water
@@ -354,7 +365,7 @@ AH.renderMap = function (m) {
         x.fillStyle = '#e8f4ff'; x.fillRect(X + (i * 3) % 10 + 2, Y + (j * 5) % 10 + 2, 3, 1);
       }
       // shadow below walls
-      if (AH.solidTile(m.get(i, j - 1))) {
+      if (AH.wallTile(m.get(i, j - 1))) {
         x.fillStyle = 'rgba(0,0,0,0.45)';
         for (let k = 0; k < 4; k++) for (let q = 0; q < T; q++) if (AH.BAYER[(k & 3) * 4 + ((X + q) & 3)] < 0.7 - k * 0.17) x.fillRect(X + q, Y + k, 1, 1);
       }
@@ -365,8 +376,8 @@ AH.renderMap = function (m) {
   const P = (X, Y, col) => { x.fillStyle = col; x.fillRect(X, Y, 1, 1); };
   const R = (X, Y, w, h, col) => { x.fillStyle = col; x.fillRect(X, Y, w, h); };
   const E = (X, Y, w, h, col) => { ex.fillStyle = col; ex.fillRect(X, Y, w, h); };
-  const isFace = (i, j) => AH.solidTile(m.get(i, j)) && m.get(i, j) !== 5 && !AH.solidTile(m.get(i, j + 1));
-  const isOpen = (i, j) => m.get(i, j) === 1 && !AH.solidTile(m.get(i, j - 1)) && !m.props.some(p => Math.abs(p.x - i * T - 8) < 14 && Math.abs(p.y - j * T - 8) < 14);
+  const isFace = (i, j) => AH.wallTile(m.get(i, j)) && m.get(i, j) !== 5 && !AH.wallTile(m.get(i, j + 1));
+  const isOpen = (i, j) => m.get(i, j) === 1 && !AH.wallTile(m.get(i, j - 1)) && !m.props.some(p => Math.abs(p.x - i * T - 8) < 14 && Math.abs(p.y - j * T - 8) < 14);
   const id = b.id;
   for (let j = 1; j < m.h - 1; j++) for (let i = 1; i < m.w - 1; i++) {
     const X = i * T, Y = j * T + 4;
@@ -400,20 +411,6 @@ AH.renderMap = function (m) {
       else if (id === 'sunken') { R(X2, Y2, 4, 6, '#0c0a0e'); R(X2 + 1, Y2 + 1, 2, 5, '#6a7a8a'); R(X2 + 1, Y2 + 1, 2, 1, '#9aaaba'); R(X2 + 4, Y2 + 4, 4, 2, '#5a6a7a'); }
       else if (id === 'magma') { R(X2, Y2 + 2, 5, 3, '#1a1014'); R(X2 + 1, Y2 + 1, 2, 1, '#3a2a34'); E(X2 + 3, Y2 + 3, 1, 1, '#ff8a2e'); }
       else if (id === 'crystal' || id === 'shadow') { const cols = id === 'shadow' ? ['#4a2a6a', '#8a5ac8'] : ['#2a7a96', '#4fbcd8']; E(X2, Y2, 1, 4, cols[1]); E(X2 + 2, Y2 + 1, 1, 3, cols[1]); R(X2 + 1, Y2 + 1, 1, 3, cols[0]); }
-    }
-  }
-  // veins
-  for (const v of m.veins || []) {
-    const X = v.tx * T, Y = v.ty * T + 4;
-    const c = v.gem ? ['#0c1a22', '#2a7a96', '#6fd6e8', '#e8fbff'] : ['#1a0e08', '#8a5a26', '#d8a048', '#fff0b8'];
-    // dark seam the nuggets sit in
-    x.fillStyle = '#0c0a0e'; x.fillRect(X + 2, Y + 4, 12, 1); x.fillRect(X + 4, Y + 7, 9, 1); x.fillRect(X + 3, Y + 5, 1, 2);
-    const nug = [[2, 1, 4, 3], [8, 2, 5, 4], [4, 6, 4, 3], [11, 6, 3, 3], [1, 8, 3, 2]];
-    for (const [a, b, w, h] of nug) {
-      x.fillStyle = c[0]; x.fillRect(X + a - 1, Y + b - 1, w + 2, h + 2);
-      x.fillStyle = c[1]; x.fillRect(X + a, Y + b, w, h);
-      x.fillStyle = c[2]; x.fillRect(X + a, Y + b, w - 1, h - 1);
-      x.fillStyle = c[3]; x.fillRect(X + a, Y + b, 1, 1);
     }
   }
   // static crystals

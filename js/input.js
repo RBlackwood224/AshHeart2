@@ -5,8 +5,8 @@ AH.Input = (function () {
   const keys = {};
   const KB = {
     kb1: { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'],
-      a: ['KeyJ', 'Enter'], b: ['KeyL', 'Backspace'], x: ['KeyK'], y: ['KeyI', 'Digit1'], lb: ['KeyU', 'Digit2'], rb: ['KeyO', 'Digit3'],
-      pot: ['KeyQ'], mana: ['KeyE', 'KeyR'], start: ['Escape'], select: ['Tab', 'KeyB'], dodge: ['Space', 'ShiftLeft'] },
+      a: ['KeyJ'], b: ['KeyL'], x: ['KeyK'], y: ['KeyI', 'Digit1'], lb: ['KeyU', 'Digit2'], rb: ['KeyO', 'Digit3'],
+      pot: ['KeyQ'], mana: ['KeyE', 'KeyR'], start: ['Escape'], select: ['Tab', 'KeyB'], dodge: ['Space'] },
     kb2: { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'],
       a: ['Numpad1', 'Period'], b: ['Numpad2', 'Slash'], x: ['Numpad4', 'Comma'], y: ['Numpad5', 'Semicolon'], lb: ['Numpad7', 'KeyM'], rb: ['Numpad8', 'Quote'],
       pot: ['Numpad0', 'KeyN'], mana: ['NumpadDecimal', 'KeyH'], start: ['NumpadEnter', 'Backslash'], select: ['NumpadAdd', 'BracketRight'] },
@@ -36,6 +36,8 @@ AH.Input = (function () {
       for (const b of ['a', 'b', 'x', 'y', 'lb', 'rb', 'start', 'select']) d.cur[b] = any(m[b]);
       d.cur.up = any(m.up); d.cur.down = any(m.down); d.cur.left = any(m.left); d.cur.right = any(m.right);
       d.cur.pot = any(m.pot); d.cur.mana = any(m.mana); d.cur.dodge = m.dodge ? any(m.dodge) : false;
+      // Enter / Backspace confirm and go back in menus only, never attack in the game
+      if (id === 'kb1' && AH.game && (AH.game.menu || AH.game.scene === 'title')) { if (keys.Enter || keys.NumpadEnter) d.cur.a = true; if (keys.Backspace) d.cur.b = true; }
       if (d.ax || d.ay || Object.values(d.cur).some(v => v)) d.lastActive = now;
     }
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
@@ -82,6 +84,14 @@ AH.Input = (function () {
     return { dx: 0, dy: 0 };
   }
   function devices() { return Object.keys(dev); }
+  // the device the person touched last (mouse movement counts as the first keyboard)
+  function lastDevice() {
+    let best = null, bt = -1;
+    for (const id in dev) if (dev[id].lastActive > bt) { bt = dev[id].lastActive; best = id; }
+    if (AH.Mouse && AH.Mouse.lastMove && AH.Mouse.lastMove > bt && !AH.isTouch) best = 'kb1';
+    if (AH.isTouch && (!best || bt <= 0)) best = 'touch';
+    return best;
+  }
   function anyPressed(b) { for (const id in dev) if (pressed(id, b)) return id; return null; }
 
   // ---------- touch controls ----------
@@ -116,5 +126,5 @@ AH.Input = (function () {
       el.addEventListener('pointerleave', off); el.addEventListener('pointercancel', off);
     });
   }
-  return { poll, pressed, held, axis, menuDir, devices, anyPressed, setupTouch, dev, keys, touch };
+  return { poll, pressed, held, axis, menuDir, devices, lastDevice, anyPressed, setupTouch, dev, keys, touch };
 })();
