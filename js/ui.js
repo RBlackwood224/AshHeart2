@@ -826,8 +826,8 @@ U.init.store = function (G, m) { m.mode = 'menu'; m.sel = 0; };
 U.init.inn = function (G, m) { m.sel = 0; };
 U.init.shrine = function (G, m) { m.sel = 0; };
 U.shopMenus = {
-  smith: [{ id: 'buy', label: 'BUY GEAR' }, { id: 'sell', label: 'SELL' }, { id: 'upgrade', label: 'UPGRADE (ORE + GOLD)' }, { id: 'reforge', label: 'REFORGE MAGIC' }, { id: 'socket', label: 'ADD SOCKET (CRYSTAL)' }, { id: 'unsocket', label: 'CLEAR SOCKETS' }, { id: 'ore', label: 'HAND IN ORE (BOUNTY)' }, { id: 'leave', label: 'LEAVE' }],
-  store: [{ id: 'cons', label: 'BUY SUPPLIES' }, { id: 'sell', label: 'SELL' }, { id: 'pet', label: 'SWAP COMPANION (60G)' }, { id: 'leave', label: 'LEAVE' }],
+  smith: [{ id: 'buy', label: 'BUY GEAR' }, { id: 'sell', label: 'SELL' }, { id: 'junk', label: 'SELL ALL PLAIN GEAR' }, { id: 'upgrade', label: 'UPGRADE (ORE + GOLD)' }, { id: 'reforge', label: 'REFORGE MAGIC' }, { id: 'socket', label: 'ADD SOCKET (CRYSTAL)' }, { id: 'unsocket', label: 'CLEAR SOCKETS' }, { id: 'ore', label: 'HAND IN ORE (BOUNTY)' }, { id: 'leave', label: 'LEAVE' }],
+  store: [{ id: 'cons', label: 'BUY SUPPLIES' }, { id: 'sell', label: 'SELL' }, { id: 'junk', label: 'SELL ALL PLAIN GEAR' }, { id: 'pet', label: 'SWAP COMPANION (60G)' }, { id: 'leave', label: 'LEAVE' }],
 };
 U.smithCost = function (it, kind) {
   const t = it.tier || 0;
@@ -851,6 +851,12 @@ U.update.smith = U.update.store = function (G, m, dt) {
       if (it.id === 'leave') { G.closeMenu(); G.saveAll(); return; }
       if (it.id === 'ore') { const b = (G.world.active || []).find(b => b.type === 'gather' && !b.done); if (!b) { G.toast(p, 'NO ORE BOUNTY ACTIVE', '#a39bb0'); return; } if (p.countCons('ore') < b.need) { G.toast(p, 'YOU NEED ' + b.need + ' ORE', '#ff8a8a'); return; } p.takeCons('ore', b.need); b.done = true; G.banner('BOUNTY COMPLETE', '#f2c94c', b.text); return; }
       if (it.id === 'pet') { m.mode = 'pet'; m.i = 0; return; }
+      if (it.id === 'junk') {
+        let gold = 0, n = 0;
+        ch.bag.forEach((x, i) => { if (x && (x.kind === 'weapon' || x.kind === 'armor') && (x.rarity || 0) === 0 && !x.loaner && !x.quest) { gold += AH.itemValue(x); n++; ch.bag[i] = null; } });
+        if (!n) { G.toast(p, 'NO PLAIN GEAR TO SELL', '#a39bb0'); AH.Audio.sfx('error'); return; }
+        ch.gold += gold; AH.Audio.sfx('coin'); G.toast(p, 'SOLD ' + n + ' ITEMS FOR ' + gold + 'G', '#f2c94c'); G.saveAll && G.saveAll(); return;
+      }
       m.mode = it.id; m.i = 0;
     }, () => { G.closeMenu(); G.saveAll(); });
     return;

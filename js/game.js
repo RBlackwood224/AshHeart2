@@ -296,10 +296,11 @@ GG.openChest = function (p, c) {
   }
   c.open = true; AH.Audio.sfx('loot');
   for (const q of this.players) {
-    const mf = q.S.mf + (c.rare ? 150 : 40) + (q.buffs.luck > 0 ? 100 : 0);
-    const n = c.rare ? 2 : 1;
+    const mf = q.S.mf + (c.rare ? 120 : 20) + (q.buffs.luck > 0 ? 100 : 0);
+    const early = this.floorNo <= 10;
+    const n = c.rare ? (early ? 1 : 2) : (AH.rand() < (early ? 0.55 : 0.8) ? 1 : 0);
     for (let k = 0; k < n; k++) this.dropItem(c.x, c.y + 4, AH.genItem(AH.rand, this.floorNo, { mf }), q.pid);
-    this.dropGold(c.x, c.y + 4, (5 + this.floorNo * 2) * (c.rare ? 3 : 1) * (1 + q.S.gold / 100), q.pid);
+    this.dropGold(c.x, c.y + 4, (5 + this.floorNo * 2) * (c.rare ? 3 : 1) * (n ? 1 : 1.8) * (1 + q.S.gold / 100), q.pid);
     if (AH.rand() < 0.3) this.dropItem(c.x, c.y + 4, AH.makeCons(AH.rand.pick(['potion', 'torch', 'murky', 'bomb', 'idscroll'])), q.pid);
     if (AH.rand() < 0.12) this.dropItem(c.x, c.y + 4, AH.genRune(AH.rand, this.floorNo), q.pid);
   }

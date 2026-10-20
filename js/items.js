@@ -222,8 +222,11 @@ AH.genItem = function (rng, floor, opt) {
   const mf = opt.mf || 0;
   let rarity = opt.rarity;
   if (rarity === undefined) {
-    const r = rng() * 100 / (1 + mf / 100);
-    rarity = r < 1.2 + floor * 0.02 ? 3 : r < 9 + floor * 0.06 ? 2 : r < 38 ? 1 : 0;
+    const r = rng() * 100 / (1 + Math.min(mf, 300) / 100);
+    const leg = floor < 10 ? 0 : Math.min(2.5, 0.4 + (floor - 10) * 0.02);
+    const rare = floor < 4 ? 0.8 : Math.min(9, 1.5 + floor * 0.12);
+    const magic = Math.min(36, 10 + floor * 0.9);
+    rarity = r < leg ? 3 : r < leg + rare ? 2 : r < leg + rare + magic ? 1 : 0;
   }
   let kind, base;
   if (opt.base) { base = opt.base; kind = AH.WEAPONS[base] ? 'weapon' : 'armor'; }
@@ -264,7 +267,7 @@ AH.genItem = function (rng, floor, opt) {
   if (slotGroup === 'ring' && rarity > 0 && rng.chance(0.45)) it.unid = 1;
   if (slotGroup === 'ring' && rarity > 0 && rng.chance(0.12)) it.cursed = 1;
   AH.nameItem(it, rng);
-  if (!opt.noSet && !opt.base && (rarity === 3 && rng.chance(0.4) || rarity === 2 && rng.chance(0.1))) return AH.genSetItem(rng, floor);
+  if (!opt.noSet && !opt.base && floor >= 8 && (rarity === 3 && rng.chance(0.4) || rarity === 2 && rng.chance(0.08))) return AH.genSetItem(rng, floor);
   return it;
 };
 AH.nameItem = function (it, rng) {

@@ -238,14 +238,15 @@ GP.rollLoot = function (x, y, src, p) {
   const elite = src && src.elite;
   let goldN = (1 + f * 0.45) * (1 + p.S.gold / 100) * rng.range(0.6, 1.4);
   if (rng() < (legendary ? 1 : elite ? 0.9 : 0.45)) this.dropGold(x, y, goldN * (legendary ? 12 : elite ? 4 : 1), p.pid);
-  let itemChance = legendary ? 1 : elite ? 0.7 : 0.11;
+  const early = f <= 10;
+  let itemChance = legendary ? 1 : elite ? (early ? 0.4 : 0.65) : (early ? 0.05 : 0.09);
   if (src && src.minion) itemChance *= 0.3;
-  const n = legendary ? 3 : elite ? 1 + (rng() < 0.4 ? 1 : 0) : 1;
+  const n = legendary ? (early ? 2 : 3) : elite ? 1 + (rng() < 0.3 ? 1 : 0) : 1;
   for (let k = 0; k < n; k++) if (rng() < itemChance) {
-    const it = AH.genItem(rng, f, { mf: mf + (elite ? 80 : 0) + (legendary ? 200 : 0), rarity: legendary && k === 0 ? 3 : undefined });
+    const it = AH.genItem(rng, f, { mf: mf + (elite ? 60 : 0) + (legendary ? 150 : 0), rarity: legendary && k === 0 ? (f < 10 ? 2 : 3) : undefined });
     this.dropItem(x, y, it, p.pid);
   }
-  if (legendary && src.legend && src.legend.drop) this.dropItem(x, y, AH.genMythic(rng, f, src.legend), p.pid);
+  if (legendary && src.legend && src.legend.drop) this.dropItem(x, y, f >= 10 ? AH.genMythic(rng, f, src.legend) : AH.genItem(rng, f, { rarity: 2 }), p.pid);
   const r = rng();
   if (r < 0.035) this.dropItem(x, y, AH.makeCons('potion'), p.pid);
   else if (r < 0.08) this.dropItem(x, y, AH.makeCons(p.ch.cls === 'wizard' ? 'mana' : 'torch'), p.pid);
