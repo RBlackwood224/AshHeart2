@@ -3,6 +3,8 @@
 A pixel-art action roguelite for the browser. Dive 100 floors below the town of Dunmere, keep its lamps burning, and silence the Heart of Ash.
 
 ## Play
+**Play online: https://rblackwood224.github.io/AshHeart2/**
+
 Open `index.html` in a modern browser, or host the folder on GitHub Pages (Settings → Pages → deploy from the main branch).
 Online co-op needs the page to be served over https (GitHub Pages works).
 
