@@ -1,0 +1,44 @@
+# ASHHEART — The Mines of Dunmere
+
+A pixel-art action roguelite for the browser. Dive 100 floors below the town of Dunmere, keep its lamps burning, and silence the Heart of Ash.
+
+## Play
+Open `index.html` in a modern browser, or host the folder on GitHub Pages (Settings → Pages → deploy from the main branch).
+Online co-op needs the page to be served over https (GitHub Pages works).
+
+## Controls
+| Action | Keyboard (P1) | Keyboard (P2) | Gamepad |
+|---|---|---|---|
+| Move | WASD | Arrows | Left stick / D-pad |
+| Attack / use | J | Num1 | A |
+| Heavy attack | K | Num4 | X |
+| Dodge | L | Num2 | B |
+| Skills | I, U, O | Num5, Num7, Num8 | Y, LB, RB |
+| Potions | Q (life), R (mana) | Num0, Num. | D-pad up / down |
+| Inventory | Tab | Num+ | Select |
+| Menu | Esc | NumEnter | Start |
+
+**Mouse (PC, Diablo style):** left click the ground to walk (hold to steer), left click a monster to walk up and attack it (hold to keep attacking), left click a chest, door, stairs or person to use it, right click for a heavy attack toward the cursor. Skill keys aim at the cursor. Menus can be clicked too.
+
+Phones and tablets get touch controls automatically (play in landscape).
+
+## Languages
+English, Français and Magyar — switch under Options → Language (the first start follows the browser language).
+
+## Highlights
+- 100 floors in 10 biomes, a boss every 10 floors, ASHHEART on floor 100, then endless depths and a daily time attack.
+- 26 item sets (2/3/4/5-piece bonuses and unique set powers), legendary and mythic items, runes and runewords.
+- Four story quest chains from the people of Dunmere, with unique rewards.
+- Gravestones: where a hero falls, a grave stays on that floor. Read it to see who died there, to what, and with which stats.
+- Nemesis system, legendary beasts, floor events, bounties, a town that remembers what you did.
+
+## Co-op
+- **Local:** up to 3 players. Press START on another controller (or NumEnter for the second keyboard player) to join with your own hero. Together you share one screen; wander apart and it splits, with arrows pointing at your friends.
+- **Online:** Title → Online co-op → Host. Friends choose Join and type the 5-letter code. The host runs the game; everyone keeps their own loot and their own save.
+
+## Music
+Drop your own tracks into the `music` folder: `title.mp3`, `town.mp3`, `mine.mp3`, `mine2.mp3`, `mine3.mp3`, `boss.mp3`. The mine plays its tracks one after another. Missing files are simply skipped. Music and sound volume are under Options.
+
+## Saves
+Heroes are saved in the browser. Use **Export file** on the hero list to move a hero to another device, and **Import hero file** to bring it back.
+

@@ -1,0 +1,645 @@
+'use strict';
+// Rendering: cameras, dynamic split screen, dithered lighting, weather, HUD
+const RW = AH.W, RH = AH.H;
+AH.Render = function (canvas) {
+  this.c = canvas; this.ctx = canvas.getContext('2d'); this.ctx.imageSmoothingEnabled = false;
+  this.L = new Float32Array(RW * RH); this.LR = new Float32Array(RW * RH); this.LG = new Float32Array(RW * RH); this.LB = new Float32Array(RW * RH);
+  this.cams = {}; this.views = [];
+};
+const R = AH.Render.prototype;
+
+R.computeViews = function (G) {
+  const locals = G.players.filter(p => !p.remote);
+  const alive = locals.filter(p => !p.dead);
+  const track = alive.length ? alive : locals;
+  if (!track.length) return [];
+  const mapW = G.map.w * AH.T, mapH = G.map.h * AH.T;
+  const fitView = (x, y, w, h, cx, cy) => {
+    let camX = cx - w / 2, camY = G.scene === 'town' ? cy - Math.min(h * 0.78, h - 40) : cy - h / 2 - 8;
+    camX = mapW <= w ? (mapW - w) / 2 : AH.clamp(camX, 0, mapW - w);
+    camY = mapH <= h ? (mapH - h) / 2 : AH.clamp(camY, 0, mapH - h);
+    return { x, y, w, h, camX, camY };
+  };
+  if (track.length === 1 || locals.length === 1) {
+    const p = track[0];
+    return [Object.assign(fitView(0, 0, RW, RH, p.x, p.y), { players: locals, main: p })];
+  }
+  let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+  for (const p of track) { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y); }
+  const together = (maxX - minX) < RW - 90 && (maxY - minY) < RH - 70;
+  if (together) return [Object.assign(fitView(0, 0, RW, RH, (minX + maxX) / 2, (minY + maxY) / 2), { players: locals, main: track[0] })];
+  if (locals.length === 2) {
+    return [Object.assign(fitView(0, 0, 159, RH, locals[0].x, locals[0].y), { players: [locals[0]], main: locals[0], split: 1 }),
+      Object.assign(fitView(161, 0, 159, RH, locals[1].x, locals[1].y), { players: [locals[1]], main: locals[1], split: 1 })];
+  }
+  return [Object.assign(fitView(0, 0, 159, RH, locals[0].x, locals[0].y), { players: [locals[0]], main: locals[0], split: 1 }),
+    Object.assign(fitView(161, 0, 159, 89, locals[1].x, locals[1].y), { players: [locals[1]], main: locals[1], split: 1 }),
+    Object.assign(fitView(161, 91, 159, 89, locals[2].x, locals[2].y), { players: [locals[2]], main: locals[2], split: 1 })];
+};
+
+R.draw = function (G) {
+  const ctx = this.ctx;
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, RW, RH);
+  if (!G.map || G.scene === 'title') return;
+  const views = this.computeViews(G);
+  this.views = views;
+  // smooth cameras per view slot
+  views.forEach((v, i) => {
+    const key = (v.split ? 's' : 'u') + i + views.length;
+    const c = this.cams[key];
+    if (c && c.scene === G.scene && c.floor === G.floorNo) { v.camX = AH.lerp(c.x, v.camX, 0.18); v.camY = AH.lerp(c.y, v.camY, 0.18); }
+    this.cams[key] = { x: v.camX, y: v.camY, scene: G.scene, floor: G.floorNo };
+  });
+  this.views = views;
+  const sh = G.shakeA ? (Math.random() - 0.5) * G.shakeA * 2 : 0, sv = G.shakeA ? (Math.random() - 0.5) * G.shakeA * 2 : 0;
+  for (const v of views) {
+    v.camX = Math.round(v.camX + sh); v.camY = Math.round(v.camY + sv);
+    this.drawWorld(G, v);
+    this.applyLight(G, v);
+    this.drawEmissive(G, v);
+    if (G.scene === 'town') this.drawWeather(G, v);
+    this.drawViewHud(G, v, views);
+  }
+  if (views.length > 1) {
+    ctx.fillStyle = '#ffb347';
+    ctx.fillRect(159, 0, 2, RH);
+    if (views.length === 3) ctx.fillRect(161, 89, 159, 2);
+  }
+  this.drawGlobalHud(G, views);
+};
+
+R.inView = function (v, x, y, m) { m = m || 24; return x > v.camX - m && x < v.camX + v.w + m && y > v.camY - m && y < v.camY + v.h + m * 2; };
+
+R.drawWorld = function (G, v) {
+  const ctx = this.ctx, m = G.map;
+  ctx.save(); ctx.beginPath(); ctx.rect(v.x, v.y, v.w, v.h); ctx.clip();
+  ctx.translate(v.x - v.camX, v.y - v.camY);
+  if (G.scene === 'town' && v.camY < 112) this.drawSky(G, v);
+  ctx.drawImage(m.canvas, v.camX, v.camY, v.w, v.h, v.camX, v.camY, v.w, v.h);
+  if (G.scene === 'mine') {
+    ctx.drawImage(m.emCanvas, v.camX, v.camY, v.w, v.h, v.camX, v.camY, v.w, v.h);
+    // water shimmer
+    if (m.biome.hazard === 'water' || G.event === 'flooded') {
+      const t = Math.floor(G.time * 4);
+      ctx.fillStyle = '#4a6a8e';
+      const tx0 = Math.floor(v.camX / AH.T), ty0 = Math.floor(v.camY / AH.T);
+      for (let j = ty0; j < ty0 + v.h / AH.T + 2; j++) for (let i = tx0; i < tx0 + v.w / AH.T + 2; i++) if (m.get(i, j) === 2) ctx.fillRect(i * AH.T + ((i * 7 + j * 3 + t) % 13), j * AH.T + ((i * 3 + j * 5 + t * 2) % 13), 2, 1);
+    }
+  }
+  // zones
+  for (const z of G.zones) {
+    if (!this.inView(v, z.x, z.y, z.r)) continue;
+    const col = { fire: '#c84a1a', efire: '#c84a1a', holy: '#f2e3b3', gas: '#6a9a3a', smoke: '#5a5262' }[z.kind];
+    ctx.fillStyle = col;
+    const r = z.r, a = Math.min(1, z.t) * (z.kind === 'smoke' ? 0.6 : 0.45);
+    for (let j = -r; j <= r; j += 1) for (let i = -r; i <= r; i += 1) {
+      if (i * i + j * j * 1.6 > r * r) continue;
+      const X = Math.round(z.x + i), Y = Math.round(z.y + j * 0.7);
+      if (AH.BAYER[(Y & 3) * 4 + (X & 3)] < a * (1 - Math.hypot(i, j) / r * 0.5)) ctx.fillRect(X, Y, 1, 1);
+    }
+  }
+  // props
+  if (G.scene === 'mine') this.drawMineProps(G, v);
+  // telegraphs
+  for (const f of G.fx) if (f.k === 'tele') {
+    const k = 1 - f.life / f.max; ctx.fillStyle = '#ff3b1f';
+    for (let a = 0; a < Math.PI * 2; a += 0.08) ctx.fillRect(Math.round(f.x + Math.cos(a) * f.r), Math.round(f.y + Math.sin(a) * f.r * 0.7), 1, 1);
+    for (let a = 0; a < Math.PI * 2; a += 0.12) ctx.fillRect(Math.round(f.x + Math.cos(a) * f.r * k), Math.round(f.y + Math.sin(a) * f.r * 0.7 * k), 1, 1);
+  }
+  // drops
+  for (const d of G.drops) {
+    if (!this.inView(v, d.x, d.y)) continue;
+    const mine = d.owner < 0 || v.players.some(p => p.pid === d.owner) || (G.players.length === 1);
+    if (!mine && G.net) continue;
+    const y = Math.round(d.y - d.z - 2 + Math.sin(d.t * 3) * 1);
+    if (d.gold) { AH.drawSpr(ctx, AH.SPR.coin, d.x - 3, y - 3); continue; }
+    const ic = AH.itemIcon(d.item);
+    if (d.item.rarity >= 2 && !d.z) { ctx.fillStyle = AH.RARITY[d.item.rarity].border; for (let k = 0; k < 18; k += 2) ctx.fillRect(Math.round(d.x), y - 8 - k, 1, 1); }
+    AH.drawSpr(ctx, ic, Math.round(d.x - ic.w / 2), y - ic.h + 2);
+    if (G.players.length > 1 && d.owner >= 0) { ctx.fillStyle = AH.PLAYER_COLORS[d.owner]; ctx.fillRect(Math.round(d.x) - 1, y + 2, 3, 1); }
+  }
+  // dying creatures: white flash, then they sink and crumble into ash
+  for (const f of G.fx) if (f.k === 'corpse' && this.inView(v, f.x, f.y, 40)) {
+    const k = 1 - f.life / f.max, s = f.spr, sc = f.sc || 1;
+    const w = s.w * sc, h = Math.max(1, Math.round(s.h * sc * (1 - k * 0.8)));
+    const x = Math.round(f.x - w / 2), y = Math.round(f.y - h + 2 + (f.fly ? -6 + k * 6 : 0));
+    if (k < 0.15) AH.drawFlash(ctx, s, x, y, f.face < 0, sc);
+    else { ctx.globalAlpha = 1 - k; ctx.drawImage(f.face < 0 ? s.cf : s.c, 0, 0, s.w, Math.max(1, Math.round(s.h * (1 - k * 0.8))), x, y, w, h); ctx.globalAlpha = 1; }
+    if (Math.random() < 0.4) G.fx.push({ k: 'px', x: f.x + (Math.random() - 0.5) * w, y: y + Math.random() * h, vx: (Math.random() - 0.5) * 8, vy: -10 - Math.random() * 14, col: Math.random() < 0.5 ? '#5a5060' : '#8a7a7a', life: 0.5 });
+  }
+  // sortable actors
+  const list = [];
+  if (G.scene === 'mine') for (const pr of m.props) if (pr.type === 'grave' && this.inView(v, pr.x, pr.y)) list.push({ y: pr.y, d: () => AH.drawGrave(ctx, pr.x, pr.y, false) });
+  if (G.scene === 'mine') for (const pr of m.props) if (pr.type === 'qitem' && !pr.taken && this.inView(v, pr.x, pr.y)) list.push({ y: pr.y, d: () => {
+    const b = Math.round(Math.sin(G.time * 3) * 1.5);
+    ctx.fillStyle = 'rgba(200,160,255,0.25)'; ctx.fillRect(pr.x - 6, pr.y - 2, 12, 3);
+    ctx.fillStyle = AH.OUT; ctx.fillRect(pr.x - 5, pr.y - 12 + b, 10, 9); ctx.fillStyle = '#e8dcc4'; ctx.fillRect(pr.x - 4, pr.y - 11 + b, 8, 7); ctx.fillStyle = '#8a6a3a'; ctx.fillRect(pr.x - 3, pr.y - 9 + b, 6, 1); ctx.fillRect(pr.x - 3, pr.y - 7 + b, 4, 1);
+    if (Math.floor(G.time * 4) % 2) { ctx.fillStyle = '#e8d0ff'; ctx.fillRect(pr.x + 4, pr.y - 15 + b, 1, 1); ctx.fillRect(pr.x - 6, pr.y - 10 + b, 1, 1); }
+  } });
+  for (const p of G.players) list.push({ y: p.y, d: () => p.draw(ctx, G) });
+  for (const e of G.enemies) if (this.inView(v, e.x, e.y, 40)) list.push({ y: e.y, d: () => e.draw(ctx, G) });
+  for (const pt of G.pets) if (pt.active) list.push({ y: pt.y + (pt.kind === 'canary' ? 30 : 0), d: () => this.drawPet(G, pt) });
+  for (const a of G.allies) list.push({ y: a.y, d: () => AH.drawSpr(ctx, a.spr, a.x - a.spr.w / 2, a.y - a.spr.h + 2, a.face < 0) });
+  for (const n of G.npcs) if (this.inView(v, n.x, n.y)) list.push({ y: n.y, d: () => { const bob = (!n.fixed && n.wa !== null && Math.floor(G.time * 4) % 2) ? -1 : 0; AH.drawSpr(ctx, n.spr, n.x - n.spr.w / 2, n.y - n.spr.h + 2 + bob, n.face < 0); if (n.kind === 'lost' && Math.floor(G.time * 2) % 2) AH.text(ctx, n.x, n.y - 24, '!', '#f2c94c', { align: 'center' });
+    if (n.say && n.sayUntil > G.time) this.bubbles.push(n); } });
+  if (G.scene === 'town') {
+    // lamp posts
+    const lit = G.lampsLit();
+    G.map.lamps.forEach((l, i) => list.push({ y: l.y + 10, d: () => { ctx.fillStyle = '#1a1620'; ctx.fillRect(l.x, l.y - 4, 2, 16); ctx.fillStyle = AH.OUT; ctx.fillRect(l.x - 3, l.y - 10, 8, 7); ctx.fillStyle = i < lit ? '#ffd36a' : '#2a2430'; ctx.fillRect(l.x - 2, l.y - 9, 6, 5); } }));
+  }
+  this.bubbles = [];
+  list.sort((a, b) => a.y - b.y);
+  for (const it of list) it.d();
+  // speech bubbles over villagers
+  for (const n of this.bubbles) {
+    const lines = AH.wrap(n.say, 120).slice(0, 4), w = Math.max(...lines.map(l => AH.textW(l))) + 8, h = lines.length * 8 + 5;
+    const bx = Math.round(n.x - w / 2), by = Math.round(n.y - 36 - h);
+    ctx.fillStyle = AH.OUT; ctx.fillRect(bx - 1, by - 1, w + 2, h + 2); ctx.fillStyle = '#f2e8d4'; ctx.fillRect(bx, by, w, h);
+    ctx.fillStyle = '#f2e8d4'; ctx.fillRect(Math.round(n.x) - 1, by + h, 3, 2); ctx.fillRect(Math.round(n.x), by + h + 2, 1, 1);
+    lines.forEach((l, i) => AH.text(ctx, bx + 4, by + 3 + i * 8, l, '#2a2028', { shadow: null }));
+  }
+  // projectiles (dark parts)
+  for (const pr of G.projs) {
+    if (!this.inView(v, pr.x, pr.y)) continue;
+    if (pr.k === 'arrow') { ctx.fillStyle = '#6b4a2a'; const dx = Math.cos(pr.a), dy = Math.sin(pr.a); for (let k = 0; k < 6; k++) ctx.fillRect(Math.round(pr.x - dx * k), Math.round(pr.y - dy * k), 1, 1); ctx.fillStyle = '#e9e2d0'; ctx.fillRect(Math.round(pr.x), Math.round(pr.y), 1, 1); }
+    else if (pr.k === 'knife') { ctx.fillStyle = '#dfe6f0'; ctx.fillRect(Math.round(pr.x), Math.round(pr.y), 2, 2); }
+    else if (pr.k === 'bomb') { ctx.fillStyle = AH.OUT; ctx.fillRect(Math.round(pr.x) - 3, Math.round(pr.y) - 3, 6, 6); ctx.fillStyle = '#2a2430'; ctx.fillRect(Math.round(pr.x) - 2, Math.round(pr.y) - 2, 4, 4); ctx.fillStyle = Math.floor(G.time * 10) % 2 ? '#ffd36a' : '#ff3b1f'; ctx.fillRect(Math.round(pr.x) + 1, Math.round(pr.y) - 4, 1, 1); }
+  }
+  // smoke puffs
+  for (const f of G.fx) if (f.k === 'smoke') {
+    const k = 1 - f.life / f.max, r = Math.round(f.r * (1 + k * 1.6)), cx = Math.round(f.x + f.vx * k), cy = Math.round(f.y + f.vy * k - k * 6);
+    for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) { const d = Math.hypot(i, j) / r; if (d > 1) continue; if (AH.BAYER[((cy + j) & 3) * 4 + ((cx + i) & 3)] < (1 - k) * (1.1 - d * 0.6)) { ctx.fillStyle = d < 0.5 ? '#c8c4d0' : '#8a8494'; ctx.fillRect(cx + i, cy + j, 1, 1); } }
+  }
+  for (const f of G.fx) if (f.k === 'px' && !f.em) { ctx.fillStyle = f.col; ctx.fillRect(Math.round(f.x), Math.round(f.y), 1, 1); }
+  ctx.restore();
+};
+R.drawMineProps = function (G, v) {
+  const ctx = this.ctx, m = G.map;
+  if (this.inView(v, m.stairs.x, m.stairs.y)) {
+    AH.drawSpr(ctx, AH.SPR.stairs, m.stairs.x - 8, m.stairs.y - 5);
+    if (m.stairs.locked) { ctx.fillStyle = '#5a1a12'; ctx.fillRect(m.stairs.x - 6, m.stairs.y - 1, 12, 1); ctx.fillRect(m.stairs.x - 6, m.stairs.y + 2, 12, 1); }
+  }
+  if (this.inView(v, m.rope.x, m.rope.y)) AH.drawSpr(ctx, m.hasLift ? AH.SPR.lift : AH.SPR.rope, m.rope.x - (m.hasLift ? 8 : 4), m.rope.y - (m.hasLift ? 2 : 6));
+  for (const p of m.props) {
+    if (!this.inView(v, p.x, p.y)) continue;
+    switch (p.type) {
+      case 'chest': AH.drawSpr(ctx, p.open ? AH.SPR.chestOpen : AH.SPR.chest, p.x - 8, p.y - 9); break;
+      case 'tablet': AH.drawSpr(ctx, AH.SPR.tablet, p.x - 6, p.y - 8); break;
+      case 'shrine': AH.drawSpr(ctx, AH.SPR.shrine, p.x - 6, p.y - 11); if (p.used) { ctx.fillStyle = '#3a3442'; ctx.fillRect(p.x - 2, p.y - 11, 5, 3); } break;
+      case 'dig': if (!p.dug) { if (G.pets.some(pt => pt.kind === 'dog' && pt.active) || Math.floor(G.time * 2 + p.x) % 7 === 0) AH.drawSpr(ctx, AH.SPR.digspot, p.x - 4, p.y - 3); } else { ctx.fillStyle = '#1a1620'; ctx.fillRect(p.x - 3, p.y - 1, 6, 2); } break;
+      case 'deco': {
+        const s = p.kind === 'bones' ? AH.SPR.bones : AH.SPR.rubble;
+        if (p.kind === 'moss') { ctx.fillStyle = '#3e6a3a'; ctx.fillRect(p.x - 3, p.y, 6, 1); ctx.fillRect(p.x - 1, p.y - 1, 3, 1); }
+        else if (p.kind === 'shroomS') { ctx.fillStyle = '#c84ac8'; ctx.fillRect(p.x - 1, p.y - 3, 3, 1); ctx.fillStyle = '#d8c8a8'; ctx.fillRect(p.x, p.y - 2, 1, 2); }
+        else AH.drawSpr(ctx, s, p.x - 3, p.y - 2);
+        break;
+      }
+      case 'torchWall': ctx.fillStyle = '#5a3c22'; ctx.fillRect(p.x + 2, p.y + 5, 2, 7); ctx.fillStyle = '#3a261a'; ctx.fillRect(p.x + 1, p.y + 4, 4, 2); break;
+    }
+  }
+  // sniffed secret wall marker
+  if (m.secret && m.secret.sniffed && !m.secret.found) { const x = m.secret.wall[0] * AH.T + 8, y = m.secret.wall[1] * AH.T + 6; if (Math.floor(G.time * 3) % 2) { ctx.fillStyle = '#f2c94c'; ctx.fillRect(x - 1, y, 3, 1); ctx.fillRect(x, y - 1, 1, 3); } }
+};
+R.drawPet = function (G, pt) {
+  const ctx = this.ctx;
+  const s = AH.SPR[AH.PETS[pt.kind].spr];
+  const bob = pt.moving && Math.floor(G.time * 8) % 2 ? -1 : 0;
+  if (pt.kind === 'canary') { const fl = Math.floor(G.time * 10) % 2; AH.drawSpr(ctx, s, pt.x - 3, pt.y - 3 + fl, pt.face < 0); if (pt.chirp > 0) AH.text(ctx, pt.x + 4, pt.y - 10, '!', '#f8d83c'); return; }
+  AH.drawSpr(ctx, s, pt.x - s.w / 2, pt.y - s.h + 2 + bob, pt.face < 0);
+};
+
+// ---------- lighting ----------
+// live sky behind the town (day blue -> dusk -> night)
+R.drawSky = function (G, v) {
+  const ctx = this.ctx, a = this.ambientOf(G), h = G.world.hour;
+  const day = ['#5a86c0', '#6e98cc', '#86acd8', '#a0c0e0', '#bcd2e8', '#d4e0ec'];
+  const dusk = ['#2a2a50', '#3e3460', '#5a4068', '#86506a', '#c06a5a', '#e89a5a'];
+  const night = ['#0e0e1c', '#141428', '#1a1a30', '#22203a', '#2a2642', '#322c48'];
+  const isDusk = (h > 17 && h < 21) || (h > 5 && h < 8);
+  const t = AH.clamp((a - 0.3) / 0.7, 0, 1);
+  const top = 0, bot = 112, n = 6;
+  for (let i = 0; i < n; i++) {
+    let col;
+    if (isDusk) col = t > 0.5 ? AH.mix(dusk[i], day[i], (t - 0.5) * 2) : AH.mix(night[i], dusk[i], t * 2);
+    else col = AH.mix(night[i], day[i], t);
+    ctx.fillStyle = col;
+    ctx.fillRect(v.camX, top + Math.floor(i * (bot - top) / n), v.w, Math.ceil((bot - top) / n) + 1);
+  }
+  if (t < 0.4) { // stars
+    ctx.fillStyle = '#e8e4ff';
+    for (let k = 0; k < 60; k++) { const sx = (k * 97) % (G.map.w * AH.T), sy = (k * 53) % 70; if (sx >= v.camX && sx < v.camX + v.w && (Math.floor(G.time * 2 + k) % 9)) ctx.fillRect(sx, sy, 1, 1); }
+    ctx.fillStyle = '#f2ecd0'; const mx = 40 * AH.T; ctx.fillRect(mx, 12, 8, 8); ctx.fillStyle = night[1]; ctx.fillRect(mx + 3, 11, 7, 7);
+  }
+};
+R.ambientOf = function (G) {
+  if (G.scene === 'town') {
+    const h = G.world.hour;
+    let a = h < 5 ? 0.3 : h < 8 ? AH.lerp(0.3, 1, (h - 5) / 3) : h < 18 ? 1 : h < 21 ? AH.lerp(1, 0.32, (h - 18) / 3) : 0.3;
+    const w = G.world.weather;
+    if (w === 'rain') a *= 0.82; else if (w === 'fog') a *= 0.86; else if (w === 'storm') a *= 0.68; else if (w === 'snow') a *= 0.92;
+    if (G.lightning > 0) a = Math.min(1, a + 0.7);
+    return a;
+  }
+  if (G.floorNo <= 5) return 0.82;
+  if (G.event === 'dark') return 0.015;
+  return G.map.biome.ambient;
+};
+R.collectLights = function (G, v) {
+  const L = [];
+  const add = (x, y, r, i, tint) => { if (x + r > v.camX && x - r < v.camX + v.w && y + r > v.camY && y - r < v.camY + v.h) L.push([x, y, r, i, tint]); };
+  const warm = [1.0, 0.86, 0.66];
+  for (const p of G.players) {
+    if (p.remote && G.isHost === false) { /* still light */ }
+    const torchK = G.scene === 'mine' && G.floorNo >= 6 ? (0.35 + 0.65 * Math.min(1, p.torch / 40)) : 1;
+    const r = (G.scene === 'town' ? 70 : 112) * torchK * (1 + p.S.light / 100) * (p.dead ? 0.4 : 1);
+    add(p.x, p.y - 8, r, 1.0, warm);
+  }
+  for (const l of G.map.lights) { const f = l.flicker ? 0.9 + Math.sin(G.time * 13 + l.x) * 0.06 + Math.sin(G.time * 7.3 + l.y) * 0.05 : 1; add(l.x, l.y, l.r * f, l.i, l.tint); }
+  if (G.scene === 'mine' && G.map.lavaLights) for (const l of G.map.lavaLights) add(l.x, l.y, 30, 0.55, [1.25, 0.6, 0.35]);
+  for (const pr of G.projs) if (pr.light || pr.enemy) add(pr.x, pr.y, pr.k === 'fire' ? 40 : 24, 0.7, pr.k === 'fire' ? [1.2, 0.7, 0.4] : [0.8, 0.95, 1.2]);
+  for (const f of G.flashLights) add(f.x, f.y, f.r, f.i * (f.life / 0.25), f.tint);
+  for (const z of G.zones) if (z.kind === 'fire' || z.kind === 'efire' || z.kind === 'holy') add(z.x, z.y, z.r * 1.6, 0.5, z.kind === 'holy' ? [1.1, 1.05, 0.85] : [1.2, 0.7, 0.4]);
+  for (const e of G.enemies) if ((e.legend || e.boss || e.nemesis) && !e.dead && !e.hidden) add(e.x, e.y - 10, 96, 0.7, [1.25, 0.7, 0.55]);
+  if (G.scene === 'town') {
+    const night = 1 - this.ambientOf(G);
+    if (night > 0.15) {
+      for (const w of G.map.windows) add(w.x, w.y, 34, 0.55 * night, [1.0, 0.78, 0.48]);
+      const lit = G.lampsLit();
+      G.map.lamps.forEach((l, i) => { if (i < lit) add(l.x + 1, l.y - 4, 56, 0.85 * night + 0.1, [1.0, 0.82, 0.52]); });
+    }
+    if (G.map.forge) add(G.map.forge.x, G.map.forge.y, 56, 0.9, [1.0, 0.62, 0.32]);
+  }
+  if (G.scene === 'mine' && G.map.biome.id === 'ashen') add(v.camX + v.w / 2, v.camY - 40, 220, 0.18, [1.3, 0.6, 0.4]);
+  return L;
+};
+R.applyLight = function (G, v) {
+  const amb = this.ambientOf(G);
+  if (amb >= 0.995) return;
+  const ctx = this.ctx;
+  const W = v.w, H = v.h;
+  const Ls = this.L, LR = this.LR, LG = this.LG, LB = this.LB;
+  const n = W * H;
+  const ambTint = G.scene === 'town' ? [0.82, 0.88, 1.08] : G.map.biome.tint;
+  for (let i = 0; i < n; i++) { Ls[i] = amb; LR[i] = amb * ambTint[0]; LG[i] = amb * ambTint[1]; LB[i] = amb * ambTint[2]; }
+  const lights = this.collectLights(G, v);
+  for (const [lx, ly, r, inten, tint] of lights) {
+    const cx = lx - v.camX, cy = ly - v.camY;
+    const x0 = Math.max(0, Math.floor(cx - r)), x1 = Math.min(W - 1, Math.ceil(cx + r));
+    const y0 = Math.max(0, Math.floor(cy - r)), y1 = Math.min(H - 1, Math.ceil(cy + r));
+    const ir = 1 / r;
+    for (let y = y0; y <= y1; y++) {
+      const dy = (y - cy) * 1.15, row = y * W;
+      for (let x = x0; x <= x1; x++) {
+        const dx = x - cx; const d = Math.sqrt(dx * dx + dy * dy) * ir;
+        if (d >= 1) continue;
+        const f = 1 - d; const val = inten * f * Math.sqrt(f) ;
+        const o = row + x; Ls[o] += val; LR[o] += val * tint[0]; LG[o] += val * tint[1]; LB[o] += val * tint[2];
+      }
+    }
+  }
+  const img = ctx.getImageData(v.x, v.y, W, H), px = img.data;
+  const steps = 6;
+  const dk0 = 6, dk1 = 5, dk2 = 12;
+  for (let y = 0; y < H; y++) {
+    const by = ((y + v.y) & 3) * 4;
+    for (let x = 0; x < W; x++) {
+      const o = y * W + x, p4 = o * 4;
+      const s = Ls[o];
+      let tot = s > 1 ? 1 : s;
+      let b = Math.round(tot * steps);
+      const f = b >= steps ? 1 : b / steps;
+      const inv = s > 0.0001 ? 1 / s : 0;
+      let tr = LR[o] * inv, tg = LG[o] * inv, tb = LB[o] * inv;
+      if (s > 1.2) { const k = Math.min(1, (s - 1.2) * 0.5); tr += (1 - tr) * k * 0.3; tg += (1 - tg) * k * 0.3; tb += (1 - tb) * k * 0.3; }
+      let r = px[p4] * tr, g = px[p4 + 1] * tg, bb = px[p4 + 2] * tb;
+      if (r > 255) r = 255; if (g > 255) g = 255; if (bb > 255) bb = 255;
+      px[p4] = dk0 + (r - dk0) * f; px[p4 + 1] = dk1 + (g - dk1) * f; px[p4 + 2] = dk2 + (bb - dk2) * f;
+    }
+  }
+  ctx.putImageData(img, v.x, v.y);
+};
+
+R.drawEmissive = function (G, v) {
+  const ctx = this.ctx, m = G.map;
+  ctx.save(); ctx.beginPath(); ctx.rect(v.x, v.y, v.w, v.h); ctx.clip();
+  ctx.translate(v.x - v.camX, v.y - v.camY);
+  if (G.scene === 'mine') ctx.drawImage(m.emCanvas, v.camX, v.camY, v.w, v.h, v.camX, v.camY, v.w, v.h);
+  else {
+    const night = 1 - this.ambientOf(G);
+    if (night > 0.2) { ctx.globalAlpha = Math.min(1, night * 1.4); ctx.drawImage(m.emCanvas, v.camX, v.camY, v.w, v.h, v.camX, v.camY, v.w, v.h); ctx.globalAlpha = 1; }
+    if (G.map.forge) { const f = G.map.forge; ctx.fillStyle = Math.floor(G.time * 8) % 2 ? '#ffd36a' : '#ff8a2e'; ctx.fillRect(f.x - 3, f.y - 2, 2, 2); ctx.fillRect(f.x + 2, f.y - 4, 1, 2); }
+    const lit = G.lampsLit();
+    G.map.lamps.forEach((l, i) => { if (i < lit && night > 0.15) { ctx.fillStyle = '#ffd36a'; ctx.fillRect(l.x - 2, l.y - 9, 6, 5); ctx.fillStyle = '#fff2b0'; ctx.fillRect(l.x - 2, l.y - 9, 6, 1); } });
+    // chimney smoke
+    if (G.map.chimney) { ctx.fillStyle = '#5a5468'; for (let k = 0; k < 6; k++) { const t = (G.time * 0.6 + k / 6) % 1; ctx.fillRect(Math.round(G.map.chimney.x + Math.sin(t * 6 + k) * 2), Math.round(G.map.chimney.y - t * 30), 2, 2); } }
+  }
+  // wall torch flames
+  if (G.scene === 'mine') for (const p of m.props) if (p.type === 'torchWall' && this.inView(v, p.x, p.y)) {
+    const fl = Math.floor(G.time * 10 + p.x) % 3;
+    ctx.fillStyle = '#ff8a2e'; ctx.fillRect(p.x + 1, p.y + 1 - fl % 2, 4, 3);
+    ctx.fillStyle = '#ffd36a'; ctx.fillRect(p.x + 2, p.y + 1, 2, 3);
+    ctx.fillStyle = '#fff2b0'; ctx.fillRect(p.x + 2, p.y + 3, 1, 1);
+    if (fl === 0) { ctx.fillStyle = '#e0702a'; ctx.fillRect(p.x + 3, p.y - 1, 1, 1); }
+  }
+  for (const e of G.enemies) if (this.inView(v, e.x, e.y, 40)) e.drawEm(ctx, G);
+  if (G.scene === 'mine') for (const p of m.props) if (p.type === 'tablet' && this.inView(v, p.x, p.y)) AH.drawSprEm(ctx, AH.SPR.tablet, p.x - 6, p.y - 8);
+  // glowing projectiles
+  for (const pr of G.projs) {
+    if (!this.inView(v, pr.x, pr.y)) continue;
+    if (pr.k === 'magic' || pr.k === 'spit' || pr.k === 'fire' || pr.k === 'wave') {
+      const r = pr.k === 'fire' ? 3 : pr.heavy ? 3 : 2;
+      ctx.fillStyle = pr.col; ctx.fillRect(Math.round(pr.x) - r, Math.round(pr.y) - r + 1, r * 2, r * 2 - 2); ctx.fillRect(Math.round(pr.x) - r + 1, Math.round(pr.y) - r, r * 2 - 2, r * 2);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(pr.x) - 1, Math.round(pr.y) - 1, 2, 2);
+      if (Math.random() < 0.5) G.fx.push({ k: 'px', x: pr.x, y: pr.y, vx: 0, vy: 0, col: pr.col, life: 0.15, em: 1 });
+    }
+  }
+  // fx
+  for (const f of G.fx) {
+    if (f.k === 'px' && f.em) { ctx.fillStyle = f.col; ctx.fillRect(Math.round(f.x), Math.round(f.y), 1, 1); }
+    else if (f.k === 'ring') { const k = 1 - f.life / f.max; const r = AH.lerp(f.r0, f.r1, k); ctx.fillStyle = f.col; for (let a = 0; a < Math.PI * 2; a += 1 / Math.max(4, r)) ctx.fillRect(Math.round(f.x + Math.cos(a) * r), Math.round(f.y + Math.sin(a) * r * 0.7), 1, 1); }
+    else if (f.k === 'boom') { const k = 1 - f.life / f.max; const r = f.r * (0.4 + k * 0.6); for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) { const d = Math.hypot(i, j) / r; if (d > 1) continue; if (AH.BAYER[((Math.round(f.y + j)) & 3) * 4 + ((Math.round(f.x + i)) & 3)] < (1 - d) * (1 - k) * 1.3) { ctx.fillStyle = d < 0.3 ? '#fff2b0' : d < 0.6 ? '#ffb347' : '#c84a1a'; ctx.fillRect(Math.round(f.x + i), Math.round(f.y + j * 0.7), 1, 1); } } }
+    else if (f.k === 'bolt') { const rng = AH.mulberry(f.seed | 0); let x = f.x0, y = f.y0; const n = 8; ctx.fillStyle = '#ffe04a'; for (let i = 1; i <= n; i++) { const nx = AH.lerp(f.x0, f.x1, i / n) + (i < n ? rng.range(-4, 4) : 0), ny = AH.lerp(f.y0, f.y1, i / n) + (i < n ? rng.range(-4, 4) : 0); const st = Math.ceil(Math.hypot(nx - x, ny - y)); for (let s = 0; s < st; s++) ctx.fillRect(Math.round(AH.lerp(x, nx, s / st)), Math.round(AH.lerp(y, ny, s / st)), 1, 1); x = nx; y = ny; } }
+    else if (f.k === 'arc') {
+      const cols = f.heavy ? ['#fff2d0', '#ffd36a', '#ffb347', '#e0702a'] : ['#ffffff', '#cfd6e4', '#8a92a8'];
+      const k = 1 - f.life / f.max;
+      AH.arc(ctx, f.x, f.y, f.r * (0.7 + k * 0.3), f.a - f.arc / 2, f.a - f.arc / 2 + f.arc * Math.min(1, k * 1.6 + 0.3), cols);
+    }
+  }
+  // numbers
+  for (const f of G.fx) if (f.k === 'num') { if (f.life < 0.2 && Math.floor(f.life * 30) % 2) continue; AH.text(ctx, f.x, f.y, f.t, f.col, { align: 'center' }); }
+  // names over legends
+  for (const e of G.enemies) if ((e.legend || e.nemesis) && !e.boss && !e.dead && !e.hidden && this.inView(v, e.x, e.y)) AH.text(ctx, e.x, e._dy - 12, e.name, e.nemesis ? '#e05a5a' : '#ff9a3e', { align: 'center' });
+  // interact prompts
+  for (const p of v.players) {
+    const it = p.interactable;
+    if (!it || !it.label || p.dead) continue;
+    const label = it.label, tw = AH.textW(label) + 16;
+    const x = Math.round(it.x - tw / 2), y = Math.round(it.y - 34);
+    AH.frame(ctx, x, y, tw, 12, { fill: '#15121b', edge: '#c9a24a', hi: '#f2e3b3' });
+    AH.text(ctx, x + 4, y + 3, 'A', '#ffb347'); AH.text(ctx, x + 12, y + 3, label, '#f2e3b3');
+  }
+  ctx.restore();
+};
+
+R.drawWeather = function (G, v) {
+  const ctx = this.ctx, w = G.world.weather;
+  ctx.save(); ctx.beginPath(); ctx.rect(v.x, v.y, v.w, v.h); ctx.clip();
+  if (w === 'rain' || w === 'storm') {
+    const n = w === 'storm' ? 140 : 90;
+    const t = G.time;
+    for (let i = 0; i < n; i++) {
+      const sx = (i * 73.13 + t * 40) % v.w, sy = (i * 41.7 + t * (210 + (i % 5) * 20)) % (v.h + 10) - 5;
+      ctx.fillStyle = i % 3 ? 'rgba(160,180,216,0.55)' : 'rgba(200,214,240,0.7)';
+      ctx.fillRect(Math.round(v.x + sx), Math.round(v.y + sy), 1, 3);
+    }
+    for (let i = 0; i < 14; i++) { const sx = (i * 97.3 + Math.floor(t * 6) * 31) % v.w, sy = (i * 53.1 + Math.floor(t * 6) * 17) % v.h; ctx.fillStyle = 'rgba(180,196,230,0.6)'; ctx.fillRect(Math.round(v.x + sx) - 1, Math.round(v.y + sy), 3, 1); }
+  } else if (w === 'snow') {
+    for (let i = 0; i < 80; i++) {
+      const sx = (i * 61.7 + Math.sin(G.time + i) * 10 + G.time * 8) % v.w, sy = (i * 37.3 + G.time * (22 + (i % 4) * 6)) % v.h;
+      ctx.fillStyle = i % 4 ? '#e8f0ff' : '#ffffff'; ctx.fillRect(Math.round(v.x + sx), Math.round(v.y + sy), i % 5 ? 1 : 2, i % 5 ? 1 : 2);
+    }
+  } else if (w === 'fog') {
+    // soft drifting fog banks
+    ctx.fillStyle = 'rgba(150,156,180,0.16)'; ctx.fillRect(v.x, v.y, v.w, v.h);
+    for (let k = 0; k < 7; k++) {
+      const by = v.y + ((k * 29 + v.camY * 0.2) % v.h), bw = 90 + (k * 37) % 80;
+      const bx = v.x + ((k * 83 + G.time * (6 + k)) % (v.w + bw)) - bw;
+      ctx.fillStyle = 'rgba(170,176,196,0.13)';
+      for (let j = 0; j < 4; j++) ctx.fillRect(Math.round(bx + j * 6), Math.round(by + j * 3), bw - j * 12, 12 - j * 3);
+    }
+  }
+  if (G.lightning > 0.15) { ctx.fillStyle = 'rgba(230,236,255,0.35)'; ctx.fillRect(v.x, v.y, v.w, v.h); }
+  ctx.restore();
+};
+
+// ---------- HUD ----------
+R.playerPanel = function (G, p, x, y, compact) {
+  const ctx = this.ctx;
+  const w = compact ? 76 : 106, h = compact ? 22 : 30;
+  AH.frame(ctx, x, y, w, h, { edge: compact ? p.color : '#5a4e66' });
+  if (!compact) {
+    AH.slot(ctx, x + 2, y + 2, 26, '#c9a24a', '#1d1824');
+    ctx.save(); ctx.beginPath(); ctx.rect(x + 4, y + 4, 22, 22); ctx.clip();
+    AH.drawSpr(ctx, p.portrait, x + 15 - p.portrait.w / 2, y + 5, false); ctx.restore();
+    AH.text(ctx, x + 31, y + 3, p.ch.name.slice(0, 7), '#f2e3b3');
+    AH.text(ctx, x + w - 4, y + 3, 'LV' + p.ch.level, '#8d8494', { align: 'right' });
+    AH.bar(ctx, x + 31, y + 13, w - 35, 4, p.hp / p.S.hp, '#d43c3c', '#3a1416', '#ff8a8a');
+    AH.bar(ctx, x + 31, y + 20, w - 35, 3, p.mp / p.S.mp, '#4a7bd1', '#141a2a', '#9ec0ff');
+    AH.bar(ctx, x + 31, y + 26, w - 35, 1, p.ch.xp / AH.xpNeed(p.ch.level), '#e8c25a', '#2a2214');
+  } else {
+    AH.text(ctx, x + 4, y + 3, p.ch.name.slice(0, 7), p.color);
+    AH.text(ctx, x + w - 4, y + 3, '' + p.ch.level, '#8d8494', { align: 'right' });
+    AH.bar(ctx, x + 4, y + 13, w - 8, 3, p.hp / p.S.hp, '#d43c3c', '#3a1416', '#ff8a8a');
+    AH.bar(ctx, x + 4, y + 18, w - 8, 1, p.mp / p.S.mp, '#4a7bd1', '#141a2a');
+  }
+  if (p.dead) AH.text(ctx, x + w / 2, y + h / 2 - 3, 'DOWN', '#ff6a5a', { align: 'center' });
+  return h;
+};
+R.miniBar = function (G, p, x, y) {
+  const ctx = this.ctx;
+  const ids = p.ch.slots;
+  for (let i = 0; i < 3; i++) {
+    const id = ids[i]; const sx = x + i * 13;
+    AH.slot(ctx, sx, y, 12, '#3a3242');
+    if (!id) continue;
+    AH.drawSpr(ctx, AH.ICON[AH.SKILLS[id].icon], sx - 1, y - 1, false);
+    const cd = p.skillCd[id] || 0;
+    if (cd > 0) { ctx.fillStyle = 'rgba(8,6,12,0.7)'; ctx.fillRect(sx + 2, y + 2, 8, Math.ceil(8 * cd / AH.SKILLS[id].cd)); }
+  }
+  AH.text(ctx, x + 41, y + 3, '' + p.countCons('potion'), '#ff8a8a');
+};
+R.drawViewHud = function (G, v, views) {
+  const ctx = this.ctx;
+  if (v.split) {
+    const p = v.main;
+    this.playerPanel(G, p, v.x + 2, v.y + 2, true);
+    this.miniBar(G, p, v.x + 2, v.y + 26);
+    if (G.scene === 'mine' && G.floorNo >= 6) this.torchGauge(G, p, v.x + 2, v.y + 40);
+    // arrows to others
+    for (const o of G.players) {
+      if (o === p || o.remote) continue;
+      const ox = o.x - v.camX, oy = o.y - 8 - v.camY;
+      if (ox > 0 && ox < v.w && oy > 0 && oy < v.h) continue;
+      const cx = v.w / 2, cy = v.h / 2, a = Math.atan2(oy - cy, ox - cx);
+      const ex = AH.clamp(cx + Math.cos(a) * 1000, 10, v.w - 10), ey = AH.clamp(cy + Math.sin(a) * 1000, 12, v.h - 12);
+      const tt = Math.min(Math.abs((v.w / 2 - 10) / Math.cos(a) || 1e9), Math.abs((v.h / 2 - 12) / Math.sin(a) || 1e9));
+      const ax = v.x + cx + Math.cos(a) * tt, ay = v.y + cy + Math.sin(a) * tt;
+      this.arrow(ax, ay, a, o.color);
+      const dm = Math.round(AH.dist(o, p) / AH.T);
+      const lx = AH.clamp(ax - Math.cos(a) * 14, v.x + 12, v.x + v.w - 12), ly = AH.clamp(ay - Math.sin(a) * 12, v.y + 4, v.y + v.h - 16);
+      AH.text(ctx, lx, ly - 4, 'P' + (o.pid + 1), o.color, { align: 'center' });
+      AH.text(ctx, lx, ly + 4, dm + 'M', '#a39bb0', { align: 'center' });
+    }
+    this.drawToasts(G, v, p.pid);
+  } else {
+    const locals = v.players;
+    if (locals.length === 1 && !G.net) {
+      const p = locals[0];
+      this.playerPanel(G, p, v.x + 2, v.y + 2, false);
+      if (G.scene === 'mine' && G.floorNo >= 6) this.torchGauge(G, p, v.x + 2, v.y + 34);
+      this.petPanel(G, p, v.x + 2, v.y + (G.scene === 'mine' && G.floorNo >= 6 ? 44 : 34));
+      this.hotbar(G, p);
+    } else {
+      let y = v.y + 2;
+      const all = G.net ? G.players : locals;
+      for (const p of all) {
+        if (p.remote) { this.playerPanel(G, p, v.x + 2, y, true); y += 24; continue; }
+        this.playerPanel(G, p, v.x + 2, y, true); this.miniBar(G, p, v.x + 80, y + 4);
+        y += 24;
+      }
+      if (G.scene === 'mine' && G.floorNo >= 6) for (const p of locals) { this.torchGauge(G, p, v.x + 2, y); y += 8; }
+      if (G.net && locals.length === 1) this.hotbar(G, locals[0]);
+    }
+    if (G.scene === 'mine' && views.length === 1) this.minimap(G, v);
+    this.drawToasts(G, v, null);
+  }
+};
+R.torchGauge = function (G, p, x, y) {
+  const ctx = this.ctx;
+  AH.drawSpr(ctx, AH.ICON.torch, x - 2, y - 3);
+  AH.bar(ctx, x + 12, y + 2, 34, 2, p.torch / 100, p.torch < 25 ? '#e05a3a' : '#ffb347', '#2a1a10');
+  AH.text(ctx, x + 50, y, '' + p.countCons('torch'), '#cfc6b4');
+};
+R.petPanel = function (G, p, x, y) {
+  const pt = G.pets.find(q => q.owner === p); if (!pt || !pt.active) return;
+  const ctx = this.ctx;
+  const s = AH.SPR[AH.PETS[pt.kind].spr];
+  AH.frame(ctx, x, y, 64, 13);
+  AH.drawSpr(ctx, s, x + 3, y + (13 - s.h) / 2 | 0);
+  AH.text(ctx, x + 19, y + 3, AH.PETS[pt.kind].name, '#cfc6b4');
+};
+R.arrow = function (x, y, a, col) {
+  const ctx = this.ctx;
+  for (let i = 0; i < 8; i++) for (let j = -i; j <= i; j++) {
+    const px = Math.round(x - Math.cos(a) * (8 - i) * 1 + Math.cos(a + Math.PI / 2) * j * 0.5), py = Math.round(y - Math.sin(a) * (8 - i) + Math.sin(a + Math.PI / 2) * j * 0.5);
+    ctx.fillStyle = Math.abs(j) === i ? AH.OUT : col; ctx.fillRect(px, py, 1, 1);
+  }
+};
+R.hotbar = function (G, p) {
+  const ctx = this.ctx;
+  const items = [
+    { k: 'A', ic: AH.itemIcon(p.weapon() || { kind: 'cons', icon: 'dodge' }) },
+    { k: 'X', ic: AH.ICON.heavy },
+    { k: 'B', ic: AH.ICON.dodge, cd: p.cd.dodge / 0.85 },
+  ];
+  ['Y', 'LB', 'RB'].forEach((k, i) => { if (p.ch.slots[i]) items.push({ k, sk: p.ch.slots[i] }); });
+  items.push({ k: '^', ic: AH.ICON.potion, n: p.countCons('potion') });
+  if (p.ch.cls === 'wizard' || p.countCons('mana')) items.push({ k: '_', ic: AH.ICON.mana, n: p.countCons('mana') });
+  const S = 18, Gp = 2, x0 = Math.floor((RW - (items.length * S + (items.length - 1) * Gp)) / 2), y = RH - 30;
+  items.forEach((it, i) => {
+    const x = x0 + i * (S + Gp);
+    AH.slot(ctx, x, y, S, '#5a4e66');
+    let ic = it.ic, cd = it.cd || 0;
+    if (it.sk) { ic = AH.ICON[AH.SKILLS[it.sk].icon]; cd = (p.skillCd[it.sk] || 0) / AH.SKILLS[it.sk].cd; if (p.mp < p.manaCost(AH.SKILLS[it.sk].mp)) { ctx.fillStyle = '#141a2a'; ctx.fillRect(x + 2, y + 2, S - 4, S - 4); } }
+    if (ic) AH.iconIn(ctx, ic, x, y, S);
+    if (cd > 0) { ctx.fillStyle = 'rgba(8,6,12,0.72)'; ctx.fillRect(x + 2, y + 2, S - 4, Math.ceil((S - 4) * Math.min(1, cd))); }
+    if (it.n !== undefined) AH.text(ctx, x + S - 2, y + S - 8, '' + it.n, '#ffffff', { align: 'right' });
+    if (!AH.isTouch) AH.text(ctx, x + S / 2, y + S + 3, it.k, '#cfc6b4', { align: 'center' });
+  });
+};
+R.minimap = function (G, v) {
+  const ctx = this.ctx, m = G.map;
+  const mw = 56, mh = 40, x = v.x + v.w - mw - 3, y = v.y + 3;
+  AH.frame(ctx, x - 2, y - 2, mw + 4, mh + 4, { fill: '#0c0a10' });
+  const sx = mw / m.w, sy = mh / m.h;
+  // reveal around players
+  for (const p of G.players) {
+    const tx = Math.floor(p.x / AH.T), ty = Math.floor(p.y / AH.T);
+    for (let j = -6; j <= 6; j++) for (let i = -8; i <= 8; i++) { const X = tx + i, Y = ty + j; if (X >= 0 && Y >= 0 && X < m.w && Y < m.h) m.seen[Y * m.w + X] = 1; }
+  }
+  for (let j = 0; j < m.h; j++) for (let i = 0; i < m.w; i++) {
+    if (!m.seen[j * m.w + i]) continue;
+    const t = m.get(i, j); if (AH.solidTile(t)) continue;
+    ctx.fillStyle = t === 2 ? '#2a4a6e' : t === 3 ? '#a83a1a' : '#4a4256';
+    ctx.fillRect(x + Math.floor(i * sx), y + Math.floor(j * sy), Math.ceil(sx), Math.ceil(sy));
+  }
+  const dot = (wx, wy, col) => { ctx.fillStyle = col; ctx.fillRect(x + Math.floor(wx / AH.T * sx) - 1, y + Math.floor(wy / AH.T * sy) - 1, 2, 2); };
+  if (m.seen[Math.floor(m.stairs.y / AH.T) * m.w + Math.floor(m.stairs.x / AH.T)]) dot(m.stairs.x, m.stairs.y, '#6fd6e8');
+  dot(m.rope.x, m.rope.y, '#c8a060');
+  for (const e of G.enemies) if ((e.legend || e.boss || e.nemesis) && !e.dead) dot(e.x, e.y, '#ff9a3e');
+  for (const pr of m.props) if (pr.type === 'grave' && pr.g.items && G.players.some(p => p.ch.created === pr.g.owner) && Math.floor(G.time * 3) % 2) dot(pr.x, pr.y, '#ff5a5a');
+  for (const p of G.players) dot(p.x, p.y, p.color);
+};
+R.drawToasts = function (G, v, pid) {
+  const ctx = this.ctx;
+  const list = G.toasts.filter(t => pid === null ? true : (t.pid === pid || t.pid < 0)).slice(-4);
+  let y = v.y + v.h - (v.split ? 14 : 44) - (list.length - 1) * 10;
+  for (const t of list) {
+    const msg = (pid === null && t.pid >= 0 && G.players.length > 1 ? 'P' + (t.pid + 1) + ': ' : '') + t.msg;
+    const lines = AH.wrap(msg, v.w - 20);
+    for (const ln of lines.slice(0, 2)) {
+      if (t.t < 0.4 && Math.floor(t.t * 20) % 2) { y += 10; continue; }
+      AH.text(ctx, v.x + 6, y, ln, t.col);
+      y += 10;
+    }
+  }
+};
+R.drawGlobalHud = function (G, views) {
+  const ctx = this.ctx;
+  if (G.scene === 'mine') {
+    const fx = RW / 2;
+    if (views.length === 1) {
+      AH.text(ctx, fx, 3, (G.mode === 'endless' ? 'DEPTH ' : 'FLOOR ') + G.floorNo, '#ffb347', { align: 'center' });
+      AH.text(ctx, fx, 12, G.map.biome.name, '#6fd6e8', { align: 'center' });
+    } else AH.text(ctx, fx, RH - 9, 'F' + G.floorNo, '#ffb347', { align: 'center' });
+    if (G.mode === 'time') AH.text(ctx, fx, 22, AH.fmtTime(G.runTimer || 0), '#f2e3b3', { align: 'center' });
+    if (G.event === 'collapse' && G.collapseT > 0) AH.text(ctx, fx, 22, 'COLLAPSE ' + Math.ceil(G.collapseT), '#ff8a8a', { align: 'center' });
+    // quest tracker under the minimap
+    if (views.length === 1 && G.activeQuests) {
+      let ty = 64;
+      for (const a of G.activeQuests().slice(0, 2)) {
+        const txt = a.st.ready ? AH.tr('RETURN TO DUNMERE') : AH.tr(a.step.goal) + (a.step.type === 'kill' ? ' (' + a.st.prog + '/' + a.step.n + ')' : '');
+        for (const l of AH.wrap(txt, 96).slice(0, 3)) { AH.text(ctx, RW - 4, ty, l, a.st.ready ? '#f2c94c' : '#c8a0ff', { align: 'right' }); ty += 8; }
+        ty += 3;
+      }
+    }
+    // cinematic intro card for bosses and legends
+    if (G.bossIntro && G.bossIntro.t > 0) {
+      const bi = G.bossIntro, k = Math.min(1, (2.6 - bi.t) * 4, bi.t * 3), bar = Math.round(22 * k);
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, RW, bar); ctx.fillRect(0, RH - bar, RW, bar);
+      if (k > 0.6) {
+        AH.text(ctx, RW / 2, RH / 2 - 30, bi.name, bi.col, { align: 'center', scale: 2 });
+        if (bi.title) AH.text(ctx, RW / 2, RH / 2 - 12, bi.title, '#cfc6b4', { align: 'center' });
+        ctx.fillStyle = bi.col; const w = Math.round(AH.textW(bi.name, 2) * k); ctx.fillRect(Math.round(RW / 2 - w / 2), RH / 2 - 15, w, 1);
+      }
+    }
+    // boss bar
+    const boss = G.enemies.find(e => (e.boss || e.legend) && !e.dead && e.aggro && !e.hidden);
+    if (boss) {
+      const w = 160, x = (RW - w) / 2, y = 34;
+      AH.text(ctx, RW / 2, y - 9, boss.name, boss.boss ? '#ff6a5a' : '#ff9a3e', { align: 'center' });
+      AH.bar(ctx, x, y, w, 4, boss.hp / boss.maxHp, boss.boss ? '#d43c3c' : '#ff8a2e', '#2a1416', '#ff8a8a');
+    }
+  } else if (G.scene === 'town') {
+    const W = G.world, h = Math.floor(W.hour), mm = Math.floor((W.hour % 1) * 60);
+    const x = views.length === 1 && G.players.filter(p => !p.remote).length === 1 && !G.net ? RW - 92 : RW - 92;
+    AH.frame(ctx, x, 2, 90, 44);
+    AH.text(ctx, x + 4, 5, 'DAY ' + W.day, '#f2e3b3');
+    AH.text(ctx, x + 86, 5, String(h).padStart(2, '0') + ':' + String(mm).padStart(2, '0'), '#cfc6b4', { align: 'right' });
+    AH.text(ctx, x + 4, 14, { clear: 'CLEAR', rain: 'RAIN', fog: 'FOG', snow: 'SNOW', storm: 'STORM' }[W.weather], '#9fb4d8');
+    // lamps of Dunmere
+    const lit = G.lampsLit();
+    for (let i = 0; i < 8; i++) { ctx.fillStyle = i < lit ? '#ffd36a' : '#2a2430'; ctx.fillRect(x + 48 + i * 5, 15, 3, 4); ctx.fillStyle = AH.OUT; ctx.fillRect(x + 48 + i * 5, 19, 3, 1); }
+    AH.text(ctx, x + 4, 24, 'TRUST', '#f2e3b3'); AH.text(ctx, x + 86, 24, '' + Math.round(W.trust), '#ffb347', { align: 'right' });
+    AH.bar(ctx, x + 4, 32, 82, 2, AH.clamp(W.trust / 100, 0, 1), '#ffb347', '#2a2214', '#ffe0a0');
+    AH.text(ctx, x + 4, 36, 'POP', '#f2e3b3'); AH.text(ctx, x + 86, 36, '' + W.pop, '#6fbf73', { align: 'right' });
+    const pw = AH.textW(AH.tr('POP')) + 8;
+    AH.bar(ctx, x + pw, 38, 66 - pw, 2, AH.clamp(W.pop / 80, 0, 1), '#6fbf73', '#142014', '#b8ffb0');
+  }
+  // gold (main local player)
+  const p0 = G.players.find(p => !p.remote);
+  if (p0 && views.length === 1) { AH.coinIcon(ctx, 3, RH - 9); AH.text(ctx, 10, RH - 10, '' + p0.ch.gold, '#f2c94c'); }
+  // banners
+  let by = 46;
+  for (const b of G.banners) {
+    if (b.t < 0.4 && Math.floor(b.t * 20) % 2) { by += 22; continue; }
+    const lines = AH.wrap(b.sub, 280);
+    const w = Math.max(AH.textW(b.msg), ...lines.map(l => AH.textW(l))) + 16, h = 14 + lines.length * 9;
+    AH.frame(ctx, Math.floor(RW / 2 - w / 2), by, w, h, { fill: '#120e10', edge: AH.shade(b.col, 0.7), hi: b.col });
+    AH.text(ctx, RW / 2, by + 4, b.msg, b.col, { align: 'center' });
+    lines.forEach((l, i) => AH.text(ctx, RW / 2, by + 13 + i * 9, l, '#cfc6b4', { align: 'center' }));
+    by += h + 3;
+  }
+  // join hint
+  if (G.players.filter(p => !p.remote).length < 3 && !G.menu && !G.net && G.scene === 'town' && !AH.isTouch && G.time % 20 < 5) AH.text(ctx, RW - 4, 50, 'P' + (G.players.length + 1) + ': PRESS START', '#4e4858', { align: 'right' });
+};
