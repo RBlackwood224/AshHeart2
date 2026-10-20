@@ -1155,7 +1155,9 @@ U.tick = function (G, dt) {
 };
 U.render = function (G, ctx) {
   ctx.clearRect(0, 0, UW, UH);
-  const m = G.menu; if (!m) { U.nameInput(G, null, false); return; }
+  const m = G.menu;
+  if (!(m && m.type === 'online' && m.step === 'code')) { const ci = document.getElementById('codeInput'); if (ci) { ci.blur(); ci.remove(); } }
+  if (!m) { U.nameInput(G, null, false); return; }
   AH.tooltipEquip = m.p ? Object.values(m.p.ch.equip) : [];
   if (!(m.type === 'create' && m.step === 1)) U.nameInput(G, m, false);
   const f = U.draw[m.type]; if (f) f(G, ctx, m);

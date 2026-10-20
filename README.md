@@ -1,4 +1,4 @@
-# ASHHEART — The Mines of Dunmere Beta
+# ASHHEART — The Mines of Dunmere
 
 A pixel-art action roguelite for the browser. Dive 100 floors below the town of Dunmere, keep its lamps burning, and silence the Heart of Ash.
 

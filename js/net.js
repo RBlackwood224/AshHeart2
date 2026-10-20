@@ -350,7 +350,7 @@ U.update.online = function (G, m, dt) {
   if (m.step === 'menu') {
     const items = [{ id: 'host', label: 'HOST A GAME' }, { id: 'join', label: 'JOIN A GAME' }, { id: 'back', label: 'BACK' }];
     U.listUpdate(G, m, dt, items, it => {
-      if (it.id === 'back') { G.closeMenu(); return; }
+      if (it.id === 'back') { G.closeAllMenus(); G.openMenu('title', null); return; }
       if (!AH.Save.load().length) { G.toast(null, 'CREATE A HERO FIRST', '#ff8a8a'); return; }
       const dev = m.dev || m.lastDev || 'kb1';
       G.openMenu('slots', null, { dev, purpose: 'online', onDone: idx => {
@@ -362,7 +362,31 @@ U.update.online = function (G, m, dt) {
           G.openMenu('online', null, { dev, step: 'code', slotIdx: idx });
         }
       } });
-    }, () => G.closeMenu());
+    }, () => { G.closeAllMenus(); G.openMenu('title', null); });
+    return;
+  }
+  if (m.step === 'code' && AH.isTouch) {
+    let el = document.getElementById('codeInput');
+    if (!el) {
+      el = document.createElement('input'); el.id = 'codeInput'; el.type = 'text'; el.maxLength = 5; el.autocomplete = 'off'; el.spellcheck = false;
+      el.setAttribute('autocapitalize', 'characters'); el.placeholder = 'KÓD';
+      el.style.cssText = 'position:fixed;left:50%;top:34%;transform:translateX(-50%);width:50vw;max-width:260px;font:bold 26px monospace;letter-spacing:8px;text-align:center;text-transform:uppercase;background:#16101c;color:#ffb347;border:2px solid #c9a24a;padding:8px;z-index:50;outline:none;border-radius:0;';
+      el.placeholder = AH.tr('CODE');
+      el.addEventListener('input', () => { const v = el.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5); if (v !== el.value) el.value = v; m.code = v; });
+      el.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); m.go = true; } });
+      document.body.appendChild(el);
+    }
+    const kill = () => { const e2 = document.getElementById('codeInput'); if (e2) { e2.blur(); e2.remove(); } };
+    if (n.p.a) m.go = true;
+    if (n.p.b || n.p.start) { kill(); G.closeAllMenus(); G.openMenu('title', null); return; }
+    if (m.go && m.code.length === 5) {
+      m.go = false; kill();
+      G.slotIdx = m.slotIdx; G.world = AH.Save.load()[m.slotIdx].world;
+      G.net = new AH.Net(G); G.net.localCh = AH.Save.load()[m.slotIdx].ch; G.net.device = 'touch';
+      m.step = 'wait';
+      G.net.join(m.code);
+    }
+    m.go = false;
     return;
   }
   if (m.step === 'code') {
@@ -400,6 +424,10 @@ U.draw.online = function (G, ctx, m) {
   if (m.step === 'menu') {
     U.list(ctx, [{ label: 'HOST A GAME' }, { label: 'JOIN A GAME' }, { label: 'BACK' }], m.sel, 150, 70, 180);
     ['UP TO 3 HEROES. THE HOST RUNS THE GAME,', 'FRIENDS JOIN WITH A 5-LETTER CODE.', 'EACH PLAYER SEES THEIR OWN LOOT.'].forEach((l, i) => AH.text(ctx, UW / 2, 150 + i * 11, l, '#8d8494', { align: 'center' }));
+  } else if (m.step === 'code' && AH.isTouch) {
+    AH.text(ctx, UW / 2, 60, 'ENTER THE HOST CODE', '#cfc6b4', { align: 'center' });
+    AH.text(ctx, UW / 2, 150, 'TAP THE BOX ABOVE TO TYPE', '#a39bb0', { align: 'center' });
+    U.hint(ctx, 'A JOIN   B BACK');
   } else if (m.step === 'code') {
     AH.text(ctx, UW / 2, 60, 'ENTER THE HOST CODE', '#cfc6b4', { align: 'center' });
     AH.text(ctx, UW / 2, 80, (m.code + '_____').slice(0, 5).split('').join(' '), '#ffb347', { align: 'center', scale: 3 });

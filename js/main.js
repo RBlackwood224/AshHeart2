@@ -119,6 +119,7 @@
     if (dt > 0.05) dt = 0.05;
     AH.Input.poll();
     try {
+      if (!G.menu && G.scene === 'title') G.openMenu('title', null);
       if (G.menu) AH.UI.tick(G, dt);
       else handleDevices();
       if (AH.Mouse) AH.Mouse.tick(G, dt);
