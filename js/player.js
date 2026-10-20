@@ -343,8 +343,8 @@ P.update = function (G, dt, pad) {
   if (tile === AH.TILE.LAVA && this.state !== 'dodge') { this.lavaT = (this.lavaT || 0) - dt; if (this.lavaT <= 0) { this.lavaT = 0.5; this.hurt(G, 4 + G.floorNo * 0.9, null, true); } }
   // input (keyboard/pad, or mouse goals for the PC player)
   let ax = pad.ax, ay = pad.ay, mouseAtk = false;
-  if (Math.hypot(ax, ay) > 0.2) { this.mTarget = this.mInter = this.mDest = null; }
-  else if (this.mTarget || this.mInter || this.mDest) {
+  if (Math.hypot(ax, ay) > 0.2) { this.mTarget = this.mInter = this.mDest = this.mVein = null; }
+  else if (this.mTarget || this.mInter || this.mDest || this.mVein) {
     const steer = (tx, ty) => {
       // follow a grid path around walls, recomputed now and then
       this.mPathT = (this.mPathT || 0) - dt;
@@ -368,6 +368,15 @@ P.update = function (G, dt, pad) {
       if (cur && cur.obj === it.obj) { G.interact(this, cur); this.mInter = null; }
       else if (Math.hypot(it.x - this.x, it.y - this.y) < 6) this.mInter = null;
       else steer(it.x, it.y);
+    } else if (this.mVein) {
+      // walk up to the rock face and swing at it until it breaks
+      const vn = this.mVein, fx = vn.x, fy = (vn.ty + 1) * AH.T + 6;
+      if (vn.hp <= 0) this.mVein = null;
+      else if (Math.hypot(fx - this.x, fy - this.y) > 9) { steer(fx, fy); this.mStuck = Math.hypot(this.x - this.lastPosX, this.y - this.lastPosY) < 0.05 ? (this.mStuck || 0) + dt : 0; if (this.mStuck > 1.2) { this.mVein = null; this.mStuck = 0; } }
+      else {
+        this.aim = Math.atan2(vn.ty * AH.T + 10 - (this.y - 4), vn.x - this.x); this.face = vn.x >= this.x ? 1 : -1; this.mAimLock = 0.25;
+        mouseAtk = true;
+      }
     } else if (this.mDest) {
       if (Math.hypot(this.mDest.x - this.x, this.mDest.y - this.y) < 4 && !this.mHold) this.mDest = null;
       else if (Math.hypot(this.mDest.x - this.x, this.mDest.y - this.y) >= 4) steer(this.mDest.x, this.mDest.y);
@@ -377,7 +386,7 @@ P.update = function (G, dt, pad) {
   }
   this.lastPosX = this.x; this.lastPosY = this.y; this.lastPosD = 1;
   let mag = Math.hypot(ax, ay);
-  this.lastMag = (this.mTarget || this.mDest || this.mInter) ? 0 : mag;
+  this.lastMag = (this.mTarget || this.mDest || this.mInter || this.mVein) ? 0 : mag;
   if (mag > 0.2 && !(this.mAimLock > 0 && mouseAtk)) { this.aim = Math.atan2(ay, ax); if (Math.abs(ax) > 0.15) this.face = ax > 0 ? 1 : -1; }
   if (this.mAimLock > 0) this.mAimLock -= dt;
   if (mouseAtk) { ax = 0; ay = 0; mag = 0; }
@@ -408,11 +417,11 @@ P.update = function (G, dt, pad) {
   if (pad.held('a') && !inter && this.state === 'idle' || pad.held('a') && !inter && this.state === 'walk') this.tryAttack(G, true);
   if (mouseAtk && this.state !== 'attack') { this.tryAttack(G, true); if (this.mOnce && this.state === 'attack') { this.mOnce = false; this.mTarget = null; } }
   if (this.mHeavy !== undefined && this.mHeavy !== null) { this.aim = this.mHeavy; this.face = Math.cos(this.mHeavy) >= 0 ? 1 : -1; this.mAimLock = 0.3; this.mHeavy = null; this.tryHeavy(G); }
-  if (this.mCursor && AH.Mouse && AH.Mouse.player(G) === this && (pad.pressed('x') || pad.pressed('y') || pad.pressed('lb') || pad.pressed('rb') || pad.pressed('b'))) {
+  if (this.mCursor && AH.Mouse && AH.Mouse.player(G) === this && (pad.pressed('x') || pad.pressed('y') || pad.pressed('lb') || pad.pressed('rb') || pad.pressed('b') || pad.pressed('dodge'))) {
     const c = this.mCursor; this.aim = Math.atan2(c.y - (this.y - 6), c.x - this.x); this.face = c.x >= this.x ? 1 : -1; this.mAimLock = 0.3; this.dodgeAimMouse = true;
   }
   if (pad.pressed('x')) this.tryHeavy(G);
-  if (pad.pressed('b')) this.tryDodge(G);
+  if (pad.pressed('b') || pad.pressed('dodge')) this.tryDodge(G);
   if (pad.pressed('y')) this.trySkill(G, 0);
   if (pad.pressed('lb')) this.trySkill(G, 1);
   if (pad.pressed('rb')) this.trySkill(G, 2);

@@ -44,11 +44,15 @@ AH.Mouse = (function () {
     return best;
   };
   M.interactAt = function (G, x, y) { return G.findInteract({ x, y }); };
+  M.veinAt = function (G, x, y) {
+    if (G.scene !== 'mine' || !G.map.veins) return null;
+    return G.map.veins.find(v => v.hp > 0 && x >= v.tx * AH.T - 1 && x < v.tx * AH.T + AH.T + 1 && y >= v.ty * AH.T + 2 && y < v.ty * AH.T + AH.T + 2) || null;
+  };
 
   // per-frame: turn mouse state into goals on the player
   M.tick = function (G, dt) {
     const p = M.player(G);
-    M.hover = null; M.hoverInter = null;
+    M.hover = null; M.hoverInter = null; M.hoverVein = null;
     if (G.menu) { M.leftPressed = M.rightPressed = false; return; }
     if (!p || G.scene === 'title' || !G.map) { M.leftPressed = M.rightPressed = false; return; }
     const w = M.world(G, p); if (!w) return;
@@ -57,13 +61,15 @@ AH.Mouse = (function () {
     M.hover = e;
     const it = e ? null : M.interactAt(G, w.x, w.y);
     M.hoverInter = it;
+    const vn = (e || it) ? null : M.veinAt(G, w.x, w.y);
+    M.hoverVein = vn;
     if (M.leftPressed) {
       M.leftPressed = false;
-      p.mTarget = e || null; p.mInter = it || null; p.mDest = (!e && !it) ? { x: w.x, y: w.y } : null; p.mPath = null; p.mPathT = 0;
+      p.mTarget = e || null; p.mInter = it || null; p.mVein = vn || null; p.mDest = (!e && !it && !vn) ? { x: w.x, y: w.y } : null; p.mPath = null; p.mPathT = 0;
       p.mHold = true;
     }
     if (!M.left) p.mHold = false;
-    if (M.left && !p.mTarget && !p.mInter) { if (!p.mDest || Math.hypot(p.mDest.x - w.x, p.mDest.y - w.y) > 12) { p.mDest = { x: w.x, y: w.y }; p.mPath = null; } }
+    if (M.left && !p.mTarget && !p.mInter && !p.mVein) { if (!p.mDest || Math.hypot(p.mDest.x - w.x, p.mDest.y - w.y) > 12) { p.mDest = { x: w.x, y: w.y }; p.mPath = null; } }
     if (M.rightPressed) { M.rightPressed = false; p.mHeavy = Math.atan2(w.y - (p.y - 6), w.x - p.x); }
     p.mCursor = w;
   };
@@ -87,6 +93,15 @@ AH.Mouse = (function () {
         AH.bar(ctx, X + 4, 63, tw - 8, 3, e.hp / e.maxHp, '#d43c3c', '#2a1416', '#ff8a8a');
         AH.text(ctx, AH.UW / 2, 53, nm, col, { align: 'center' });
       }
+    } else if (M.hoverVein && !G.menu) {
+      // pickaxe cursor
+      const g = ['.####...', '#oooo#..', '....##o#', '...#.#o#', '..#...#.', '.#......', '#.......'];
+      for (let k = 0; k < 6; k++) { R(6 - k, 1 + k, 2, 2, AH.OUT); R(6 - k, 1 + k, 1, 1, '#8a5a26'); }
+      R(1, 0, 6, 1, AH.OUT); R(0, 1, 1, 2, AH.OUT); R(1, 1, 5, 1, '#c8c8d8'); R(6, 1, 2, 2, AH.OUT); R(7, 2, 1, 3, '#c8c8d8'); R(8, 3, 1, 2, AH.OUT);
+      const nm = M.hoverVein.gem ? 'CRYSTAL VEIN' : 'ORE VEIN', tw = Math.max(80, AH.textW(AH.tr(nm)) + 12), X = Math.round(AH.UW / 2 - tw / 2);
+      AH.frame(ctx, X, 50, tw, 20, { fill: '#120e10', edge: '#4a3a24', hi: '#7a6038' });
+      AH.bar(ctx, X + 4, 63, tw - 8, 3, M.hoverVein.hp / 3, M.hoverVein.gem ? '#6fd6e8' : '#d8a048', '#1a1416', '#fff0b8');
+      AH.text(ctx, AH.UW / 2, 53, nm, M.hoverVein.gem ? '#6fd6e8' : '#f2c94c', { align: 'center' });
     } else if (M.hoverInter && !G.menu) {
       R(0, 0, 2, 9, AH.OUT); R(0, 0, 7, 2, AH.OUT); R(1, 1, 1, 7, '#ffd36a'); R(1, 1, 5, 1, '#ffd36a'); R(2, 2, 4, 4, '#ffd36a'); R(5, 5, 3, 3, AH.OUT); R(5, 5, 2, 2, '#ffd36a');
     } else {

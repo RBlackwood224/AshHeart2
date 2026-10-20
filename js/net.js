@@ -307,7 +307,7 @@ GG.guestUpdate = function (dt) {
   const pad = this.padFor(me);
   me.interactable = this.findInteract(me);
   const pressed = [];
-  for (const b of ['a', 'b', 'x', 'y', 'lb', 'rb', 'pot', 'mana']) if (pad.pressed(b)) pressed.push(b);
+  for (const b of ['a', 'b', 'x', 'y', 'lb', 'rb', 'pot', 'mana', 'dodge']) if (pad.pressed(b)) pressed.push(b);
   // menus that live on the guest
   if (pressed.indexOf('a') >= 0 && me.interactable) {
     const k = me.interactable.kind;

@@ -43,7 +43,7 @@ U.hint = function (ctx, s) {
 };
 U.btnName = function (G, m, b) {
   const d = m.dev || '';
-  const kb1 = { a: 'J', b: 'L', x: 'K', y: 'I', lb: 'U', rb: 'O', start: 'ESC', select: 'TAB' };
+  const kb1 = { a: 'ENTER', b: 'ESC', x: 'K', y: '1', lb: '2', rb: '3', start: 'ESC', select: 'TAB' };
   const kb2 = { a: 'NUM1', b: 'NUM2', x: 'NUM4', y: 'NUM5', lb: 'NUM7', rb: 'NUM8', start: 'NUMENTER', select: 'NUM+' };
   if (d === 'kb1') return kb1[b]; if (d === 'kb2') return kb2[b];
   return { a: 'A', b: 'B', x: 'X', y: 'Y', lb: 'LB', rb: 'RB', start: 'START', select: 'SELECT' }[b];
@@ -231,9 +231,21 @@ U.init.create = function (G, m) {
   m.keyHandler = e => {
     if (G.menu !== m || m.step !== 1) return;
     if (document.activeElement && document.activeElement.id === 'nameInput') return;
-    if (U.NAME_CHAR.test(e.key) && m.name.length < 10) { m.name += e.key.toUpperCase(); AH.Audio.sfx('move'); }
+    // typing on a keyboard: letters type, arrows + space use the grid, Enter confirms, Esc goes back
+    m.kbTyping = true;
+    if (U.NAME_CHAR.test(e.key) && m.name.length < 10) { if (!e.repeat) { m.name += e.key.toUpperCase(); AH.Audio.sfx('move'); } }
     else if (e.key === 'Backspace') { m.name = m.name.slice(0, -1); }
-    else if (e.key === 'Enter' && m.name.length) { m.step = 2; m.sel = 0; AH.Audio.sfx('select'); m.skipA = true; }
+    else if (e.key === 'Enter') { if (m.name.length) { m.step = 2; m.sel = 0; AH.Audio.sfx('select'); m.skipA = true; } }
+    else if (e.key === 'Escape') { m.step = 0; m.skipB = true; AH.Audio.sfx('back'); }
+    else if (e.key.startsWith('Arrow')) {
+      const d = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -10, ArrowDown: 10 }[e.key];
+      m.gridSel = Math.abs(d) === 1 ? (m.gridSel + d + U.GRID.length) % U.GRID.length : AH.clamp(m.gridSel + d, 0, U.GRID.length - 1); AH.Audio.sfx('move');
+    } else if (e.key === ' ') {
+      const k = U.GRID[m.gridSel];
+      if (k === 'DEL') m.name = m.name.slice(0, -1); else if (k === 'OK') { if (m.name.length) { m.step = 2; m.sel = 0; m.skipA = true; } } else if (m.name.length < 10) m.name += k;
+      AH.Audio.sfx('select');
+    }
+    e.preventDefault();
   };
   window.addEventListener('keydown', m.keyHandler);
 };
@@ -257,13 +269,16 @@ U.update.create = function (G, m, dt) {
   const n = U.nav(G, m, dt);
   const clsKeys = ['paladin', 'rogue', 'wizard'], pets = ['canary', 'dog', 'rat'];
   if (m.skipA) { m.skipA = false; n.p.a = false; }
+  if (m.skipB) { m.skipB = false; n.p.b = false; n.p.start = false; }
   if (m.step !== 1 || G.menu !== m) U.nameInput(G, m, false);
   if (m.step === 0) {
     if (n.dx) { m.cls = (m.cls + n.dx + 3) % 3; AH.Audio.sfx('move'); }
     if (n.p.a) { m.step = 1; AH.Audio.sfx('select'); }
-    if (n.p.b) { window.removeEventListener('keydown', m.keyHandler); G.closeMenu(); }
+    if (n.p.b || n.p.start) { window.removeEventListener('keydown', m.keyHandler); G.closeMenu(); }
   } else if (m.step === 1) {
     if (AH.isTouch) U.nameInput(G, m, true);
+    // keyboard players type directly (handled in keyHandler); only gamepads and touch use the grid here
+    if (m.kbTyping || (m.dev && m.dev.startsWith('kb')) || (m.lastDev && m.lastDev.startsWith('kb'))) return;
     const cols = 10;
     if (n.dx) { m.gridSel = (m.gridSel + n.dx + U.GRID.length) % U.GRID.length; AH.Audio.sfx('move'); }
     if (n.dy) { m.gridSel = AH.clamp(m.gridSel + n.dy * cols, 0, U.GRID.length - 1); AH.Audio.sfx('move'); }
@@ -294,7 +309,7 @@ U.update.create = function (G, m, dt) {
       else { G.closeAllMenus(); G.startSession(idx, m.dev); }
       return;
     }
-    if (n.p.b) { m.step = 1; AH.Audio.sfx('back'); }
+    if (n.p.b || n.p.start) { m.step = 1; m.kbTyping = false; AH.Audio.sfx('back'); }
   }
 };
 U.draw.create = function (G, ctx, m) {
@@ -320,7 +335,8 @@ U.draw.create = function (G, ctx, m) {
         if (i === m.gridSel) AH.frame(ctx, cx - 4, cy - 4, k.length > 1 ? 30 : 18, 15, { fill: '#2e2638', edge: '#c9a24a', hi: '#f2e3b3' });
         AH.text(ctx, cx, cy, k, i === m.gridSel ? '#ffb347' : '#cfc6b4');
       });
-      AH.text(ctx, UW / 2, 244, AH.isTouch ? 'TAP THE BOX ABOVE TO TYPE' : 'TYPE ON KEYBOARD OR PICK LETTERS   ' + U.btnName(G, m, 'y') + ' RANDOM', '#6a6274', { align: 'center' });
+      const kb = m.kbTyping || (m.dev && m.dev.startsWith('kb')) || (m.lastDev && m.lastDev.startsWith('kb'));
+      AH.text(ctx, UW / 2, 244, AH.isTouch ? 'TAP THE BOX ABOVE TO TYPE' : kb ? 'TYPE A NAME   ENTER: DONE   ESC: BACK' : 'PICK LETTERS   ' + U.btnName(G, m, 'y') + ' RANDOM', '#6a6274', { align: 'center' });
     } else {
       const pets = ['canary', 'dog', 'rat'];
       const rows = [{ label: 'COMPANION', right: '< ' + AH.PETS[pets[m.pet]].name + ' >' }, { label: 'PERMADEATH', right: m.hc ? 'ON - ONE LIFE ONLY' : 'OFF', rcol: m.hc ? '#ff6a5a' : '#8d8494' }, { label: 'BEGIN THE DESCENT', col: '#ffb347' }];
@@ -330,7 +346,7 @@ U.draw.create = function (G, ctx, m) {
       AH.wrap(AH.PETS[pets[m.pet]].desc, 270).forEach((l, j) => AH.text(ctx, UW / 2, 230 + j * 9, l, '#a39bb0', { align: 'center' }));
     }
   }
-  U.hint(ctx, U.btnName(G, m, 'a') + ' CONFIRM   ' + U.btnName(G, m, 'b') + ' BACK');
+  if (!(m.step === 1 && (m.kbTyping || (m.dev && m.dev.startsWith('kb')) || (m.lastDev && m.lastDev.startsWith('kb'))))) U.hint(ctx, U.btnName(G, m, 'a') + ' CONFIRM   ' + U.btnName(G, m, 'b') + ' BACK');
 };
 
 // ---------- OPTIONS / HELP ----------
@@ -365,8 +381,8 @@ U.update.help = function (G, m, dt) { const n = U.nav(G, m, dt); if (n.p.a || n.
 U.draw.help = function (G, ctx, m) {
   U.bg(ctx); U.title(ctx, 'HOW TO PLAY', 12);
   const L = [
-    ['MOVE', 'STICK / WASD / ARROWS (P2)'], ['ATTACK / USE', 'A / J'], ['HEAVY ATTACK', 'X / K'], ['DODGE ROLL', 'B / L'],
-    ['SKILLS', 'Y  LB  RB  /  I  U  O'], ['POTIONS', 'D-PAD UP & DOWN / Q & R'], ['INVENTORY', 'SELECT / TAB'], ['MENU', 'START / ESC'], ['MOUSE (PC)', 'LEFT: MOVE / ATTACK  RIGHT: HEAVY'],
+    ['MOVE', 'STICK / WASD'], ['ATTACK / USE', 'A / J / LEFT CLICK'], ['HEAVY ATTACK', 'X / K / RIGHT CLICK'], ['DODGE ROLL', 'B / SPACE'],
+    ['SKILLS', 'Y  LB  RB  /  1  2  3'], ['POTIONS', 'D-PAD UP & DOWN / Q & E'], ['INVENTORY', 'SELECT / TAB'], ['MENU', 'START / ESC'], ['MOUSE (PC)', 'LEFT: MOVE / ATTACK  RIGHT: HEAVY'],
   ];
   L.forEach(([a, b], i) => { AH.text(ctx, 60, 36 + i * 12, a, '#ffb347'); AH.text(ctx, 190, 36 + i * 12, b, '#cfc6b4'); });
   const tips = ['DIVE INTO THE MINE BELOW DUNMERE. EVERY 10TH FLOOR HIDES A BOSS. FLOOR 100 HIDES ASHHEART.', 'FROM FLOOR 6 IT IS DARK: KEEP TORCHES. LIFTS EVERY 5 FLOORS TAKE YOU BACK DOWN.', 'DYING PUTS OUT A LAMP OF DUNMERE AND MAY BIRTH A NEMESIS. KEEP THE TOWN HOPEFUL.', 'WHEN YOU DIE, YOUR GEAR STAYS IN YOUR GRAVE. GO BACK FOR IT. THE TOWN STASH IS ALWAYS SAFE.', 'CO-OP: PRESS START ON ANOTHER PAD TO JOIN. STAY CLOSE FOR ONE SCREEN, WANDER OFF TO SPLIT.'];

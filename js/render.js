@@ -100,6 +100,15 @@ R.drawWorld = function (G, v) {
   }
   // props
   if (G.scene === 'mine') this.drawMineProps(G, v);
+  if (G.scene === 'mine') for (const vn of m.veins || []) if (vn.hp > 0 && vn.hp < 3 && this.inView(v, vn.x, vn.y)) {
+    // cracks spread with every blow
+    const X = vn.tx * AH.T, Y = vn.ty * AH.T + 4, sh = vn.hitT > 0 ? (Math.random() < 0.5 ? -1 : 1) : 0;
+    ctx.fillStyle = '#060408';
+    const cr = [[7, 0], [7, 1], [6, 2], [6, 3], [7, 4], [8, 5], [8, 6], [9, 7], [5, 3], [4, 4], [3, 4], [9, 5], [10, 4], [11, 4]];
+    const n = vn.hp === 2 ? 8 : cr.length;
+    for (let k = 0; k < n; k++) ctx.fillRect(X + cr[k][0] + sh, Y + cr[k][1], 1, 1);
+    if (vn.hp === 1) { ctx.fillRect(X + 2 + sh, Y + 8, 3, 1); ctx.fillRect(X + 12 + sh, Y + 1, 1, 3); }
+  }
   // telegraphs
   for (const f of G.fx) if (f.k === 'tele') {
     const k = 1 - f.life / f.max; ctx.fillStyle = '#ff3b1f';
@@ -145,7 +154,7 @@ R.drawWorld = function (G, v) {
   if (G.scene === 'town') {
     // lamp posts
     const lit = G.lampsLit();
-    G.map.lamps.forEach((l, i) => list.push({ y: l.y + 10, d: () => { ctx.fillStyle = '#1a1620'; ctx.fillRect(l.x, l.y - 4, 2, 16); ctx.fillStyle = AH.OUT; ctx.fillRect(l.x - 3, l.y - 10, 8, 7); ctx.fillStyle = i < lit ? '#ffd36a' : '#2a2430'; ctx.fillRect(l.x - 2, l.y - 9, 6, 5); } }));
+    G.map.lamps.forEach((l, i) => list.push({ y: l.y + 12, d: () => this.drawLamp(ctx, l, i, i < lit, G.time, false, 1 - this.ambientOf(G)) }));
   }
   this.bubbles = [];
   list.sort((a, b) => a.y - b.y);
@@ -265,10 +274,11 @@ R.collectLights = function (G, v) {
     if (night > 0.15) {
       for (const w of G.map.windows) add(w.x, w.y, 34, 0.55 * night, [1.0, 0.78, 0.48]);
       const lit = G.lampsLit();
-      G.map.lamps.forEach((l, i) => { if (i < lit) add(l.x + 1, l.y - 4, 56, 0.85 * night + 0.1, [1.0, 0.82, 0.52]); });
+      G.map.lamps.forEach((l, i) => { if (i < lit) add(l.x + 1, l.y - 16, 62 + Math.sin(G.time * 9 + i * 3) * 3, 0.9 * night + 0.1, [1.0, 0.8, 0.5]); });
     }
     if (G.map.forge) add(G.map.forge.x, G.map.forge.y, 56, 0.9, [1.0, 0.62, 0.32]);
   }
+  if (G.scene === 'mine') for (const vn of G.map.veins || []) if (vn.hp > 0) add(vn.x, vn.y - 6, vn.gem ? 30 : 22, vn.gem ? 0.5 : 0.32, vn.gem ? [0.7, 1.05, 1.3] : [1.25, 0.95, 0.55]);
   if (G.scene === 'mine' && G.map.biome.id === 'ashen') add(v.camX + v.w / 2, v.camY - 40, 220, 0.18, [1.3, 0.6, 0.4]);
   return L;
 };
@@ -329,7 +339,7 @@ R.drawEmissive = function (G, v) {
     if (night > 0.2) { ctx.globalAlpha = Math.min(1, night * 1.4); ctx.drawImage(m.emCanvas, v.camX, v.camY, v.w, v.h, v.camX, v.camY, v.w, v.h); ctx.globalAlpha = 1; }
     if (G.map.forge) { const f = G.map.forge; ctx.fillStyle = Math.floor(G.time * 8) % 2 ? '#ffd36a' : '#ff8a2e'; ctx.fillRect(f.x - 3, f.y - 2, 2, 2); ctx.fillRect(f.x + 2, f.y - 4, 1, 2); }
     const lit = G.lampsLit();
-    G.map.lamps.forEach((l, i) => { if (i < lit && night > 0.15) { ctx.fillStyle = '#ffd36a'; ctx.fillRect(l.x - 2, l.y - 9, 6, 5); ctx.fillStyle = '#fff2b0'; ctx.fillRect(l.x - 2, l.y - 9, 6, 1); } });
+    G.map.lamps.forEach((l, i) => { if (i < lit) this.drawLamp(ctx, l, i, true, G.time, true, night); });
     // chimney smoke
     if (G.map.chimney) { ctx.fillStyle = '#5a5468'; for (let k = 0; k < 6; k++) { const t = (G.time * 0.6 + k / 6) % 1; ctx.fillRect(Math.round(G.map.chimney.x + Math.sin(t * 6 + k) * 2), Math.round(G.map.chimney.y - t * 30), 2, 2); } }
   }
@@ -343,6 +353,19 @@ R.drawEmissive = function (G, v) {
   }
   for (const e of G.enemies) if (this.inView(v, e.x, e.y, 40)) e.drawEm(ctx, G);
   if (G.scene === 'mine') for (const p of m.props) if (p.type === 'tablet' && this.inView(v, p.x, p.y)) AH.drawSprEm(ctx, AH.SPR.tablet, p.x - 6, p.y - 8);
+  // ore glints so veins catch the eye even in the dark
+  if (G.scene === 'mine') (m.veins || []).forEach((vn, i) => {
+    if (vn.hp <= 0 || !this.inView(v, vn.x, vn.y)) return;
+    if (vn.hitT > 0) vn.hitT -= 1 / 60;
+    const X = vn.tx * AH.T, Y = vn.ty * AH.T + 4, ph = (G.time * 0.7 + i * 0.37) % 1.6;
+    const pts = [[3, 2], [10, 3], [5, 7], [12, 7]], q = pts[(Math.floor(G.time * 0.7 + i * 0.37)) % 4];
+    ctx.fillStyle = vn.gem ? '#6fd6e8' : '#d8a048'; ctx.fillRect(X + 3, Y + 2, 1, 1); ctx.fillRect(X + 10, Y + 3, 1, 1);
+    if (ph < 0.35) {
+      const r = ph < 0.12 || ph > 0.24 ? 1 : 2, gx = X + q[0], gy = Y + q[1];
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(gx, gy, 1, 1);
+      ctx.fillStyle = vn.gem ? '#bff4ff' : '#fff0b8'; for (let d = 1; d <= r; d++) { ctx.fillRect(gx - d, gy, 1, 1); ctx.fillRect(gx + d, gy, 1, 1); ctx.fillRect(gx, gy - d, 1, 1); ctx.fillRect(gx, gy + d, 1, 1); }
+    }
+  });
   // glowing projectiles
   for (const pr of G.projs) {
     if (!this.inView(v, pr.x, pr.y)) continue;
@@ -515,16 +538,66 @@ R.arrow = function (x, y, a, col) {
     ctx.fillStyle = Math.abs(j) === i ? AH.OUT : col; ctx.fillRect(px, py, 1, 1);
   }
 };
+// Dunmere street lamp: stone foot, iron post, curled bracket and a hanging glass lantern with a living flame
+R.drawLamp = function (ctx, l, i, lit, t, emissive, night) {
+  const x = Math.round(l.x), g = Math.round(l.y + 12);
+  const R2 = (a, b, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x + a, g + b, w, h); };
+  const lx = x + 6, ly = g - 31; // lantern top-left
+  const fl = Math.sin(t * 11 + i * 2.3) + Math.sin(t * 17 + i) * 0.5;
+  if (!emissive) {
+    R2(-3, -1, 8, 2, 'rgba(0,0,0,0.35)');
+    R2(-3, -4, 8, 4, AH.OUT); R2(-2, -4, 6, 3, '#4a4252'); R2(-2, -4, 6, 1, '#6a6278');
+    R2(-1, -30, 4, 27, AH.OUT); R2(0, -30, 2, 27, '#2e2836'); R2(0, -30, 1, 27, '#4a4252');
+    R2(-1, -18, 4, 2, '#4a4252');
+    // curled bracket reaching right
+    R2(0, -33, 2, 3, '#2e2836'); R2(1, -34, 8, 2, AH.OUT); R2(1, -34, 7, 1, '#4a4252'); R2(8, -33, 1, 2, '#2e2836'); R2(-1, -35, 2, 2, '#2e2836'); R2(-2, -34, 1, 1, '#4a4252');
+    // lantern: roof, cage, glass
+    ctx.fillStyle = AH.OUT; ctx.fillRect(lx - 1, ly - 1, 9, 12);
+    for (let j = 0; j < 3; j++) { ctx.fillStyle = j ? '#2e2836' : '#4a4252'; ctx.fillRect(lx + 2 - j, ly - 3 + j, 3 + j * 2, 1); }
+    ctx.fillStyle = '#2e2836'; ctx.fillRect(lx, ly, 7, 10);
+    ctx.fillStyle = lit ? '#e8a040' : '#2a2a38'; ctx.fillRect(lx + 1, ly + 1, 5, 7);
+    if (lit) { ctx.fillStyle = '#ffd36a'; ctx.fillRect(lx + 2, ly + 2 + (fl > 0.6 ? 1 : 0), 3, 5 - (fl > 0.6 ? 1 : 0)); ctx.fillStyle = '#fff6d0'; ctx.fillRect(lx + 3, ly + 4 + (fl > 0.2 ? 0 : 1), 1, 2); }
+    else { ctx.fillStyle = '#4a4a5c'; ctx.fillRect(lx + 1, ly + 1, 1, 3); ctx.fillStyle = '#1a1620'; ctx.fillRect(lx + 4, ly + 5, 2, 1); ctx.fillRect(lx + 3, ly + 6, 1, 1); }
+    ctx.fillStyle = '#2e2836'; ctx.fillRect(lx + 3, ly + 1, 1, 7);
+    ctx.fillStyle = '#4a4252'; ctx.fillRect(lx - 1, ly + 10, 9, 1);
+    ctx.fillStyle = '#2e2836'; ctx.fillRect(lx + 3, ly + 11, 1, 2);
+    // cold, dead lamps smoke a little
+    if (!lit && Math.floor(t * 2 + i) % 3 === 0) { ctx.fillStyle = '#4a4458'; ctx.fillRect(lx + 3 + Math.round(Math.sin(t * 2 + i)), ly - 5 - Math.floor((t * 6 + i * 5) % 6), 1, 1); }
+    return;
+  }
+  // glow pass: bright glass, soft halo and moths at night
+  const k = 0.75 + fl * 0.08;
+  ctx.fillStyle = '#ffd36a'; ctx.fillRect(lx + 1, ly + 1, 5, 7);
+  ctx.fillStyle = '#fff6d0'; ctx.fillRect(lx + 2, ly + 3 + (fl > 0.6 ? 1 : 0), 3, 4 - (fl > 0.6 ? 1 : 0));
+  ctx.fillStyle = '#2e2836'; ctx.fillRect(lx + 3, ly + 1, 1, 2);
+  if (night > 0.15) {
+    const cx = lx + 3, cy = ly + 5, R = 11;
+    for (let j = -R; j <= R; j++) for (let q = -R; q <= R; q++) {
+      const d = Math.hypot(q, j) / R; if (d > 1 || (Math.abs(q) < 4 && Math.abs(j) < 5)) continue;
+      if (AH.BAYER[((cy + j) & 3) * 4 + ((cx + q) & 3)] < (1 - d) * 0.42 * k * night) { ctx.fillStyle = d < 0.55 ? '#c8862e' : '#7a4a1e'; ctx.fillRect(cx + q, cy + j, 1, 1); }
+    }
+    // light spilling on the cobbles under the lamp
+    for (let q = -9; q <= 9; q++) for (let j = 0; j < 4; j++) if (AH.BAYER[((g + j) & 3) * 4 + ((x + q) & 3)] < (1 - Math.abs(q) / 10) * 0.3 * night) { ctx.fillStyle = '#6a4a26'; ctx.fillRect(x + 4 + q, g - 1 + j, 1, 1); }
+    for (let mth = 0; mth < 2; mth++) {
+      const a = t * (2.6 + mth) + i * 1.7 + mth * 3;
+      ctx.fillStyle = '#f2e3c0'; ctx.fillRect(Math.round(cx + Math.cos(a) * (6 + mth * 2)), Math.round(cy + Math.sin(a * 1.3) * 5), 1, 1);
+    }
+  }
+};
 R.hotbar = function (G, p) {
   const ctx = this.ctx;
+  // key names for the device this hero uses
+  const KL = p.device === 'kb1' ? { a: 'J', x: 'K', b: 'SPC', y: '1', lb: '2', rb: '3', pot: 'Q', mana: 'E' }
+    : p.device === 'kb2' ? { a: 'N1', x: 'N4', b: 'N2', y: 'N5', lb: 'N7', rb: 'N8', pot: 'N0', mana: 'N.' }
+    : { a: 'A', x: 'X', b: 'B', y: 'Y', lb: 'LB', rb: 'RB', pot: '^', mana: '_' };
   const items = [
-    { k: 'A', ic: AH.itemIcon(p.weapon() || { kind: 'cons', icon: 'dodge' }) },
-    { k: 'X', ic: AH.ICON.heavy },
-    { k: 'B', ic: AH.ICON.dodge, cd: p.cd.dodge / 0.85 },
+    { k: KL.a, ic: AH.itemIcon(p.weapon() || { kind: 'cons', icon: 'dodge' }) },
+    { k: KL.x, ic: AH.ICON.heavy },
+    { k: KL.b, ic: AH.ICON.dodge, cd: p.cd.dodge / 0.85 },
   ];
-  ['Y', 'LB', 'RB'].forEach((k, i) => { if (p.ch.slots[i]) items.push({ k, sk: p.ch.slots[i] }); });
-  items.push({ k: '^', ic: AH.ICON.potion, n: p.countCons('potion') });
-  if (p.ch.cls === 'wizard' || p.countCons('mana')) items.push({ k: '_', ic: AH.ICON.mana, n: p.countCons('mana') });
+  ['y', 'lb', 'rb'].forEach((k, i) => { if (p.ch.slots[i]) items.push({ k: KL[k], sk: p.ch.slots[i] }); });
+  items.push({ k: KL.pot, ic: AH.ICON.potion, n: p.countCons('potion') });
+  if (p.ch.cls === 'wizard' || p.countCons('mana')) items.push({ k: KL.mana, ic: AH.ICON.mana, n: p.countCons('mana') });
   const S = 18, Gp = 2, x0 = Math.floor((RW - (items.length * S + (items.length - 1) * Gp)) / 2), y = RH - 30;
   items.forEach((it, i) => {
     const x = x0 + i * (S + Gp);

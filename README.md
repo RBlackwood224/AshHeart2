@@ -12,15 +12,16 @@ Online co-op needs the page to be served over https (GitHub Pages works).
 | Action | Keyboard (P1) | Keyboard (P2) | Gamepad |
 |---|---|---|---|
 | Move | WASD | Arrows | Left stick / D-pad |
-| Attack / use | J | Num1 | A |
+| Attack / use / mine | J | Num1 | A |
 | Heavy attack | K | Num4 | X |
-| Dodge | L | Num2 | B |
-| Skills | I, U, O | Num5, Num7, Num8 | Y, LB, RB |
-| Potions | Q (life), R (mana) | Num0, Num. | D-pad up / down |
+| Dodge roll | Space (or Shift, L) | Num2 | B |
+| Skills | 1, 2, 3 | Num5, Num7, Num8 | Y, LB, RB |
+| Potions | Q (life), E (mana) | Num0, Num. | D-pad up / down |
 | Inventory | Tab | Num+ | Select |
-| Menu | Esc | NumEnter | Start |
+| Menu / back | Esc | NumEnter | Start |
+| In menus | Arrows + Enter, Esc to go back | | D-pad + A, B |
 
-**Mouse (PC, Diablo style):** left click the ground to walk (hold to steer), left click a monster to walk up and attack it (hold to keep attacking), left click a chest, door, stairs or person to use it, right click for a heavy attack toward the cursor. Skill keys aim at the cursor. Menus can be clicked too.
+**Mouse (PC, Diablo style):** left click the ground to walk (hold to steer), left click a monster to walk up and attack it (hold to keep attacking), left click a chest, door, stairs or person to use it, right click for a heavy attack toward the cursor, left click a glittering ore or crystal vein to mine it. Skill keys aim at the cursor. Menus can be clicked too.
 
 Phones and tablets get touch controls automatically (play in landscape).
 
@@ -31,6 +32,7 @@ English, Français and Magyar — switch under Options → Language (the first s
 - 100 floors in 10 biomes, a boss every 10 floors, ASHHEART on floor 100, then endless depths and a daily time attack.
 - 26 item sets (2/3/4/5-piece bonuses and unique set powers), legendary and mythic items, runes and runewords.
 - Four story quest chains from the people of Dunmere, with unique rewards.
+- Mining: glittering ore and crystal veins in the walls break after a few blows. Ore upgrades and reforges gear at the smith, crystals add sockets.
 - Gravestones: where a hero falls, a grave stays on that floor. Read it to see who died there, to what, and with which stats.
 - Nemesis system, legendary beasts, floor events, bounties, a town that remembers what you did.
 

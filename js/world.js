@@ -405,8 +405,16 @@ AH.renderMap = function (m) {
   // veins
   for (const v of m.veins || []) {
     const X = v.tx * T, Y = v.ty * T + 4;
-    for (let k = 0; k < 6; k++) { x.fillStyle = v.gem ? '#6fd6e8' : '#c8a060'; x.fillRect(X + 2 + ((k * 5) % 11), Y + 2 + ((k * 3) % 7), 2, 1); }
-    x.fillStyle = v.gem ? '#ffffff' : '#f2d8a0'; x.fillRect(X + 6, Y + 4, 1, 1);
+    const c = v.gem ? ['#0c1a22', '#2a7a96', '#6fd6e8', '#e8fbff'] : ['#1a0e08', '#8a5a26', '#d8a048', '#fff0b8'];
+    // dark seam the nuggets sit in
+    x.fillStyle = '#0c0a0e'; x.fillRect(X + 2, Y + 4, 12, 1); x.fillRect(X + 4, Y + 7, 9, 1); x.fillRect(X + 3, Y + 5, 1, 2);
+    const nug = [[2, 1, 4, 3], [8, 2, 5, 4], [4, 6, 4, 3], [11, 6, 3, 3], [1, 8, 3, 2]];
+    for (const [a, b, w, h] of nug) {
+      x.fillStyle = c[0]; x.fillRect(X + a - 1, Y + b - 1, w + 2, h + 2);
+      x.fillStyle = c[1]; x.fillRect(X + a, Y + b, w, h);
+      x.fillStyle = c[2]; x.fillRect(X + a, Y + b, w - 1, h - 1);
+      x.fillStyle = c[3]; x.fillRect(X + a, Y + b, 1, 1);
+    }
   }
   // static crystals
   for (const p of m.props) if (p.type === 'crystal') {

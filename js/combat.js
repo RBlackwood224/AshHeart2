@@ -56,9 +56,11 @@ GP.meleeSwing = function (p, mult, range, arc, heavy) {
   return hits;
 };
 GP.mineVein = function (p, v) {
-  v.hp--; AH.Audio.sfx('dig'); AH.fx.spark(this, v.x, v.y - 4, v.gem ? '#6fd6e8' : '#c8a060', 6); this.shake(1);
+  v.hp--; v.hitT = 0.18; AH.Audio.sfx('dig'); AH.fx.spark(this, v.x, v.y - 4, v.gem ? '#6fd6e8' : '#d8a048', 10); AH.fx.dust(this, v.x, v.y - 2, '#6a6276', 6); this.shake(2);
+  if (this.world) this.world.tipVein = 1;
   if (v.hp <= 0) {
-    const n = 1 + (Math.random() < 0.4 ? 1 : 0);
+    const n = 1 + (Math.random() < 0.45 ? 1 : 0) + (Math.random() < 0.12 ? 1 : 0);
+    AH.Audio.sfx('break'); this.shake(3); AH.fx.dust(this, v.x, v.y, '#8a8296', 16);
     this.dropItem(v.x, v.y + 6, AH.makeCons(v.gem ? 'gem' : 'ore', n), p.pid);
     if (Math.random() < 0.06) this.dropItem(v.x, v.y + 6, AH.genRune(AH.rand, this.floorNo), p.pid);
     // redraw vein as plain wall

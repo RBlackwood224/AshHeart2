@@ -635,6 +635,12 @@ GG.updateFlee = function (e, dt) {
   if (e.fleeT <= 0) { e.gone = true; AH.fx.puff(this, e.x, e.y, '#f2c94c'); this.toast(null, 'THE GOLDEN RAT ESCAPED...', '#a39bb0'); }
 };
 GG.updateEvents = function (dt) {
+  // first glittering rock: teach mining once
+  if (this.scene === 'mine' && this.world && !this.world.tipVein && this.map && this.map.veins) {
+    for (const p of this.players) if (!p.remote && !p.dead && this.map.veins.some(v => v.hp > 0 && Math.hypot(v.x - p.x, v.y - p.y) < 56)) {
+      this.world.tipVein = 1; this.toast(p, AH.Mouse && AH.Mouse.active ? 'CLICK THE GLITTERING ROCK TO MINE ORE' : 'HIT THE GLITTERING ROCK TO MINE ORE', '#f2c94c'); break;
+    }
+  }
   if (this.event === 'collapse') {
     this.collapseT -= dt;
     this.rockT = (this.rockT || 0) - dt;

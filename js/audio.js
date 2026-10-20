@@ -5,6 +5,8 @@ AH.Audio = (function () {
   let musicVol = 0.5, sfxVol = 0.6;
   const tracks = {};
   let current = null, playing = null;
+  // ears hear volume logarithmically, and the songs are mastered loud: 10% on the slider is really quiet
+  const curve = v => Math.max(0, Math.min(1, v * v * 0.45));
   // the mine rotates through up to three tracks: music/mine.mp3, mine2.mp3, mine3.mp3
   const PLAYLISTS = { mine: ['mine', 'mine2', 'mine3'] };
   function unlock() {
@@ -79,7 +81,7 @@ AH.Audio = (function () {
   }
   function loadTrack(name, loop) {
     if (tracks[name] !== undefined) return;
-    const a = new Audio(); a.loop = loop !== false; a.volume = musicVol; a.preload = 'auto';
+    const a = new Audio(); a.loop = loop !== false; a.volume = curve(musicVol); a.preload = 'auto';
     tracks[name] = a;
     a.addEventListener('error', () => { tracks[name] = null; if (playing === name) playListNext(); });
     a.addEventListener('ended', () => { if (playing === name && PLAYLISTS[current]) playListNext(); });
@@ -110,7 +112,7 @@ AH.Audio = (function () {
   }
   function setVol(m, s) {
     musicVol = m; sfxVol = s;
-    for (const k in tracks) if (tracks[k]) tracks[k].volume = m;
+    for (const k in tracks) if (tracks[k]) tracks[k].volume = curve(m);
     if (master) master.gain.value = s;
   }
   return { unlock, sfx, music, setVol, get musicVol() { return musicVol; }, get sfxVol() { return sfxVol; } };

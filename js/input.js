@@ -5,8 +5,8 @@ AH.Input = (function () {
   const keys = {};
   const KB = {
     kb1: { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'],
-      a: ['KeyJ', 'Space', 'Enter'], b: ['KeyL', 'ShiftLeft', 'Backspace'], x: ['KeyK'], y: ['KeyI'], lb: ['KeyU'], rb: ['KeyO'],
-      pot: ['KeyQ'], mana: ['KeyR'], start: ['Escape'], select: ['Tab', 'KeyB'] },
+      a: ['KeyJ', 'Enter'], b: ['KeyL', 'Backspace'], x: ['KeyK'], y: ['KeyI', 'Digit1'], lb: ['KeyU', 'Digit2'], rb: ['KeyO', 'Digit3'],
+      pot: ['KeyQ'], mana: ['KeyE', 'KeyR'], start: ['Escape'], select: ['Tab', 'KeyB'], dodge: ['Space', 'ShiftLeft'] },
     kb2: { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'],
       a: ['Numpad1', 'Period'], b: ['Numpad2', 'Slash'], x: ['Numpad4', 'Comma'], y: ['Numpad5', 'Semicolon'], lb: ['Numpad7', 'KeyM'], rb: ['Numpad8', 'Quote'],
       pot: ['Numpad0', 'KeyN'], mana: ['NumpadDecimal', 'KeyH'], start: ['NumpadEnter', 'Backslash'], select: ['NumpadAdd', 'BracketRight'] },
@@ -35,7 +35,7 @@ AH.Input = (function () {
       d.ay = (any(m.down) ? 1 : 0) - (any(m.up) ? 1 : 0);
       for (const b of ['a', 'b', 'x', 'y', 'lb', 'rb', 'start', 'select']) d.cur[b] = any(m[b]);
       d.cur.up = any(m.up); d.cur.down = any(m.down); d.cur.left = any(m.left); d.cur.right = any(m.right);
-      d.cur.pot = any(m.pot); d.cur.mana = any(m.mana);
+      d.cur.pot = any(m.pot); d.cur.mana = any(m.mana); d.cur.dodge = m.dodge ? any(m.dodge) : false;
       if (d.ax || d.ay || Object.values(d.cur).some(v => v)) d.lastActive = now;
     }
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
@@ -70,8 +70,10 @@ AH.Input = (function () {
   function menuDir(id, dt) {
     const d = dev[id]; if (!d) return { dx: 0, dy: 0 };
     let dx = 0, dy = 0;
-    if (d.ax < -0.5 || d.cur.left) dx = -1; else if (d.ax > 0.5 || d.cur.right) dx = 1;
-    if (d.ay < -0.5 || d.cur.up) dy = -1; else if (d.ay > 0.5 || d.cur.down) dy = 1;
+    // in menus the first keyboard also answers to the arrow keys
+    const arr = id === 'kb1' ? { l: keys.ArrowLeft, r: keys.ArrowRight, u: keys.ArrowUp, d: keys.ArrowDown } : {};
+    if (d.ax < -0.5 || d.cur.left || arr.l) dx = -1; else if (d.ax > 0.5 || d.cur.right || arr.r) dx = 1;
+    if (d.ay < -0.5 || d.cur.up || arr.u) dy = -1; else if (d.ay > 0.5 || d.cur.down || arr.d) dy = 1;
     const r = d.rep;
     if (dx !== r.dx || dy !== r.dy) { r.dx = dx; r.dy = dy; r.t = 0.28; return { dx, dy }; }
     if (!dx && !dy) return { dx: 0, dy: 0 };
