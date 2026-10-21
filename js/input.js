@@ -17,12 +17,14 @@ AH.Input = (function () {
   const touch = { active: false, ax: 0, ay: 0, btn: {} };
   let hidePad = null; // set by setupTouch: hides the on-screen pad when a mouse, keyboard or controller is used
 
+  const menuKeys = {}; // keys that went down while a menu was open (so Esc that opened the pause menu doesn't also close it)
   window.addEventListener('keydown', e => {
     keys[e.code] = true;
+    if (AH.game && (AH.game.menu || AH.game.scene === 'title')) menuKeys[e.code] = true;
     if (['Tab', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace'].indexOf(e.code) >= 0) e.preventDefault();
     AH.Audio && AH.Audio.unlock();
   });
-  window.addEventListener('keyup', e => { keys[e.code] = false; });
+  window.addEventListener('keyup', e => { keys[e.code] = false; menuKeys[e.code] = false; });
   window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 
   function any(list) { for (const k of list) if (keys[k]) return true; return false; }
@@ -38,7 +40,7 @@ AH.Input = (function () {
       d.cur.up = any(m.up); d.cur.down = any(m.down); d.cur.left = any(m.left); d.cur.right = any(m.right);
       d.cur.pot = any(m.pot); d.cur.mana = any(m.mana); d.cur.dodge = m.dodge ? any(m.dodge) : false;
       // Enter / Backspace confirm and go back in menus only, never attack in the game
-      if (id === 'kb1' && AH.game && (AH.game.menu || AH.game.scene === 'title')) { if (keys.Enter || keys.NumpadEnter) d.cur.a = true; if (keys.Backspace) d.cur.b = true; }
+      if (id === 'kb1' && AH.game && (AH.game.menu || AH.game.scene === 'title')) { if (menuKeys.Enter || menuKeys.NumpadEnter) d.cur.a = true; if (menuKeys.Backspace || menuKeys.Escape) d.cur.b = true; }
       if (d.ax || d.ay || Object.values(d.cur).some(v => v)) d.lastActive = now;
     }
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];

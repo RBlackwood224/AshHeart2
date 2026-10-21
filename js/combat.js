@@ -264,6 +264,8 @@ GP.updateDrops = function (dt) {
       if (p.dead || p.remote && !this.isHost) continue;
       if (d.owner >= 0 && d.owner !== p.pid) continue;
       const dist = AH.dist(p, d);
+      // something you threw away stays on the ground until you walk off and come back for it
+      if (d.dropper === p.pid) { if (dist > 22) d.dropper = undefined; else continue; }
       // gold magnet
       if (d.gold && dist < 26) { d.x = AH.lerp(d.x, p.x, dt * 8); d.y = AH.lerp(d.y, p.y, dt * 8); }
       if (dist < 9) this.pickup(p, d);

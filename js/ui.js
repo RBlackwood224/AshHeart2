@@ -591,7 +591,7 @@ U.update.inv = function (G, m, dt) {
     }
     if (n.p.x && it && m.area === 'bag') {
       // drop
-      if (G.scene === 'mine' || G.scene === 'town') { ch.bag[m.i] = null; G.dropItem(p.x, p.y, it, p.pid); AH.Audio.sfx('back'); }
+      if (G.scene === 'mine' || G.scene === 'town') { ch.bag[m.i] = null; G.dropItem(p.x + (p.face || 1) * 14, p.y + 2, it, p.pid); const dd = G.drops[G.drops.length - 1]; if (dd) { dd.dropper = p.pid; dd.vx = (p.face || 1) * 20; } AH.Audio.sfx('back'); }
     }
     if (n.p.y && m.area === 'bag') { U.sortBag(ch); AH.Audio.sfx('select'); }
   } else if (m.tab === 1) {
