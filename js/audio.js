@@ -115,5 +115,10 @@ AH.Audio = (function () {
     for (const k in tracks) if (tracks[k]) tracks[k].volume = curve(m);
     if (master) master.gain.value = s;
   }
+  // phones only allow sound after a tap: any first touch, click or key starts the music, also on the splash screen
+  for (const ev of ['pointerdown', 'touchend', 'click', 'keydown']) window.addEventListener(ev, () => {
+    unlock();
+    const pl = playing && tracks[playing]; if (pl && pl.paused && unlocked) pl.play().catch(() => {});
+  }, { passive: true });
   return { unlock, sfx, music, setVol, get musicVol() { return musicVol; }, get sfxVol() { return sfxVol; } };
 })();

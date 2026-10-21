@@ -6,14 +6,15 @@ AH.PETS = {
   dog: { name: 'DOG', desc: 'DIGS UP TREASURE AND BITES YOUR FOES.', spr: 'dog' },
   rat: { name: 'RAT', desc: 'COLLECTS GOLD AND SNIFFS OUT SECRET WALLS.', spr: 'pet_rat' },
 };
-AH.xpNeed = L => Math.floor(24 + 16 * L + 2.4 * L * L);
+// every level takes longer than the last: the deeper you are, the more you farm for the next one
+AH.xpNeed = L => Math.floor(30 + 20 * L + 8 * L * L + 0.25 * L * L * L);
 
 AH.newCharacter = function (cls, name, pet, hardcore) {
   const C = AH.CLASSES[cls];
   const rng = AH.mulberry(AH.hashStr(name + cls + Date.now()));
   const ch = {
     v: 1, name, cls, pet, hardcore: !!hardcore, level: 1, xp: 0, base: Object.assign({}, C.base), pts: 0, ppts: 0,
-    passives: [{ paladin: 'p0', rogue: 'r0', wizard: 'm0' }[cls]], skills: {}, slots: [C.skills[0], null, null],
+    passives: [{ paladin: 'p0', rogue: 'r0', wizard: 'm0' }[cls]], treeV: AH.TREE_V, skills: {}, slots: [C.skills[0], null, null],
     equip: {}, bag: new Array(40).fill(null), gold: 30, deepest: 0, lifts: [], kills: 0, deaths: 0,
     bestiary: {}, created: Date.now(), playTime: 0, bestTimes: {}, storyDone: false,
   };
@@ -39,6 +40,7 @@ AH.Player = function (pid, ch, device) {
   this.inv = 0; this.flash = 0; this.dead = false; this.reviveT = 0;
   this.buffs = {}; this.hitList = new Set(); this.hitCount = 0; this.nextCrit = false;
   this.torch = 100; this.slow = 0; this.poison = 0;
+  if (AH.migratePassives) AH.migratePassives(ch);
   this.recalc();
   this.hp = this.S.hp; this.mp = this.S.mp;
 };
@@ -65,7 +67,7 @@ P.recalc = function () {
   for (const b of sb.list) add(b.fx);
   S.sets = sb;
   for (const id of ch.passives) { const n = AH.PASSIVES[id]; if (n) add(n.fx); }
-  S.hp += C.hp + S.vit * 5 + (ch.level - 1) * 3; S.hp = Math.round(S.hp * (1 + S.hpPct / 100));
+  S.hp += C.hp + S.vit * 5 + (ch.level - 1) * 5; S.hp = Math.round(S.hp * (1 + S.hpPct / 100));
   S.mp += C.mp + S.int * 3 + (ch.level - 1) * 2;
   S.armor = Math.round(S.armor * (1 + S.armorPct / 100));
   S.crit += 5 + S.dex * 0.3 + (this.wbase().crit || 0);

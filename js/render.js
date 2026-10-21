@@ -516,6 +516,7 @@ R.torchGauge = function (G, p, x, y) {
   AH.text(ctx, x + 50, y, '' + p.countCons('torch'), '#cfc6b4');
 };
 R.petPanel = function (G, p, x, y) {
+  return; // the companion is right there on screen, no label needed
   const pt = G.pets.find(q => q.owner === p); if (!pt || !pt.active) return;
   const ctx = this.ctx;
   const s = AH.SPR[AH.PETS[pt.kind].spr];

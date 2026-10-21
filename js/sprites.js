@@ -196,7 +196,7 @@ AH.ICON_GRIDS = {
   aegis: ["..QQQQQQQ...", "..QqqgqqQ...", "..QqqgqqQ...", "..QgggggQ...", "..QqqgqqQ...", "...QqgqQ....", "....QgQ.....", ".....Q......"],
   smoke: ["...KKK......", "..KmmmK.KK..", ".KmmmmmKmmK.", ".KmmmmmmmmK.", "..KmmmmmmK..", "...KKKKKK..."],
   knives: ["s....s....s.", ".s...s...s..", "..s..s..s...", "...........", "..s..s..s...", ".s...s...s..", "s....s....s."],
-  step: ["....kkk.....", "...kkkkk....", "...kpkpk....", "....kkk.....", "..kkkkkkk...", ".k.kkkkk.k..", "...kk.kk....", "..kk...kk..."],
+  step: ["........eee.", "..P....eKKe.", ".PP...pKwKw.", "PPP..pp.KK..", ".PPpp..eKKKe", "PP.p..KKKKK.", ".P....KK.KK.", ".....KK...KK"],
   holy: [".....w......", ".....w......", "..wwwwwww...", ".....w......", ".....w......", ".....w......", "....www....."],
 };
 AH.ICON = {};

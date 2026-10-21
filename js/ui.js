@@ -250,7 +250,7 @@ U.init.create = function (G, m) {
   };
   window.addEventListener('keydown', m.keyHandler);
 };
-U.GRID = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('').concat(['DEL', 'OK']);
+U.GRID = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ÁÉÍÓÖŐÚÜŰ'.split('').concat(['DEL', 'OK']);
 U.NAME_CHAR = /^[a-zA-Z0-9áéíóöőúüűÁÉÍÓÖŐÚÜŰàâçèêëîïôùûÀÂÇÈÊËÎÏÔÙÛ]$/;
 // phones: a real text box so the native keyboard can be used
 U.nameInput = function (G, m, show) {
@@ -280,13 +280,13 @@ U.update.create = function (G, m, dt) {
     if (n.p.b || n.p.start) { window.removeEventListener('keydown', m.keyHandler); G.closeMenu(); }
   } else if (m.step === 1) {
     if (AH.isTouch) {
-      // phones: only the real text box; the stick and letter grid stay out of it
-      U.nameInput(G, m, true);
-      const el = document.getElementById('nameInput');
-      if (n.p.y) { m.name = AH.rand.pick(U.NAMES); if (el) el.value = m.name; AH.Audio.sfx('move'); }
-      if (n.p.a && m.name.length) { m.step = 2; m.sel = 0; AH.Audio.sfx('select'); }
-      if (n.p.b || n.p.start) { m.step = 0; AH.Audio.sfx('back'); }
-      return;
+      // phones: the in-game letter grid; tap a letter or steer with the stick and press A
+      const tp = AH.Mouse && AH.Mouse.tap; if (AH.Mouse) AH.Mouse.tap = null;
+      if (tp) U.GRID.forEach((k, i) => {
+        const cx = 102 + (i % 10) * 28, cy = 156 + Math.floor(i / 10) * 18;
+        if (tp.x >= cx - 9 && tp.x < cx + (k.length > 1 ? 30 : 19) && tp.y >= cy - 6 && tp.y < cy + 12) { m.gridSel = i; n.p.a = true; }
+      });
+      if (n.p.start && m.name.length) { m.step = 2; m.sel = 0; AH.Audio.sfx('select'); return; }
     }
     // keyboard players type directly (handled in keyHandler); only gamepads and touch use the grid here
     if (m.kbTyping || (m.dev && m.dev.startsWith('kb')) || (m.lastDev && m.lastDev.startsWith('kb'))) return;
@@ -340,17 +340,15 @@ U.draw.create = function (G, ctx, m) {
   if (m.step >= 1) {
     AH.frame(ctx, 90, 120, 300, 140, { fill: '#120e14', edge: '#c9a24a', hi: '#f2e3b3' });
     if (m.step === 1) {
-      if (AH.isTouch) {
-        AH.text(ctx, UW / 2, 196, 'TAP THE BOX ABOVE TO TYPE', '#cfc6b4', { align: 'center' });
-        AH.text(ctx, UW / 2, 214, 'A: DONE   Y: RANDOM NAME   B: BACK', '#8d8494', { align: 'center' });
-      } else AH.text(ctx, UW / 2, 128, m.name + (Math.floor(G.time * 2) % 2 ? '_' : ' '), '#ffb347', { align: 'center', scale: 2 });
-      if (!AH.isTouch) U.GRID.forEach((k, i) => {
+      AH.text(ctx, UW / 2, 128, m.name + (Math.floor(G.time * 2) % 2 ? '_' : ' '), '#ffb347', { align: 'center', scale: 2 });
+      U.GRID.forEach((k, i) => {
         const cx = 102 + (i % 10) * 28, cy = 156 + Math.floor(i / 10) * 18;
         if (i === m.gridSel) AH.frame(ctx, cx - 4, cy - 4, k.length > 1 ? 30 : 18, 15, { fill: '#2e2638', edge: '#c9a24a', hi: '#f2e3b3' });
         AH.text(ctx, cx, cy, k, i === m.gridSel ? '#ffb347' : '#cfc6b4');
       });
       const kb = m.kbTyping || (m.dev && m.dev.startsWith('kb')) || (m.lastDev && m.lastDev.startsWith('kb'));
-      if (!AH.isTouch) AH.text(ctx, UW / 2, 244, kb ? 'TYPE A NAME   ENTER: DONE   ESC: BACK' : 'PICK LETTERS   ' + U.btnName(G, m, 'y') + ' RANDOM', '#6a6274', { align: 'center' });
+      if (AH.isTouch) AH.text(ctx, UW / 2, 244, 'TAP LETTERS   X: DELETE   Y: RANDOM   II: DONE', '#6a6274', { align: 'center' });
+      else AH.text(ctx, UW / 2, 244, kb ? 'TYPE A NAME   ENTER: DONE   ESC: BACK' : 'PICK LETTERS   ' + U.btnName(G, m, 'y') + ' RANDOM', '#6a6274', { align: 'center' });
     } else {
       const pets = ['canary', 'dog', 'rat'];
       const rows = [{ label: 'COMPANION', right: '< ' + AH.PETS[pets[m.pet]].name + ' >' }, { label: 'PERMADEATH', right: m.hc ? 'ON - ONE LIFE ONLY' : 'OFF', rcol: m.hc ? '#ff6a5a' : '#8d8494' }, { label: 'BEGIN THE DESCENT', col: '#ffb347' }];
@@ -440,6 +438,11 @@ U.invMouse = function (G, m, n) {
   const M = AH.Mouse; if (!M || !M.active || AH.isTouch || (AH.Mouse.player && AH.Mouse.player(G) !== m.p)) return false;
   const c = M.uiPos(); if (!c) return false;
   const click = M.leftPressed, rclick = M.rightPressed, mv = M.moved || click;
+  // drag the passive tree around with the left button held
+  if (m.tab === 2 && M.left && m.pcam) {
+    if (m.dragFrom) { const dx = c.x - m.dragFrom.x, dy = c.y - m.dragFrom.y; if (Math.abs(dx) + Math.abs(dy) > 0) { m.pcam.x -= dx; m.pcam.y -= dy; m.pfree = true; if (Math.abs(dx) + Math.abs(dy) > 1) m.dragged = true; } }
+    m.dragFrom = { x: c.x, y: c.y };
+  } else { m.dragFrom = null; if (!M.left) m.wasDrag = m.dragged, m.dragged = false; }
   M.leftPressed = M.rightPressed = false; M.moved = false;
   const inR = (x, y, w, h) => c.x >= x && c.x < x + w && c.y >= y && c.y < y + h;
   if (rclick) { n.p.b = true; return false; }
@@ -452,9 +455,11 @@ U.invMouse = function (G, m, n) {
   } else if (m.tab === 1) {
     for (let i = 0; i < 4; i++) if (inR(162, 36 + i * 26, 152, 24)) { m.csel = i; if (click) n.p.a = true; }
   } else if (m.tab === 2) {
+    if (!inR(U.PT.x, U.PT.y, U.PT.w, U.PT.h) || !m.pcam) return false;
+    const ox = U.PT.x + U.PT.w / 2 - m.pcam.x, oy = U.PT.y + U.PT.h / 2 - m.pcam.y;
     let best = null, bd = 1e9;
-    for (const id in AH.PASSIVES) { const q = AH.PASSIVES[id], d = Math.hypot(q.x - c.x, q.y - c.y), r = q.t === 'key' ? 9 : q.t === 'notable' || q.t === 'heart' ? 8 : 6; if (d < r && d < bd) { bd = d; best = id; } }
-    if (best) { if (best !== m.pnode) AH.Audio.sfx('move'); m.pnode = best; if (click) n.p.a = true; }
+    for (const id in AH.PASSIVES) { const q = AH.PASSIVES[id], d = Math.hypot(q.x + ox - c.x, q.y + oy - c.y), r = q.t === 'key' ? 9 : q.t === 'notable' || q.t === 'heart' ? 8 : 6; if (d < r && d < bd) { bd = d; best = id; } }
+    if (best) { if (best !== m.pnode) AH.Audio.sfx('move'); m.pnode = best; m.pfree = true; if (click) n.p.a = true; }
   } else if (m.tab === 3) {
     const known = Object.keys(ch.skills);
     known.forEach((id, i) => { if (inR(8, 26 + i * 28, 292, 28)) m.ssel = i; });
@@ -527,7 +532,7 @@ U.update.inv = function (G, m, dt) {
         const score = d * (2 - dot);
         if (score < bd) { bd = score; best = id; }
       }
-      if (best) { m.pnode = best; AH.Audio.sfx('move'); }
+      if (best) { m.pnode = best; m.pfree = false; AH.Audio.sfx('move'); }
     }
     if (n.p.a) {
       const id = m.pnode;
@@ -659,7 +664,7 @@ U.drawCharTab = function (G, ctx, m) {
   AH.frame(ctx, 322, 20, 154, 246);
   AH.text(ctx, 328, 26, 'POWERS', '#f2e3b3');
   let y = 40;
-  const pw = [...S.powers].map(id => AH.LEGEND_POWERS.find(x => x.id === id)).filter(Boolean);
+  const pw = [...S.powers].map(id => AH.LEGEND_POWERS.find(x => x.id === id) || (AH.SET_POWERS[id] ? { lab: AH.SET_POWERS[id] } : null)).filter(Boolean);
   for (const x of pw) for (const l of AH.wrap(x.lab, 140)) { AH.text(ctx, 328, y, l, '#ffb347'); y += 9; }
   for (const rw of S.runewords) { AH.text(ctx, 328, y, 'RUNEWORD: ' + rw, '#6fbf73'); y += 9; }
   for (const k of S.keys) { const n = Object.values(AH.PASSIVES).find(q => q.fx.key === k); if (n) { AH.text(ctx, 328, y, n.name, '#f2c94c'); y += 9; } }
@@ -670,42 +675,69 @@ U.drawCharTab = function (G, ctx, m) {
   if (ch.hardcore) AH.text(ctx, 328, y + 6, 'PERMADEATH HERO', '#ff6a5a');
   U.hint(ctx, U.btnName(G, m, 'a') + ' SPEND POINT');
 };
+// the tree is bigger than the screen: a camera follows the selected point (or the mouse drag)
+U.PT = { x: 0, y: 18, w: 340, h: 252 };
+U.passiveCam = function (m) {
+  const q = AH.PASSIVES[m.pnode];
+  if (!m.pcam) m.pcam = { x: q.x, y: q.y };
+  if (!m.pfree) { m.pcam.x += (q.x - m.pcam.x) * 0.2; m.pcam.y += (q.y - m.pcam.y) * 0.2; }
+  const B = AH.TREE_BOUNDS;
+  m.pcam.x = AH.clamp(m.pcam.x, B.x0 + U.PT.w / 2 - 40, B.x1 - U.PT.w / 2 + 40); m.pcam.y = AH.clamp(m.pcam.y, B.y0 + U.PT.h / 2 - 40, B.y1 - U.PT.h / 2 + 40);
+  return { ox: Math.round(U.PT.x + U.PT.w / 2 - m.pcam.x), oy: Math.round(U.PT.y + U.PT.h / 2 - m.pcam.y) };
+};
 U.drawPassiveTab = function (G, ctx, m) {
   const p = m.p, ch = p.ch;
   const has = id => ch.passives.indexOf(id) >= 0;
-  ctx.fillStyle = '#0a080d'; ctx.fillRect(0, 18, 340, 252);
+  const { ox, oy } = U.passiveCam(m);
+  ctx.save(); ctx.beginPath(); ctx.rect(U.PT.x, U.PT.y, U.PT.w, U.PT.h); ctx.clip();
+  ctx.fillStyle = '#0a080d'; ctx.fillRect(U.PT.x, U.PT.y, U.PT.w, U.PT.h);
+  // faint backdrop rings
+  ctx.fillStyle = '#120f17';
+  for (let a = 0; a < Math.PI * 2; a += 0.02) for (const r of [120, 260, 380]) ctx.fillRect(Math.round(520 + ox + Math.cos(a) * r), Math.round(400 + oy + Math.sin(a) * r), 1, 1);
   for (const [a, b] of AH.PASSIVE_LINKS) {
     const A = AH.PASSIVES[a], B = AH.PASSIVES[b];
-    const lit = has(a) && has(b);
+    const lit = has(a) && has(b), half = has(a) || has(b);
     const n = Math.ceil(Math.hypot(B.x - A.x, B.y - A.y));
-    ctx.fillStyle = lit ? '#ffb347' : '#2e2836';
-    for (let i = 0; i <= n; i++) { const t = i / n; ctx.fillRect(Math.round(AH.lerp(A.x, B.x, t)), Math.round(AH.lerp(A.y, B.y, t)), 2, 2); }
+    ctx.fillStyle = lit ? '#ffb347' : half ? '#5a4a3a' : '#2e2836';
+    for (let i = 0; i <= n; i += lit ? 1 : 2) { const t = i / n; ctx.fillRect(Math.round(AH.lerp(A.x, B.x, t)) + ox, Math.round(AH.lerp(A.y, B.y, t)) + oy, 2, 2); }
   }
   for (const id in AH.PASSIVES) {
     const q = AH.PASSIVES[id], on = has(id);
+    const X = q.x + ox, Y = q.y + oy;
+    if (X < -20 || Y < 0 || X > U.PT.w + 20 || Y > UH + 20) continue;
     const can = !on && AH.passiveNeighbors(id).some(x => has(x));
-    const edge = on ? '#fff2d0' : can ? '#c9a24a' : '#5a5062', fill = on ? '#ffb347' : '#2a2430';
+    const edge = on ? '#fff2d0' : can ? '#c9a24a' : '#5a5062', fill = on ? (q.t === 'key' ? '#ff6a4a' : '#ffb347') : q.t === 'key' ? '#3a1a1a' : '#2a2430';
     const r = q.t === 'key' ? 8 : q.t === 'notable' ? 6 : q.t === 'heart' ? 9 : q.t === 'start' ? 5 : 3;
     for (let j = -r - 1; j <= r + 1; j++) for (let i = -r - 1; i <= r + 1; i++) {
       const d = q.t === 'notable' || q.t === 'heart' ? Math.abs(i) + Math.abs(j) : Math.max(Math.abs(i), Math.abs(j)) * (q.t === 'key' ? 0.8 : 1);
       const dd = q.t === 'key' ? Math.hypot(i, j) : d;
       if (dd > r + 1) continue;
-      ctx.fillStyle = dd > r ? AH.OUT : dd > r - 1 ? edge : fill; ctx.fillRect(q.x + i, q.y + j, 1, 1);
+      ctx.fillStyle = dd > r ? AH.OUT : dd > r - 1 ? edge : fill; ctx.fillRect(X + i, Y + j, 1, 1);
     }
-    if (q.t === 'key' || q.t === 'notable' || q.t === 'start') AH.text(ctx, q.x, q.y + r + 4, q.name, on ? '#ffd36a' : q.t === 'key' ? '#f2c94c' : '#8d8494', { align: 'center' });
-    if (id === m.pnode) AH.cursor(ctx, q.x - r - 1, q.y - r - 1, r * 2 + 3);
+    if (can && Math.floor(G.time * 2) % 2) { ctx.fillStyle = '#ffd36a'; ctx.fillRect(X, Y, 1, 1); }
+    if (q.t === 'key' || q.t === 'notable' || q.t === 'start') AH.text(ctx, X, Y + r + 4, q.name, on ? '#ffd36a' : q.t === 'key' ? '#ff8a6a' : '#8d8494', { align: 'center' });
+    if (id === m.pnode) AH.cursor(ctx, X - r - 1, Y - r - 1, r * 2 + 3);
   }
+  ctx.restore();
   AH.frame(ctx, 342, 20, 134, 246);
   AH.text(ctx, 348, 26, 'POINTS', '#8d8494'); AH.text(ctx, 470, 26, '' + ch.ppts, '#ffb347', { align: 'right' });
   const q = AH.PASSIVES[m.pnode];
-  let y = 46;
-  AH.text(ctx, 348, y, q.name || (q.t === 'small' ? 'PASSIVE' : ''), q.t === 'key' ? '#f2c94c' : '#f2e3b3'); y += 10;
-  AH.text(ctx, 348, y, { key: 'KEYSTONE', notable: 'NOTABLE', small: 'SMALL', start: 'CLASS START', heart: 'CENTER' }[q.t], '#6f6880'); y += 14;
+  let y = 42;
+  AH.text(ctx, 348, y, q.name || (q.t === 'small' ? 'PASSIVE' : ''), q.t === 'key' ? '#ff8a6a' : '#f2e3b3'); y += 10;
+  AH.text(ctx, 348, y, { key: 'KEYSTONE', notable: 'NOTABLE', small: 'SMALL', start: 'CLASS START', heart: 'CENTER' }[q.t], '#6f6880'); y += 13;
   if (q.desc) for (const l of AH.wrap(q.desc, 122)) { AH.text(ctx, 348, y, l, '#ffb347'); y += 9; }
   for (const l of AH.passiveLabel(q.fx)) for (const ll of AH.wrap(l, 122)) { AH.text(ctx, 348, y, ll, '#9ec0ff'); y += 9; }
-  y += 6;
-  AH.text(ctx, 348, y, has(m.pnode) ? 'ALLOCATED' : AH.passiveNeighbors(m.pnode).some(x => has(x)) ? U.btnName(G, m, 'a') + ' TO TAKE' : 'NOT CONNECTED', has(m.pnode) ? '#8ae08e' : '#a39bb0');
-  AH.text(ctx, 348, 240, 'RESPEC AT THE', '#6f6880'); AH.text(ctx, 348, 250, 'TOWN SHRINE', '#6f6880');
+  y += 5;
+  AH.text(ctx, 348, y, has(m.pnode) ? 'ALLOCATED' : AH.passiveNeighbors(m.pnode).some(x => has(x)) ? (AH.Mouse && AH.Mouse.active && !AH.isTouch ? 'CLICK TO TAKE' : U.btnName(G, m, 'a') + ' TO TAKE') : 'NOT CONNECTED', has(m.pnode) ? '#8ae08e' : '#a39bb0');
+  // overview map of the whole tree with the visible window
+  const B = AH.TREE_BOUNDS, mx = 348, my = 186, mw = 122, mh = 62, sc = Math.min(mw / (B.x1 - B.x0), mh / (B.y1 - B.y0));
+  const MX = x => Math.round(mx + mw / 2 + (x - (B.x0 + B.x1) / 2) * sc), MY = y2 => Math.round(my + mh / 2 + (y2 - (B.y0 + B.y1) / 2) * sc);
+  ctx.fillStyle = '#0a080d'; ctx.fillRect(mx - 2, my - 2, mw + 4, mh + 4);
+  for (const id in AH.PASSIVES) { const n2 = AH.PASSIVES[id]; ctx.fillStyle = has(id) ? '#ffb347' : n2.t === 'key' ? '#7a3a2a' : '#3a3442'; ctx.fillRect(MX(n2.x), MY(n2.y), 1, 1); }
+  ctx.fillStyle = '#c9a24a';
+  const vx0 = MX(m.pcam.x - U.PT.w / 2), vy0 = MY(m.pcam.y - U.PT.h / 2), vx1 = MX(m.pcam.x + U.PT.w / 2), vy1 = MY(m.pcam.y + U.PT.h / 2);
+  ctx.fillRect(vx0, vy0, vx1 - vx0, 1); ctx.fillRect(vx0, vy1, vx1 - vx0, 1); ctx.fillRect(vx0, vy0, 1, vy1 - vy0); ctx.fillRect(vx1, vy0, 1, vy1 - vy0 + 1);
+  AH.text(ctx, 348, 254, 'RESPEC: TOWN SHRINE', '#6f6880');
 };
 U.drawSkillTab = function (G, ctx, m) {
   const p = m.p, ch = p.ch;

@@ -20,6 +20,13 @@ AH.Mouse = (function () {
   window.addEventListener('keyup', e => { if (e.key === 'Shift') M.shift = false; });
   window.addEventListener('keydown', () => { /* keyboard use keeps mouse goals until movement keys are pressed */ });
 
+  // phones: remember where the screen was tapped (outside the on-screen buttons), in UI pixels
+  window.addEventListener('touchstart', e => {
+    if (!AH.isTouch || !e.touches.length) return;
+    if (e.target && e.target.closest && e.target.closest('#btns,#top,#fs')) return;
+    const t = e.touches[0], d = window.devicePixelRatio || 1, v = AH.getView ? AH.getView() : null; if (!v) return;
+    M.tap = { x: (t.clientX * d - v.x) / v.w * AH.UW, y: (t.clientY * d - v.y) / v.h * AH.UH };
+  }, { passive: true });
   M.uiPos = function () { const c = canvasPos(); return c ? { x: c.x * AH.UW, y: c.y * AH.UH } : null; };
   // the player the mouse drives: the local keyboard player (kb1), or the only local player if it uses the keyboard
   M.player = function (G) {

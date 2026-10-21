@@ -1,4 +1,4 @@
-# ASHHEART — The Mines of Dunmere BETA
+# ASHHEART — The Mines of Dunmere
 
 A pixel-art action roguelite for the browser. Dive 100 floors below the town of Dunmere, keep its lamps burning, and silence the Heart of Ash.
 
@@ -34,6 +34,7 @@ English, Français and Magyar — switch under Options → Language (the first s
 - Four story quest chains from the people of Dunmere, with unique rewards.
 - Mining: ore and crystal rocks stand in the mine's rooms and break after a few blows (any weapon, bows and staves too). Ore upgrades and reforges gear at the smith, crystals add sockets.
 - Gravestones: where a hero falls, a grave stays on that floor. Read it to see who died there, to what, and with which stats.
+- A 142-point passive tree with three branches and a keystone per class, plus shared outer paths. Levels come slower the deeper you go.
 - Nemesis system, legendary beasts, floor events, bounties, a town that remembers what you did.
 
 ## Co-op
