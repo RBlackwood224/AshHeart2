@@ -244,7 +244,10 @@ E.draw = function (ctx, G) {
     if (Math.floor(G.time * 3 + this.bob) % 4 === 0) { ctx.fillStyle = '#5a4e3a'; ctx.fillRect(Math.round(this.x - 3), Math.round(this.y - 1), 6, 1); ctx.fillRect(Math.round(this.x - 1), Math.round(this.y - 2), 2, 1); }
     return;
   }
-  const s = this.spr, sc = this.scale;
+  let s = this.spr; const sc = this.scale;
+  // bats flap their wings
+  if (this.def.spr === 'bat') { if (!this.spr2) this.spr2 = AH.creatureSprite(Object.assign({}, this.def, { spr: 'bat2' })); if (Math.floor(G.time * 11 + this.bob * 3) % 2) s = this.spr2; }
+  this._s = s;
   const fy = this.fly ? Math.sin(G.time * 5 + this.bob) * 2 - 6 : 0;
   const moving = this._px !== undefined && Math.hypot(this.x - this._px, this.y - this._py) > 0.02;
   this._px = this.x; this._py = this.y;
@@ -273,7 +276,7 @@ E.draw = function (ctx, G) {
 };
 E.drawEm = function (ctx, G) {
   if (this.dead || this.hidden || this._dx === undefined) return;
-  AH.drawSprEm(ctx, this.spr, this._dx, this._dy, this.face < 0, this.scale);
+  AH.drawSprEm(ctx, this._s || this.spr, this._dx, this._dy, this.face < 0, this.scale);
   // elite / legend marker
   if (this.elite || this.legend || this.nemesis || this.boss) {
     const col = this.boss ? '#ff6a5a' : this.legend ? '#ff9a3e' : this.nemesis ? '#e05a5a' : '#f2d36a';

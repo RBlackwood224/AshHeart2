@@ -114,7 +114,7 @@ AH.Mouse = (function () {
       const g = ['.####...', '#oooo#..', '....##o#', '...#.#o#', '..#...#.', '.#......', '#.......'];
       for (let k = 0; k < 6; k++) { R(6 - k, 1 + k, 2, 2, AH.OUT); R(6 - k, 1 + k, 1, 1, '#8a5a26'); }
       R(1, 0, 6, 1, AH.OUT); R(0, 1, 1, 2, AH.OUT); R(1, 1, 5, 1, '#c8c8d8'); R(6, 1, 2, 2, AH.OUT); R(7, 2, 1, 3, '#c8c8d8'); R(8, 3, 1, 2, AH.OUT);
-      const nm = M.hoverVein.gem ? 'CRYSTAL ROCK' : 'ORE ROCK', tw = Math.max(80, AH.textW(AH.tr(nm)) + 12), X = Math.round(AH.UW / 2 - tw / 2);
+      const nm = M.hoverVein.gem ? 'CRYSTAL ROCK' : ({ coal: 'COAL ROCK', ore: 'COPPER ROCK', iron: 'IRON ROCK', silver: 'SILVER ROCK', goldore: 'GOLD ROCK', mithril: 'MITHRIL ROCK' })[M.hoverVein.ore] || 'ORE ROCK', tw = Math.max(80, AH.textW(AH.tr(nm)) + 12), X = Math.round(AH.UW / 2 - tw / 2);
       AH.frame(ctx, X, 50, tw, 20, { fill: '#120e10', edge: '#4a3a24', hi: '#7a6038' });
       AH.bar(ctx, X + 4, 63, tw - 8, 3, M.hoverVein.hp / (M.hoverVein.max || 3), M.hoverVein.gem ? '#6fd6e8' : '#d8a048', '#1a1416', '#fff0b8');
       AH.text(ctx, AH.UW / 2, 53, nm, M.hoverVein.gem ? '#6fd6e8' : '#f2c94c', { align: 'center' });

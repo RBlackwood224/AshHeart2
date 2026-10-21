@@ -15,6 +15,7 @@ AH.Input = (function () {
   const mk = id => (dev[id] = dev[id] || { id, cur: {}, prev: {}, ax: 0, ay: 0, rep: { t: 0, dx: 0, dy: 0 }, lastActive: 0 });
   mk('kb1'); mk('kb2');
   const touch = { active: false, ax: 0, ay: 0, btn: {} };
+  let hidePad = null; // set by setupTouch: hides the on-screen pad when a mouse, keyboard or controller is used
 
   window.addEventListener('keydown', e => {
     keys[e.code] = true;
@@ -55,7 +56,7 @@ AH.Input = (function () {
       if (d.cur.left) ax = -1; if (d.cur.right) ax = 1;
       d.ax = ax; d.ay = ay;
       d.stickUp = ay < -0.6; d.stickDown = ay > 0.6; d.stickLeft = ax < -0.6; d.stickRight = ax > 0.6;
-      if (ax || ay || Object.values(d.cur).some(v => v)) d.lastActive = now;
+      if (ax || ay || Object.values(d.cur).some(v => v)) { d.lastActive = now; if (hidePad && AH.isTouch) hidePad(); }
     }
     if (touch.active) {
       const d = mk('touch');
@@ -84,6 +85,15 @@ AH.Input = (function () {
     return { dx: 0, dy: 0 };
   }
   function devices() { return Object.keys(dev); }
+  // controller rumble (where the browser supports it)
+  function rumble(id, strength, ms) {
+    try {
+      if (!id || !id.startsWith('gp') || AH.options.shake === false) return;
+      const pad = (navigator.getGamepads ? navigator.getGamepads() : [])[+id.slice(2)];
+      const a = pad && pad.vibrationActuator; if (!a || !a.playEffect) return;
+      a.playEffect('dual-rumble', { duration: ms || 150, strongMagnitude: Math.min(1, strength), weakMagnitude: Math.min(1, strength * 0.7) });
+    } catch (e) { /* no rumble */ }
+  }
   // the device the person touched last (mouse movement counts as the first keyboard)
   function lastDevice() {
     let best = null, bt = -1;
@@ -100,6 +110,11 @@ AH.Input = (function () {
     if (!root) return;
     root.style.display = 'block';
     touch.active = true; mk('touch');
+    // a real mouse or keyboard on a touch-capable laptop hides the on-screen pad; touching the screen brings it back
+    const toPc = hidePad = () => { if (!AH.isTouch) return; AH.isTouch = false; root.style.display = 'none'; const fs = document.getElementById('fs'); if (fs) fs.style.display = 'none'; };
+    window.addEventListener('pointermove', e => { if (e.pointerType === 'mouse' && (Math.abs(e.movementX) + Math.abs(e.movementY)) > 0) toPc(); });
+    window.addEventListener('keydown', toPc);
+    window.addEventListener('touchstart', () => { if (AH.isTouch) return; AH.isTouch = true; root.style.display = 'block'; }, { passive: true });
     const stick = document.getElementById('stick'), knob = document.getElementById('knob');
     let sid = null, ox = 0, oy = 0;
     const zone = document.getElementById('stickzone');
@@ -126,5 +141,5 @@ AH.Input = (function () {
       el.addEventListener('pointerleave', off); el.addEventListener('pointercancel', off);
     });
   }
-  return { poll, pressed, held, axis, menuDir, devices, lastDevice, anyPressed, setupTouch, dev, keys, touch };
+  return { poll, pressed, held, axis, menuDir, devices, lastDevice, rumble, anyPressed, setupTouch, dev, keys, touch };
 })();

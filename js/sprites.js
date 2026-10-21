@@ -96,6 +96,8 @@ G.skel = AH.sprite(["...bbbb....", "..bbbbbB...", "..bekbeB...", "..bbbbbB...", 
 G.slime = AH.sprite(["....gggg....", "..gghhggg...", ".gghhgggggG.", ".ggkgggkggG.", "gggkgggkgggG", "gggggggggGGG", "GggggggggGGD", ".GGGGGGGGGD.", "..DDDDDDDD.."],
   { g: '#6fd65a', G: '#3f9a34', h: '#d0ffb8', D: '#2a6a24', k: '#0e1a0c' });
 G.bat = AH.sprite(["P.........P", "PP..P.P..PP", "PpP.ppp.PpP", ".PppepeppP.", "..PP.p.PP.."], { p: '#6a4a7a', P: '#3a2448', e: '#ff3b1f' }, { emissive: 'e' });
+// second wing frame: wings swept down
+G.bat2 = AH.sprite(["...........", "....P.P....", "..PPpppPP..", ".PppepeppP.", "PPpP.p.PpPP"], { p: '#6a4a7a', P: '#3a2448', e: '#ff3b1f' }, { emissive: 'e' });
 G.spider = AH.sprite(["k..........k", ".k..kKKk..k.", "..kkKKKKkk..", "kkkKeKKeKkkk", "..kkKKKKkk..", ".k..kkkk..k.", "k....kk....k"], { k: '#2a2430', K: '#4a3a52', e: '#ff3b1f' }, { emissive: 'e' });
 G.goblin = AH.sprite(["..g....g..", "..gggggg..", ".gGeggeGg.", "..gggggg..", "...gkkg...", "..cccccC..", ".gccccccg.", ".g.cccC.g.", "...cccC...", "...cc.CC..", "...gg.gg..", "..GG..GG.."], { g: '#7aa84a', G: '#4a6a2a', e: '#ffe04a', c: '#7a5634', C: '#4e3420', k: '#2a1a10' }, { emissive: 'e' });
 G.ghost = AH.sprite(["...wwww...", "..wwwwwW..", ".wwewwewW.", ".wwewwewW.", ".wwwwwwwW.", ".wwwkkwwW.", ".wwwwwwwW.", ".wwwwwwwWW", "wwwwwwwwWW", "wwwwwwwWW.", "w.ww.wwW..", "...w..W..."], { w: '#cfdcec', W: '#8a9ab4', e: '#3a4a7a', k: '#3a4a7a' });
@@ -201,6 +203,9 @@ AH.ICON_GRIDS = {
 };
 AH.ICON = {};
 for (const k in AH.ICON_GRIDS) AH.ICON[k] = AH.sprite(AH.ICON_GRIDS[k], S);
+// one lump icon per ore, recoloured
+for (const [k, c] of Object.entries({ coal: ['#2a2630', '#4a4652', '#8a8a96'], iron: ['#5a5a6a', '#9a9aac', '#e0e0ec'], silver: ['#8a8aa0', '#e4e4f2', '#ffffff'], goldore: ['#8a6a3a', '#f2d060', '#fff4c0'], mithril: ['#3a7a78', '#8af0e0', '#e8fff8'] }))
+  AH.ICON[k] = AH.sprite(AH.ICON_GRIDS.ore, Object.assign({}, S, { k: c[0], G: c[1], g: c[2] }));
 AH.iconRecolor = function (name, map) {
   const pal = Object.assign({}, S, map); return AH.sprite(AH.ICON_GRIDS[name], pal);
 };

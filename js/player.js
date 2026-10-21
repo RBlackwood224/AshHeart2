@@ -254,6 +254,7 @@ P.useItem = function (G, i) {
     if (k === 'potion') return this.drink(G, 'potion');
     if (k === 'mana') return this.drink(G, 'mana');
     if (k === 'murky') return this.drink(G, 'murky');
+    if (k === 'coal') { if (this.torch >= 100) { G.toast(this, 'YOUR TORCH BURNS BRIGHT', '#a39bb0'); return; } this.torch = Math.min(100, this.torch + 40); this.takeCons('coal'); AH.Audio.sfx('pickup'); G.toast(this, 'COAL FEEDS THE FLAME', '#ffb347'); return; }
     if (k === 'torch') { this.torch = 100; this.takeCons('torch'); AH.Audio.sfx('pickup'); G.toast(this, 'FRESH TORCH', '#ffb347'); return; }
     if (k === 'idscroll') {
       const ring = this.ch.bag.find(b => b && b.unid);
@@ -295,6 +296,7 @@ P.heal = function (G, n) {
   if (d > 0 && G) AH.fx.num(G, this.x, this.y - 22, '+' + d, '#8ae08e');
 };
 P.hurt = function (G, dmg, src, raw) {
+  if (G.rumble && !this.dead) G.rumble(this, Math.min(1, 0.25 + dmg / Math.max(1, this.S.hp) * 2), 140);
   if (this.dead || (this.inv > 0 && !raw)) return 0;
   if (!raw && this.S.block > 0 && Math.random() * 100 < Math.min(50, this.S.block)) { AH.fx.num(G, this.x, this.y - 22, 'BLOCK', '#9ec0ff'); AH.Audio.sfx('block'); this.inv = 0.15; return 0; }
   let d = dmg;

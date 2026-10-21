@@ -85,7 +85,7 @@ GG.enterTown = function (why) {
   }
   const sp = why === 'start' ? this.map.spawn : this.map.mineSpawn;
   this.players.forEach((p, i) => { p.x = sp.x + i * 12 - 10; p.y = sp.y + (i % 2) * 6; p.dead = false; p.state = 'idle'; if (p.hp <= 0) p.hp = p.S.hp * 0.5; p.torch = Math.max(p.torch, 40); p.poison = 0; p.slow = 0; });
-  this.pets.forEach(pt => { pt.x = pt.owner.x - 10; pt.y = pt.owner.y + 6; });
+  this.pets.forEach(pt => { pt.x = pt.owner.x - 10; pt.y = pt.owner.y + 6; if (pt.kind !== 'canary' && this.map) this.placeSafe(pt); });
   this.spawnVillagers();
   if (this.world.bountyDay !== this.world.day) this.rollBounties();
   AH.Audio.music('town');
@@ -160,7 +160,7 @@ GG.enterMine = function (floor, mode) {
   this.mapSeed = seed;
   const sp = this.map.spawn;
   this.players.forEach((p, i) => { p.x = sp.x + i * 10 - 8; p.y = sp.y; this.placeSafe(p); p.dead = false; if (p.hp <= 0) p.hp = p.S.hp * 0.5; });
-  this.pets.forEach(pt => { pt.x = pt.owner.x - 8; pt.y = pt.owner.y + 6; pt.warned = new Set(); });
+  this.pets.forEach(pt => { pt.x = pt.owner.x - 8; pt.y = pt.owner.y + 6; pt.warned = new Set(); if (pt.kind !== 'canary' && this.map) this.placeSafe(pt); });
   // record depth / lifts
   for (const p of this.players) {
     if (floor > p.ch.deepest && this.mode === 'story') { p.ch.deepest = floor; }
@@ -471,8 +471,8 @@ GG.rollBounties = function () {
       const f = AH.clamp(deep + rng.int(-2, 3), 2, 100); if (f % 10 === 0) { i--; continue; }
       offers.push({ id: AH.uid(), type: 'rescue', floor: f, reward: 60 + f * 9, trust: 8, text: 'RESCUE A LOST MINER ON FLOOR ' + f });
     } else {
-      const n = rng.int(6, 12);
-      offers.push({ id: AH.uid(), type: 'gather', need: n, reward: n * 12, trust: 2, text: 'BRING ' + n + ' ORE TO THE SMITH' });
+      const n = rng.int(6, 12), ore = AH.ORE_FOR_TIER[AH.tierOf(Math.max(1, deep))], val = AH.CONSUMABLES[ore].sell;
+      offers.push({ id: AH.uid(), type: 'gather', need: n, ore, reward: n * (8 + val * 2), trust: 2, text: 'BRING ' + n + ' ' + AH.CONSUMABLES[ore].name + ' TO THE SMITH' });
     }
   }
   W.bounties = offers;
@@ -495,7 +495,8 @@ GG.updatePets = function (dt) {
     if (pt.atk > 0) pt.atk -= dt;
     const follow = (dist, spd) => {
       const d = AH.dist(pt, o);
-      if (d > 180) { pt.x = o.x - 8; pt.y = o.y + 4; return; }
+      if (d > 180) { pt.x = o.x - 8; pt.y = o.y + 4; if (pt.kind !== 'canary') this.placeSafe(pt); return; }
+      if (pt.kind !== 'canary' && this.map.blocked(pt.x, pt.y, 3)) this.placeSafe(pt);
       if (d > dist) { const a = Math.atan2(o.y - pt.y, o.x - pt.x); this.moveEntity(pt, Math.cos(a) * spd * dt, Math.sin(a) * spd * dt, 3, pt.kind === 'canary'); pt.face = Math.cos(a) > 0 ? 1 : -1; pt.moving = true; } else pt.moving = false;
     };
     if (this.scene !== 'mine') { follow(18, 85); continue; }
@@ -556,7 +557,7 @@ GG.dogDig = function (pt) {
   const o = pt.owner, s = pt.spot, r = AH.rand();
   AH.Audio.sfx('bark');
   if (r < 0.3) this.dropGold(s.x, s.y, (4 + this.floorNo * 2) * 2, o.pid);
-  else if (r < 0.55) this.dropItem(s.x, s.y, AH.makeCons(AH.rand.pick(['ore', 'ore', 'gem', 'potion', 'torch', 'murky'])), o.pid);
+  else if (r < 0.55) this.dropItem(s.x, s.y, AH.makeCons(AH.rand.pick([AH.oreForFloor(this.floorNo, AH.rand()), AH.oreForFloor(this.floorNo, AH.rand()), 'gem', 'potion', 'torch', 'murky'])), o.pid);
   else if (r < 0.85) this.dropItem(s.x, s.y, AH.genItem(AH.rand, this.floorNo, { mf: o.S.mf + 60 }), o.pid);
   else if (r < 0.95) this.dropItem(s.x, s.y, AH.genRune(AH.rand, this.floorNo), o.pid);
   else { this.toast(o, 'THE DOG FOUND A BONE. GOOD BOY.', '#c48c56'); }
@@ -636,6 +637,8 @@ GG.updateFlee = function (e, dt) {
   if (e.fleeT <= 0) { e.gone = true; AH.fx.puff(this, e.x, e.y, '#f2c94c'); this.toast(null, 'THE GOLDEN RAT ESCAPED...', '#a39bb0'); }
 };
 GG.updateEvents = function (dt) {
+  this.feelT = (this.feelT || 0) - dt;
+  if (this.feelT <= 0) { this.feelT = 0.5; this.tutorialTick(); this.achieveTick(); }
   // first glittering rock: teach mining once
   if (this.scene === 'mine' && this.world && !this.world.tipVein && this.map && this.map.veins) {
     for (const p of this.players) if (!p.remote && !p.dead && this.map.veins.some(v => v.hp > 0 && Math.hypot(v.x - p.x, v.y - p.y) < 56)) {
@@ -668,4 +671,61 @@ GG.updateTown = function (dt) {
   // weather
   if (W.weather === 'storm') { this.lightningT = (this.lightningT || 6) - dt; if (this.lightningT <= 0) { this.lightningT = AH.rand.range(5, 12); this.lightning = 0.25; setTimeout(() => AH.Audio.sfx('thunder'), 400); } }
   if (this.lightning > 0) this.lightning -= dt;
+};
+
+// ---------- feel: rumble, tutorial tips, achievements ----------
+GG.rumble = function (p, s, ms) { if (p && !p.remote && p.device) AH.Input.rumble(p.device, s, ms); };
+// short tips the first time something happens, worded for the device the player uses
+GG.keyFor = function (p, act) {
+  const d = p.device || 'kb1';
+  const T = { kb1: { atk: 'J / LEFT CLICK', heavy: 'K / RIGHT CLICK', dodge: 'SPACE', pot: 'Q', bag: 'TAB', skill: '1 2 3', move: 'WASD' },
+    kb2: { atk: 'NUM1', heavy: 'NUM4', dodge: 'NUM2', pot: 'NUM0', bag: 'NUM+', skill: 'NUM5 NUM7 NUM8', move: 'ARROWS' },
+    touch: { atk: 'A', heavy: 'X', dodge: 'B', pot: 'HP', bag: 'BAG', skill: 'Y LB RB', move: 'STICK' } };
+  return (T[d] || { atk: 'A', heavy: 'X', dodge: 'B', pot: 'D-PAD UP', bag: 'SELECT', skill: 'Y LB RB', move: 'STICK' })[act];
+};
+GG.tip = function (p, key, text) {
+  const ch = p.ch; ch.tips = ch.tips || {};
+  if (ch.tips[key] || this.mode === 'time') return;
+  ch.tips[key] = 1; this.toast(p, text, '#9ec0ff');
+};
+GG.tutorialTick = function () {
+  if (this.scene !== 'mine') return;
+  for (const p of this.players) {
+    if (p.remote || p.dead) continue;
+    const k = a => AH.tr(this.keyFor(p, a));
+    if (this.floorNo <= 2) this.tip(p, 'move', AH.tr('MOVE') + ': ' + k('move') + '   ' + AH.tr('ATTACK') + ': ' + k('atk'));
+    if (this.enemies.some(e => !e.dead && !e.hidden && AH.dist(e, p) < 90)) this.tip(p, 'fight', AH.tr('HEAVY ATTACK') + ': ' + k('heavy') + '   ' + AH.tr('DODGE') + ': ' + k('dodge'));
+    if (p.hp < p.S.hp * 0.4 && p.countCons('potion')) this.tip(p, 'potion', AH.tr('LOW LIFE! DRINK A POTION') + ': ' + k('pot'));
+    if ((p.ch.ppts > 0 || p.ch.pts > 0) && p.ch.level >= 2) this.tip(p, 'points', AH.tr('NEW POINTS TO SPEND') + ': ' + k('bag'));
+    if (p.ch.level >= 3) this.tip(p, 'skills', AH.tr('SKILLS') + ': ' + k('skill'));
+    if (this.floorNo >= 6) this.tip(p, 'dark', 'IT IS DARK FROM HERE. KEEP TORCHES AND COAL.');
+    if ((this.map.props || []).some(o => o.type === 'chest' && !o.open && AH.dist(o, p) < 50)) this.tip(p, 'chest', 'CHESTS HOLD LOOT, BUT SOME ARE MIMICS.');
+  }
+};
+AH.ACHIEVEMENTS = [
+  { id: 'f10', name: 'INTO THE DARK', desc: 'REACH FLOOR 10', ok: c => c.deepest >= 10 },
+  { id: 'f25', name: 'DEEP DELVER', desc: 'REACH FLOOR 25', ok: c => c.deepest >= 25 },
+  { id: 'f50', name: 'HALFWAY DOWN', desc: 'REACH FLOOR 50', ok: c => c.deepest >= 50 },
+  { id: 'f75', name: 'WHERE LIGHT DIES', desc: 'REACH FLOOR 75', ok: c => c.deepest >= 75 },
+  { id: 'f100', name: 'HEART OF ASH', desc: 'REACH FLOOR 100', ok: c => c.deepest >= 100 },
+  { id: 'k100', name: 'MONSTER BANE', desc: 'SLAY 100 CREATURES', ok: c => c.kills >= 100 },
+  { id: 'k1000', name: 'THE GRINDER', desc: 'SLAY 1000 CREATURES', ok: c => c.kills >= 1000 },
+  { id: 'lv20', name: 'SEASONED', desc: 'REACH LEVEL 20', ok: c => c.level >= 20 },
+  { id: 'lv40', name: 'LEGENDARY HERO', desc: 'REACH LEVEL 40', ok: c => c.level >= 40 },
+  { id: 'nodeath', name: 'UNTOUCHED', desc: 'REACH FLOOR 20 WITHOUT DYING', ok: c => c.deepest >= 20 && c.deaths === 0 },
+  { id: 'legend', name: 'BEAST HUNTER', desc: 'SLAY A LEGENDARY BEAST', ok: c => AH.LEGENDS.some(L => c.bestiary[L.name]) },
+  { id: 'set', name: 'COMPLETE SET', desc: 'COLLECT EVERY PIECE OF A SET', ok: c => AH.SETS.some(s => ((c.setsFound || {})[s.id] || []).length >= s.pieces.length) },
+  { id: 'bestiary', name: 'NATURALIST', desc: 'MEET 40 KINDS OF CREATURES', ok: c => Object.keys(c.bestiary || {}).length >= 40 },
+  { id: 'rich', name: 'GOLDEN HOARD', desc: 'CARRY 10000 GOLD', ok: c => c.gold >= 10000 },
+  { id: 'tree', name: 'WELL ROOTED', desc: 'TAKE 40 PASSIVE POINTS', ok: c => (c.passives || []).length >= 40 },
+];
+GG.achieveTick = function () {
+  for (const p of this.players) {
+    if (p.remote) continue;
+    const c = p.ch; c.ach = c.ach || {};
+    for (const a of AH.ACHIEVEMENTS) if (!c.ach[a.id] && a.ok(c)) {
+      c.ach[a.id] = this.world ? this.world.day : 1;
+      this.banner('ACHIEVEMENT: ' + a.name, '#5ee07a', a.desc); AH.Audio.sfx('achieve'); this.rumble(p, 0.3, 200);
+    }
+  }
 };

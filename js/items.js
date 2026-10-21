@@ -301,11 +301,23 @@ AH.CONSUMABLES = {
   mana: { name: 'MANA POTION', icon: 'mana', price: 20, stack: 9 },
   murky: { name: 'MURKY POTION', icon: 'murky', price: 0, stack: 9 },
   torch: { name: 'TORCH', icon: 'torch', price: 12, stack: 9 },
-  ore: { name: 'ORE', icon: 'ore', price: 0, stack: 99, sell: 4 },
+  ore: { name: 'COPPER ORE', icon: 'ore', price: 0, stack: 99, sell: 4 },
+  coal: { name: 'COAL', icon: 'coal', price: 0, stack: 99, sell: 2 },
+  iron: { name: 'IRON ORE', icon: 'iron', price: 0, stack: 99, sell: 7 },
+  silver: { name: 'SILVER ORE', icon: 'silver', price: 0, stack: 99, sell: 12 },
+  goldore: { name: 'GOLD ORE', icon: 'goldore', price: 0, stack: 99, sell: 20 },
+  mithril: { name: 'MITHRIL ORE', icon: 'mithril', price: 0, stack: 99, sell: 35 },
   gem: { name: 'CRYSTAL', icon: 'gem', price: 0, stack: 99, sell: 15 },
   bomb: { name: 'BOMB', icon: 'bomb', price: 30, stack: 9 },
   key: { name: 'VAULT KEY', icon: 'key', price: 0, stack: 9 },
   idscroll: { name: 'SCROLL OF SIGHT', icon: 'scroll', price: 25, stack: 9 },
+};
+// which ore the smith needs to work an item of a given tier, and what rocks hold at each depth
+AH.ORE_FOR_TIER = ['ore', 'iron', 'silver', 'goldore', 'goldore', 'mithril'];
+AH.ORE_COLORS = { coal: ['#0c0a0e', '#2a2630', '#4a4652', '#8a8a96'], ore: ['#3a1a0a', '#a0582a', '#e0904a', '#ffd0a0'], iron: ['#1a1a22', '#5a5a6a', '#9a9aac', '#e0e0ec'], silver: ['#2a2a3a', '#a8a8bc', '#e4e4f2', '#ffffff'], goldore: ['#5a3a14', '#c89030', '#f2d060', '#fff4c0'], mithril: ['#0a3a3a', '#3aa8a0', '#8af0e0', '#e8fff8'] };
+AH.oreForFloor = function (f, r) {
+  const T = f < 10 ? [['coal', 40], ['ore', 60]] : f < 30 ? [['coal', 15], ['ore', 25], ['iron', 60]] : f < 50 ? [['coal', 10], ['iron', 30], ['silver', 60]] : f < 80 ? [['coal', 10], ['silver', 30], ['goldore', 60]] : [['coal', 10], ['goldore', 35], ['mithril', 55]];
+  let x = r * 100; for (const [k, w] of T) { if (x < w) return k; x -= w; } return T[T.length - 1][0];
 };
 AH.makeCons = function (k, n) { const c = AH.CONSUMABLES[k]; return { id: AH.uid(), kind: 'cons', cons: k, name: c.name, icon: c.icon, rarity: 0, stack: n || 1 }; };
 AH.makeTome = function (skill) { return { id: AH.uid(), kind: 'tome', skill, name: 'TOME: ' + AH.SKILLS[skill].name, icon: 'tome', rarity: 2 }; };
@@ -352,7 +364,7 @@ AH.itemLines = function (it, cls) {
   if (it.kind === 'rune') { L.push({ t: AH.RUNES[it.rune].lab, c: '#9ec0ff' }); L.push({ t: 'SOCKET INTO GEAR AT THE SMITH OR IN THE BAG', c: '#6f6880' }); }
   if (it.kind === 'tome') { L.push({ t: AH.SKILLS[it.skill].desc, c: '#9ec0ff' }); L.push({ t: 'READ TO LEARN OR IMPROVE THIS SKILL', c: '#6f6880' }); }
   if (it.kind === 'cons') {
-    const d = { potion: 'RESTORES LIFE', mana: 'RESTORES MANA', murky: 'ANYTHING CAN HAPPEN...', torch: 'REFILLS YOUR TORCH', ore: 'THE SMITH NEEDS IT', gem: 'SELLS WELL', bomb: 'BREAKS WALLS AND FOES', key: 'OPENS A VAULT DOOR', idscroll: 'IDENTIFIES A RING' }[it.cons];
+    const d = { potion: 'RESTORES LIFE', mana: 'RESTORES MANA', murky: 'ANYTHING CAN HAPPEN...', torch: 'REFILLS YOUR TORCH', ore: 'THE SMITH NEEDS IT', coal: 'FEEDS YOUR TORCH', iron: 'THE SMITH NEEDS IT', silver: 'THE SMITH NEEDS IT', goldore: 'THE SMITH NEEDS IT', mithril: 'THE SMITH NEEDS IT', gem: 'SELLS WELL', bomb: 'BREAKS WALLS AND FOES', key: 'OPENS A VAULT DOOR', idscroll: 'IDENTIFIES A RING' }[it.cons];
     L.push({ t: d, c: '#9ec0ff' });
   }
   if (it.req) L.push({ t: `REQUIRES ${it.req.v} ${it.req.stat.toUpperCase()}`, c: '#a39bb0' });

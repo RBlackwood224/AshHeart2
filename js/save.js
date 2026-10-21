@@ -18,6 +18,7 @@ AH.Save = (function () {
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = 'ashheart-' + (s.ch.name || 'hero').toLowerCase().replace(/[^a-z0-9]/g, '') + '.json';
     document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    try { const o = options(); o.lastExport = Date.now(); setOptions(o); if (AH.options) AH.options.lastExport = o.lastExport; } catch (e) { /* ignore */ }
   }
   function importFile(cb) {
     const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json';

@@ -298,7 +298,9 @@ AH.genFloor = function (seed, floor, event) {
       if (Math.hypot(cx - m.stairs.x, cy - m.stairs.y) < 32 || Math.hypot(cx - m.rope.x, cy - m.rope.y) < 32) continue;
       if (m.props.some(p => Math.abs(p.x - cx) < 20 && Math.abs(p.y - cy) < 20) || m.veins.some(v => Math.abs(v.tx - x) < 3 && Math.abs(v.ty - y) < 3)) continue;
       const gem = biome.id === 'crystal' || (floor >= 6 && rng() < 0.18);
-      m.veins.push({ tx: x, ty: y, x: cx, y: y * T + 14, hp: gem ? 4 : 3, max: gem ? 4 : 3, gem, seed: rng.int(0, 999) });
+      const ore = gem ? 'gem' : AH.oreForFloor(floor, rng());
+      const hard = gem ? 4 : ({ coal: 2, ore: 3, iron: 3, silver: 4, goldore: 4, mithril: 5 })[ore];
+      m.veins.push({ tx: x, ty: y, x: cx, y: y * T + 14, hp: hard, max: hard, gem, ore, seed: rng.int(0, 999) });
       m.set(x, y, AH.TILE.ROCK);
     }
   }

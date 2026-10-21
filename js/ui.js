@@ -117,9 +117,10 @@ U.titleItems = function () {
   return [
     { id: 'play', label: slots.length ? 'PLAY' : 'NEW HERO' },
     { id: 'online', label: 'ONLINE CO-OP' },
+  ].concat(AH.isTouch ? [] : [{ id: 'local', label: 'LOCAL CO-OP' }]).concat([
     { id: 'options', label: 'OPTIONS' },
     { id: 'help', label: 'HOW TO PLAY' },
-  ];
+  ]);
 };
 U.update.title = function (G, m, dt) {
   m.t += dt; AH.TitleArt.update(dt, m.t + 3);
@@ -130,6 +131,7 @@ U.update.title = function (G, m, dt) {
     const dev = m.lastDev || 'kb1';
     if (it.id === 'play') { if (AH.Save.load().length) G.openMenu('slots', null, { dev, purpose: 'start' }); else G.openMenu('create', null, { dev, purpose: 'start' }); }
     if (it.id === 'online') G.openMenu('online', null, { dev });
+    if (it.id === 'local') { if (!AH.Save.load().length) { G.toast(null, 'CREATE A HERO FIRST', '#ff8a8a'); return; } G.localLobby = []; G.openMenu('local', null, {}); }
     if (it.id === 'options') G.openMenu('options', null, { dev });
     if (it.id === 'help') G.openMenu('help', null, { dev });
   });
@@ -143,7 +145,68 @@ U.draw.title = function (G, ctx, m) {
   AH.frame(ctx, UW / 2 - 84, 140, 168, items.length * 16 + 14, { fill: 'rgba(14,8,12,0.86)', edge: '#7a3020', hi: '#c8602a' });
   U.list(ctx, items, m.sel, UW / 2 - 76, 148, 152);
   AH.text(ctx, 4, UH - 10, 'V' + AH.VERSION, '#6a5a62');
+  // gentle reminder: heroes live in this browser only
+  const o = AH.options || {};
+  if (AH.Save.load().length && (!o.lastExport || Date.now() - o.lastExport > 7 * 864e5) && Math.floor(m.t / 6) % 2 === 0)
+    AH.text(ctx, UW / 2, UH - 10, 'TIP: BACK UP YOUR HEROES (PLAY > HERO > EXPORT FILE)', '#a38a6a', { align: 'center' });
   if (m.fromSplash > 0) { ctx.fillStyle = 'rgba(0,0,0,' + Math.min(1, m.fromSplash / 0.6) + ')'; ctx.fillRect(0, 0, UW, UH); }
+};
+
+// ---------- LOCAL CO-OP LOBBY ----------
+// every controller (or keyboard) presses A to pick its own hero; any joined player presses A again to begin
+U.init.local = function (G, m) { m.t = 0; };
+U.update.local = function (G, m, dt) {
+  m.t += dt;
+  const I = AH.Input, L = G.localLobby || (G.localLobby = []);
+  if (m.t < 0.25) return;
+  for (const id of I.devices()) {
+    if (id === 'touch') continue;
+    const joined = L.find(x => x.dev === id);
+    if (I.pressed(id, 'b') || (I.pressed(id, 'start') && !joined)) {
+      if (joined) { L.splice(L.indexOf(joined), 1); AH.Audio.sfx('back'); continue; }
+      G.localLobby = null; G.closeAllMenus(); G.openMenu('title', null); return;
+    }
+    if (!I.pressed(id, 'a') && !I.pressed(id, 'start')) continue;
+    if (joined) {
+      // begin
+      const first = L[0];
+      G.closeAllMenus(); G.localLobby = null;
+      G.startSession(first.idx, first.dev);
+      for (const x of L.slice(1)) { const sl = AH.Save.load()[x.idx]; if (sl) G.addLocalPlayer(x.idx, sl.ch, x.dev); }
+      return;
+    }
+    if (L.length >= 3) continue;
+    const used = L.map(x => x.idx);
+    G.openMenu('slots', null, { dev: id, purpose: 'join', exclude: used, onDone: idx => {
+      const sl = AH.Save.load()[idx];
+      if (sl && !sl.ch.dead && used.indexOf(idx) < 0) { G.localLobby.push({ dev: id, idx }); AH.Audio.sfx('levelup'); }
+      G.openMenu('local', null, {});
+    } });
+    return;
+  }
+};
+U.devLabel = function (id) { return id === 'kb1' ? 'KEYBOARD' : id === 'kb2' ? 'NUMPAD' : id.startsWith('gp') ? 'CONTROLLER ' + (+id.slice(2) + 1) : id; };
+U.draw.local = function (G, ctx, m) {
+  U.bg(ctx, false); U.title(ctx, 'LOCAL CO-OP', 16);
+  const L = G.localLobby || [], slots = AH.Save.load();
+  AH.text(ctx, UW / 2, 44, 'EVERY PLAYER PRESSES A (OR ENTER / NUM1) TO JOIN', '#cfc6b4', { align: 'center' });
+  for (let i = 0; i < 3; i++) {
+    const x = UW / 2 - 165 + i * 112, y = 70, who = L[i];
+    AH.frame(ctx, x, y, 106, 120, who ? { fill: '#1a1420', edge: '#c9a24a', hi: '#f2e3b3' } : {});
+    AH.text(ctx, x + 53, y + 6, 'P' + (i + 1), AH.PLAYER_COLORS[i], { align: 'center' });
+    if (who && slots[who.idx]) {
+      const ch = slots[who.idx].ch;
+      if (!U.lobbyPrev) U.lobbyPrev = {};
+      const P = U.lobbyPrev[ch.cls] || (U.lobbyPrev[ch.cls] = new AH.Player(0, AH.newCharacter(ch.cls, 'X', 'dog'), null));
+      const s = P.spr[Math.floor(G.time * 3 + i) % 2];
+      AH.drawSpr(ctx, s, x + 53 - s.w * 1.5, y + 18, false, 3);
+      AH.text(ctx, x + 53, y + 80, ch.name, '#f2e3b3', { align: 'center' });
+      AH.text(ctx, x + 53, y + 91, AH.CLASSES[ch.cls].name + '  LV ' + ch.level, '#8d8494', { align: 'center' });
+      AH.text(ctx, x + 53, y + 104, U.devLabel(who.dev), '#6a6274', { align: 'center' });
+    } else AH.text(ctx, x + 53, y + 56, Math.floor(G.time * 2 + i) % 2 ? 'PRESS A' : '...', '#4e4858', { align: 'center' });
+  }
+  AH.text(ctx, UW / 2, 206, L.length ? 'A JOINED PLAYER PRESSES A AGAIN TO START' : 'UP TO 3 PLAYERS ON ONE SCREEN', L.length ? '#f2c94c' : '#8d8494', { align: 'center' });
+  AH.text(ctx, UW / 2, 220, 'B: LEAVE THE LOBBY', '#6a6274', { align: 'center' });
 };
 
 // ---------- SLOTS ----------
@@ -426,7 +489,7 @@ U.draw.pause = function (G, ctx, m) {
 };
 
 // ---------- INVENTORY (tabs) ----------
-U.TABS = ['INVENTORY', 'CHARACTER', 'PASSIVES', 'SKILLS', 'BESTIARY', 'SETS'];
+U.TABS = ['INVENTORY', 'CHARACTER', 'PASSIVES', 'SKILLS', 'BESTIARY', 'SETS', 'RECORDS'];
 U.EQ_POS = { head: [10, 46], amulet: [10, 72], chest: [10, 98], cloak: [10, 124], hands: [10, 150], weapon: [124, 46], off: [124, 72], ring1: [124, 98], ring2: [124, 124], feet: [124, 150] };
 U.EQ_ORDER_L = ['head', 'amulet', 'chest', 'cloak', 'hands'], U.EQ_ORDER_R = ['weapon', 'off', 'ring1', 'ring2', 'feet'];
 U.init.inv = function (G, m) {
@@ -437,7 +500,7 @@ U.invItem = function (m) { const ch = m.p.ch; return m.area === 'bag' ? ch.bag[m
 U.invMouse = function (G, m, n) {
   const M = AH.Mouse; if (!M || !M.active || AH.isTouch || (AH.Mouse.player && AH.Mouse.player(G) !== m.p)) return false;
   const c = M.uiPos(); if (!c) return false;
-  const click = M.leftPressed, rclick = M.rightPressed, mv = M.moved || click;
+  const click = M.leftPressed, rclick = M.rightPressed, mv = M.moved || click || !!m.press;
   // drag the passive tree around with the left button held
   if (m.tab === 2 && M.left && m.pcam) {
     if (m.dragFrom) { const dx = c.x - m.dragFrom.x, dy = c.y - m.dragFrom.y; if (Math.abs(dx) + Math.abs(dy) > 0) { m.pcam.x -= dx; m.pcam.y -= dy; m.pfree = true; if (Math.abs(dx) + Math.abs(dy) > 1) m.dragged = true; } }
@@ -450,7 +513,21 @@ U.invMouse = function (G, m, n) {
   if (!mv) return false;
   const ch = m.p.ch;
   if (m.tab === 0) {
-    for (let i = 0; i < 40; i++) { const x = 162 + (i % 8) * 24, y = 36 + Math.floor(i / 8) * 24; if (inR(x, y, 22, 22)) { m.area = 'bag'; m.i = i; if (click) n.p.a = true; return false; } }
+    const bagAt = () => { for (let i = 0; i < 40; i++) { const x = 162 + (i % 8) * 24, y = 36 + Math.floor(i / 8) * 24; if (inR(x, y, 22, 22)) return i; } return -1; };
+    // drag and drop: press on an item, drag it onto another slot to swap, or out of the bag to drop it
+    if (m.press) {
+      if (M.left) { if (Math.abs(c.x - m.press.x) + Math.abs(c.y - m.press.y) > 4) m.dragging = true; m.dragPos = c; return false; }
+      const from = m.press.i, j = bagAt(), ch2 = m.p.ch; m.press = null;
+      if (!m.dragging) { m.area = 'bag'; m.i = from; n.p.a = true; return false; }
+      m.dragging = false;
+      if (j >= 0) { if (j !== from) { const t = ch2.bag[j]; ch2.bag[j] = ch2.bag[from]; ch2.bag[from] = t; m.i = j; AH.Audio.sfx('move'); } return false; }
+      const overDoll = inR(4, 20, 150, 160);
+      m.area = 'bag'; m.i = from;
+      if (overDoll) n.p.a = true; else n.p.x = true;
+      return false;
+    }
+    const bi = bagAt();
+    if (bi >= 0) { m.area = 'bag'; m.i = bi; if (click && m.p.ch.bag[bi]) { m.press = { i: bi, x: c.x, y: c.y }; m.dragging = false; } else if (click) n.p.a = true; return false; }
     for (const slot of AH.EQUIP_SLOTS) { const [sx, sy] = U.EQ_POS[slot]; if (inR(sx, sy + 2, 22, 22)) { m.area = 'eq'; m.eq = slot; if (click) n.p.a = true; return false; } }
   } else if (m.tab === 1) {
     for (let i = 0; i < 4; i++) if (inR(162, 36 + i * 26, 152, 24)) { m.csel = i; if (click) n.p.a = true; }
@@ -565,18 +642,18 @@ U.sortBag = function (ch) {
 U.drawTabs = function (G, ctx, m) {
   let x = 4; U._tabRects = [];
   U.TABS.forEach((t, i) => {
-    const w = AH.textW(t) + 12; U._tabRects.push({ x, y: 2, w, h: 14 });
-    if (i === m.tab) { AH.frame(ctx, x, 2, w, 14, { fill: '#2e2638', edge: '#c9a24a', hi: '#f2e3b3' }); AH.text(ctx, x + 6, 5, t, '#ffb347'); }
-    else { AH.frame(ctx, x, 2, w, 14); AH.text(ctx, x + 6, 5, t, '#8d8494'); }
+    const w = AH.textW(t) + 8; U._tabRects.push({ x, y: 2, w, h: 14 });
+    if (i === m.tab) { AH.frame(ctx, x, 2, w, 14, { fill: '#2e2638', edge: '#c9a24a', hi: '#f2e3b3' }); AH.text(ctx, x + 4, 5, t, '#ffb347'); }
+    else { AH.frame(ctx, x, 2, w, 14); AH.text(ctx, x + 4, 5, t, '#8d8494'); }
     x += w + 2;
   });
-  AH.text(ctx, x + 4, 5, U.btnName(G, m, 'lb') + '/' + U.btnName(G, m, 'rb'), '#4e4858');
-  AH.coinIcon(ctx, UW - 50, 6); AH.text(ctx, UW - 42, 5, '' + m.p.ch.gold, '#f2c94c');
+  if (x < 400) AH.text(ctx, x + 4, 5, U.btnName(G, m, 'lb') + '/' + U.btnName(G, m, 'rb'), '#4e4858');
+  if (x < UW - 56) { AH.coinIcon(ctx, UW - 50, 6); AH.text(ctx, UW - 42, 5, '' + m.p.ch.gold, '#f2c94c'); }
 };
 U.draw.inv = function (G, ctx, m) {
   U.bg(ctx);
   U.drawTabs(G, ctx, m);
-  [U.drawInvTab, U.drawCharTab, U.drawPassiveTab, U.drawSkillTab, U.drawBestiary, U.drawSets][m.tab](G, ctx, m);
+  [U.drawInvTab, U.drawCharTab, U.drawPassiveTab, U.drawSkillTab, U.drawBestiary, U.drawSets, U.drawRecords][m.tab](G, ctx, m);
 };
 U.drawPaperdoll = function (G, ctx, m, x0, y0, interactive) {
   const p = m.p, ch = p.ch;
@@ -609,6 +686,7 @@ U.drawInvTab = function (G, ctx, m) {
   AH.frame(ctx, 158, 20, 200, 160);
   AH.text(ctx, 164, 25, m.socket ? 'SOCKET RUNE INTO...' : 'BACKPACK', m.socket ? '#9ec0ff' : '#f2e3b3');
   AH.text(ctx, 352, 25, ch.bag.filter(Boolean).length + '/40', '#8d8494', { align: 'right' });
+  { const gs = '' + ch.gold, gx = 352 - AH.textW(ch.bag.filter(Boolean).length + '/40') - 14 - AH.textW(gs); AH.coinIcon(ctx, gx - 8, 26); AH.text(ctx, gx, 25, gs, '#f2c94c'); }
   for (let i = 0; i < 40; i++) {
     const x = 162 + (i % 8) * 24, y = 36 + Math.floor(i / 8) * 24;
     const it = ch.bag[i];
@@ -634,13 +712,19 @@ U.drawInvTab = function (G, ctx, m) {
   }
   const b = k => U.btnName(G, m, k);
   if (AH.Mouse && AH.Mouse.active && !AH.isTouch && (m.dev === 'kb1' || !m.dev)) {
-    AH.text(ctx, 164, 228, 'CLICK: USE/EQUIP   ' + b('x') + ' DROP', '#6a6274');
+    AH.text(ctx, 164, 228, 'CLICK: USE/EQUIP   DRAG OUT: DROP', '#6a6274');
     AH.text(ctx, 164, 238, b('y') + ' SORT   RIGHT CLICK / ESC: CLOSE', '#6a6274');
   } else {
     AH.text(ctx, 164, 228, b('a') + ' USE/EQUIP   ' + b('x') + ' DROP', '#6a6274');
     AH.text(ctx, 164, 238, b('y') + ' SORT   ' + b('b') + ' CLOSE', '#6a6274');
   }
   AH.text(ctx, 164, 248, 'PTS: ' + ch.pts + ' STAT  ' + ch.ppts + ' PASSIVE', ch.pts || ch.ppts ? '#f2c94c' : '#6a6274');
+  if (m.dragging && m.dragPos && ch.bag[m.press ? m.press.i : -1]) {
+    const di = ch.bag[m.press.i], ic = AH.itemIcon(di);
+    const out = !(m.dragPos.x >= 158 && m.dragPos.x < 358 && m.dragPos.y >= 20 && m.dragPos.y < 180) && !(m.dragPos.x >= 4 && m.dragPos.x < 154 && m.dragPos.y >= 20 && m.dragPos.y < 180);
+    AH.slot(ctx, m.dragPos.x - 11, m.dragPos.y - 11, 22, out ? '#e05a5a' : '#c9a24a', '#17131d'); AH.iconIn(ctx, ic, m.dragPos.x - 11, m.dragPos.y - 11, 22);
+    if (out) AH.text(ctx, m.dragPos.x, m.dragPos.y + 14, 'DROP', '#ff8a8a', { align: 'center' });
+  }
   // tooltip
   const it = U.invItem(m);
   const cmp = it && m.area === 'bag' && (it.kind === 'weapon' || it.kind === 'armor') ? (ch.equip[p.slotFor(it)] || null) : undefined;
@@ -793,6 +877,20 @@ U.drawBestiary = function (G, ctx, m) {
   AH.text(ctx, 362, 240, 'LEGENDS SLAIN: ' + legSeen + '/' + AH.LEGENDS.length, '#ff9a3e', { align: 'center' });
 };
 
+U.drawRecords = function (G, ctx, m) {
+  const c = m.p.ch, got = c.ach || {}, A = AH.ACHIEVEMENTS, n = A.filter(a => got[a.id]).length;
+  AH.frame(ctx, 4, 20, 472, 246);
+  AH.text(ctx, 12, 26, 'ACHIEVEMENTS ' + n + '/' + A.length, '#5ee07a');
+  A.forEach((a, i) => {
+    const x = 12 + (i % 2) * 234, y = 42 + Math.floor(i / 2) * 26, on = !!got[a.id];
+    AH.slot(ctx, x, y - 2, 18, on ? '#2e9a4a' : '#2c2634', on ? '#14261a' : '#120f16');
+    if (on) { ctx.fillStyle = '#5ee07a'; ctx.fillRect(x + 5, y + 7, 2, 2); ctx.fillRect(x + 7, y + 9, 2, 2); ctx.fillRect(x + 9, y + 7, 2, 2); ctx.fillRect(x + 11, y + 5, 2, 2); }
+    AH.text(ctx, x + 24, y, a.name, on ? '#f2e3b3' : '#6a6274');
+    AH.text(ctx, x + 24, y + 9, a.desc, on ? '#8ae08e' : '#4e4858');
+  });
+  const r = [['DEEPEST FLOOR', c.deepest], ['CREATURES SLAIN', c.kills], ['DEATHS', c.deaths], ['LEVEL', c.level]];
+  let rx = 12; r.forEach(([a, b]) => { const t = AH.tr(a + ' ' + b); AH.text(ctx, rx, 250, t, '#8d8494'); rx += AH.textW(t) + 18; });
+};
 U.drawSets = function (G, ctx, m) {
   const ch = m.p.ch, found = ch.setsFound || {}, sel = m.setSel || 0;
   const owned = id => (found[id] || []).length;
@@ -863,8 +961,8 @@ U.shopMenus = {
 };
 U.smithCost = function (it, kind) {
   const t = it.tier || 0;
-  if (kind === 'upgrade') return { ore: 4 + t * 3, gold: 40 * (t + 1) * (t + 1) };
-  if (kind === 'reforge') return { ore: 2 + t * 2, gold: 30 + t * 30 };
+  if (kind === 'upgrade') return { ore: 4 + t * 2, oreType: AH.ORE_FOR_TIER[t], gold: 40 * (t + 1) * (t + 1) };
+  if (kind === 'reforge') return { ore: 2 + t, oreType: AH.ORE_FOR_TIER[t], gold: 30 + t * 30 };
   if (kind === 'socket') return { gem: 1, gold: 60 + t * 40 };
   return { gold: 20 };
 };
@@ -881,7 +979,7 @@ U.update.smith = U.update.store = function (G, m, dt) {
       if (it.id === 'quest') { G.openMenu('quest', p, { qf: it.qf }); return; }
       if (it.id === 'lend') { G.lendGear(p); return; }
       if (it.id === 'leave') { G.closeMenu(); G.saveAll(); return; }
-      if (it.id === 'ore') { const b = (G.world.active || []).find(b => b.type === 'gather' && !b.done); if (!b) { G.toast(p, 'NO ORE BOUNTY ACTIVE', '#a39bb0'); return; } if (p.countCons('ore') < b.need) { G.toast(p, 'YOU NEED ' + b.need + ' ORE', '#ff8a8a'); return; } p.takeCons('ore', b.need); b.done = true; G.banner('BOUNTY COMPLETE', '#f2c94c', b.text); return; }
+      if (it.id === 'ore') { const b = (G.world.active || []).find(b => b.type === 'gather' && !b.done); if (!b) { G.toast(p, 'NO ORE BOUNTY ACTIVE', '#a39bb0'); return; } const bo = b.ore || 'ore'; if (p.countCons(bo) < b.need) { G.toast(p, 'YOU NEED ' + b.need + ' ' + AH.tr(AH.CONSUMABLES[bo].name), '#ff8a8a'); return; } p.takeCons(bo, b.need); b.done = true; G.banner('BOUNTY COMPLETE', '#f2c94c', b.text); return; }
       if (it.id === 'pet') { m.mode = 'pet'; m.i = 0; return; }
       if (it.id === 'junk') {
         let gold = 0, n = 0;
@@ -923,8 +1021,9 @@ U.update.smith = U.update.store = function (G, m, dt) {
     if (m.mode === 'reforge' && (it.rarity === 0 || it.rarity >= 3)) { G.toast(p, it.rarity ? 'CANNOT REFORGE LEGENDS' : 'NOTHING TO REFORGE', '#a39bb0'); return; }
     if (m.mode === 'socket' && (it.sockets >= 3 || ['weapon', 'chest', 'head', 'off'].indexOf(it.slot) < 0)) { G.toast(p, 'NO ROOM FOR A SOCKET', '#a39bb0'); return; }
     if (m.mode === 'unsocket' && !it.runes.length) return;
-    if (ch.gold < cost.gold || (cost.ore && p.countCons('ore') < cost.ore) || (cost.gem && p.countCons('gem') < cost.gem)) { G.toast(p, 'NEED ' + (cost.ore ? cost.ore + ' ORE + ' : '') + (cost.gem ? cost.gem + ' CRYSTAL + ' : '') + cost.gold + 'G', '#ff8a8a'); AH.Audio.sfx('error'); return; }
-    ch.gold -= cost.gold; if (cost.ore) p.takeCons('ore', cost.ore); if (cost.gem) p.takeCons('gem', cost.gem);
+    const ot = cost.oreType || 'ore';
+    if (ch.gold < cost.gold || (cost.ore && p.countCons(ot) < cost.ore) || (cost.gem && p.countCons('gem') < cost.gem)) { G.toast(p, 'NEED ' + (cost.ore ? cost.ore + ' ' + AH.tr(AH.CONSUMABLES[ot].name) + ' + ' : '') + (cost.gem ? cost.gem + ' CRYSTAL + ' : '') + cost.gold + 'G', '#ff8a8a'); AH.Audio.sfx('error'); return; }
+    ch.gold -= cost.gold; if (cost.ore) p.takeCons(ot, cost.ore); if (cost.gem) p.takeCons('gem', cost.gem);
     const rng = AH.rand;
     if (m.mode === 'upgrade') {
       const old = AH.MATERIALS[it.tier].mult, nw = AH.MATERIALS[it.tier + 1].mult; it.tier++; const k = nw / old;
@@ -959,7 +1058,11 @@ U.draw.smith = U.draw.store = function (G, ctx, m) {
   const say = m.type === 'smith' ? (G.world.trust < 30 ? 'TIMES ARE HARD. PRICES TOO.' : 'BRING ORE, I MAKE MIRACLES.') : (G.world.trust < 30 ? 'I MAY LEAVE TOWN SOON...' : 'POTIONS! TORCHES! FRESH TODAY!');
   AH.wrap('"' + say + '"', 118).forEach((l, i) => AH.text(ctx, 69, 108 + i * 9, l, '#a39bb0', { align: 'center' }));
   AH.coinIcon(ctx, 12, 250); AH.text(ctx, 20, 249, '' + m.p.ch.gold, '#f2c94c');
-  AH.text(ctx, 126, 249, 'ORE ' + m.p.countCons('ore') + '  GEM ' + m.p.countCons('gem'), '#8d8494', { align: 'right' });
+  if (m.type === 'smith') {
+    // ore pouch: what you carry of each kind
+    const kinds = [['ore', 'CU'], ['iron', 'FE'], ['silver', 'AG'], ['goldore', 'AU'], ['mithril', 'MI'], ['gem', 'CR']];
+    kinds.forEach(([k, lab], i) => { const x = 12 + (i % 3) * 40, y = 222 + Math.floor(i / 3) * 12; AH.drawSpr(ctx, AH.ICON[AH.CONSUMABLES[k].icon], x - 2, y - 3); AH.text(ctx, x + 12, y, '' + m.p.countCons(k), m.p.countCons(k) ? '#cfc6b4' : '#4e4858'); });
+  }
   if (m.mode === 'menu') { U.list(ctx, U.smithRows(G, m), m.sel, 150, 30, 220); return; }
   const list = U.shopList(G, m), mul = U.priceMul(G);
   AH.frame(ctx, 138, 4, 220, 262);
@@ -975,7 +1078,7 @@ U.draw.smith = U.draw.store = function (G, ctx, m) {
     if (m.mode === 'buy') price = Math.round(AH.itemValue(it) * 4 * mul) + 'G';
     else if (m.mode === 'cons') price = Math.round(AH.CONSUMABLES[row.k].price * mul) + 'G';
     else if (m.mode === 'sell') price = AH.itemValue(it) + 'G';
-    else { const c = U.smithCost(it, m.mode); price = (c.ore ? c.ore + 'O ' : '') + (c.gem ? c.gem + 'C ' : '') + c.gold + 'G'; }
+    else { const c = U.smithCost(it, m.mode); price = (c.ore ? c.ore + ' ' + ({ ore: 'CU', iron: 'FE', silver: 'AG', goldore: 'AU', mithril: 'MI' }[c.oreType] || 'O') + ' ' : '') + (c.gem ? c.gem + 'C ' : '') + c.gold + 'G'; }
     AH.text(ctx, 350, y, price, '#f2c94c', { align: 'right' });
   });
   const row = list[m.i];
@@ -1194,6 +1297,8 @@ U.tick = function (G, dt) {
 U.render = function (G, ctx) {
   ctx.clearRect(0, 0, UW, UH);
   const m = G.menu;
+  // phones: fade the joystick while the letter grid is on screen so it doesn't cover letters
+  if (AH.isTouch) document.body.classList.toggle('typing', !!(m && m.type === 'create' && m.step === 1));
   if (!(m && m.type === 'online' && m.step === 'code')) { const ci = document.getElementById('codeInput'); if (ci) { ci.blur(); ci.remove(); } }
   if (!m) { U.nameInput(G, null, false); return; }
   AH.tooltipEquip = m.p ? Object.values(m.p.ch.equip) : [];

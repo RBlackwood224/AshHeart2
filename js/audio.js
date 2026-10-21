@@ -76,6 +76,10 @@ AH.Audio = (function () {
       case 'warn': tone('square', 220, 0, 0.3, 0.1); tone('square', 208, 0, 0.3, 0.1, 0.32); break;
       case 'thunder': noise(1.2, 0.3, 80); break;
       case 'dig': noise(0.08, 0.15, 500); noise(0.08, 0.15, 500, 0.14); break;
+      case 'pick': tone('square', 1900, 1500, 0.05, 0.08); tone('triangle', 2600, 2200, 0.08, 0.05, 0.01); noise(0.06, 0.12, 900); break;
+      case 'crumble': noise(0.45, 0.28, 260); noise(0.25, 0.15, 900, 0.12); tone('triangle', 90, 40, 0.35, 0.1); break;
+      case 'ore': tone('triangle', 1175, 0, 0.06, 0.08); tone('triangle', 1568, 0, 0.09, 0.07, 0.06); break;
+      case 'achieve': [659, 784, 988, 1319].forEach((f, i) => tone('triangle', f, 0, 0.22, 0.09, i * 0.09)); tone('sine', 1976, 0, 0.4, 0.05, 0.36); break;
       case 'break': noise(0.3, 0.3, 300); tone('square', 120, 40, 0.3, 0.12); break;
     }
   }

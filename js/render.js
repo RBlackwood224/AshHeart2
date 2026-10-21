@@ -270,7 +270,7 @@ R.collectLights = function (G, v) {
     }
     if (G.map.forge) add(G.map.forge.x, G.map.forge.y, 56, 0.9, [1.0, 0.62, 0.32]);
   }
-  if (G.scene === 'mine') for (const vn of G.map.veins || []) if (vn.hp > 0) add(vn.x, vn.y - 8, vn.gem ? 30 : 22, vn.gem ? 0.5 : 0.3, vn.gem ? [0.7, 1.05, 1.3] : [1.25, 0.95, 0.55]);
+  if (G.scene === 'mine') for (const vn of G.map.veins || []) if (vn.hp > 0) if (vn.ore !== 'coal') add(vn.x, vn.y - 8, vn.gem ? 30 : 22, vn.gem ? 0.5 : 0.3, vn.gem ? [0.7, 1.05, 1.3] : [1.25, 0.95, 0.55]);
   if (G.scene === 'mine' && G.map.biome.id === 'ashen') add(v.camX + v.w / 2, v.camY - 40, 220, 0.18, [1.3, 0.6, 0.4]);
   return L;
 };
@@ -353,7 +353,7 @@ R.drawEmissive = function (G, v) {
     if (ph < 0.35) {
       const r = ph < 0.12 || ph > 0.24 ? 1 : 2, gx = X + q[0], gy = Y + q[1];
       ctx.fillStyle = '#ffffff'; ctx.fillRect(gx, gy, 1, 1);
-      ctx.fillStyle = vn.gem ? '#bff4ff' : '#fff0b8'; for (let d = 1; d <= r; d++) { ctx.fillRect(gx - d, gy, 1, 1); ctx.fillRect(gx + d, gy, 1, 1); ctx.fillRect(gx, gy - d, 1, 1); ctx.fillRect(gx, gy + d, 1, 1); }
+      ctx.fillStyle = vn.gem ? '#bff4ff' : (AH.ORE_COLORS[vn.ore] || [0, 0, 0, '#fff0b8'])[3]; for (let d = 1; d <= r; d++) { ctx.fillRect(gx - d, gy, 1, 1); ctx.fillRect(gx + d, gy, 1, 1); ctx.fillRect(gx, gy - d, 1, 1); ctx.fillRect(gx, gy + d, 1, 1); }
     }
     if (vn.gem) { ctx.fillStyle = '#6fd6e8'; ctx.fillRect(X + 4, Y + 1, 1, 2); ctx.fillRect(X + 9, Y, 1, 2); }
   });
@@ -596,8 +596,9 @@ R.drawOreRock = function (ctx, G, vn) {
     const cr = [[3, -1, 2, 5], [7, -3, 2, 7], [10, 0, 2, 4]];
     for (const [a, c, w, h] of cr) { R2(a - 1, c - 1, w + 2, h + 1, AH.OUT); R2(a, c, w, h, '#2a96b8'); R2(a, c, 1, h, '#6fd6e8'); R2(a, c, 1, 1, '#e8fbff'); }
   } else {
-    const nug = [[3, 5, 3, 2], [8, 4, 3, 3], [5, 9, 3, 2], [10, 8, 2, 2]];
-    for (const [a, c, w, h] of nug) { R2(a, c, w, h, '#5a3a14'); R2(a, c, w - 1, h - 1, '#d8a048'); R2(a, c, 1, 1, '#fff0b8'); }
+    const oc = AH.ORE_COLORS[vn.ore || 'goldore'] || AH.ORE_COLORS.goldore;
+    const nug = vn.ore === 'coal' ? [[3, 4, 4, 3], [8, 5, 4, 3], [4, 8, 3, 3], [9, 9, 3, 2]] : [[3, 5, 3, 2], [8, 4, 3, 3], [5, 9, 3, 2], [10, 8, 2, 2]];
+    for (const [a, c, w, h] of nug) { R2(a, c, w, h, oc[0]); R2(a, c, w - 1, h - 1, oc[1]); R2(a, c, w - 2 || 1, 1, oc[2]); R2(a, c, 1, 1, oc[3]); }
   }
   // cracks spread with every blow
   const dmg = (vn.max || 3) - vn.hp;
@@ -735,5 +736,11 @@ R.drawGlobalHud = function (G, views) {
     by += h + 3;
   }
   // join hint
-  if (G.players.filter(p => !p.remote).length < 3 && !G.menu && !G.net && G.scene === 'town' && !AH.isTouch && G.time % 20 < 5) AH.text(ctx, RW - 4, 50, 'P' + (G.players.length + 1) + ': PRESS START', '#4e4858', { align: 'right' });
+  if (G.players.filter(p => !p.remote).length < 3 && !G.menu && !G.net && G.scene === 'town' && !AH.isTouch && G.time % 20 < 5) {
+    // name the join button of a device that is not playing yet
+    const used = G.players.filter(p => !p.remote).map(p => p.device);
+    const pad = AH.Input.devices().find(id => id.startsWith('gp') && used.indexOf(id) < 0);
+    const key = pad ? 'START' : used.indexOf('kb2') < 0 ? 'NUMENTER' : 'START';
+    AH.text(ctx, RW - 4, 50, 'P' + (G.players.length + 1) + ': ' + key + ' TO JOIN', '#4e4858', { align: 'right' });
+  }
 };

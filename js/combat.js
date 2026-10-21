@@ -56,15 +56,15 @@ GP.meleeSwing = function (p, mult, range, arc, heavy) {
   return hits;
 };
 GP.mineVein = function (p, v) {
-  v.hp--; v.hitT = 0.18; AH.Audio.sfx('dig'); AH.fx.spark(this, v.x, v.y - 4, v.gem ? '#6fd6e8' : '#d8a048', 10); AH.fx.dust(this, v.x, v.y - 2, '#6a6276', 6); this.shake(2);
+  v.hp--; v.hitT = 0.18; AH.Audio.sfx('pick'); AH.fx.spark(this, v.x, v.y - 4, v.gem ? '#6fd6e8' : (AH.ORE_COLORS[v.ore || 'ore'] || [0, 0, '#d8a048'])[2], 10); AH.fx.dust(this, v.x, v.y - 2, '#6a6276', 6); this.shake(2);
   if (this.world) this.world.tipVein = 1;
   if (v.hp <= 0) {
     const n = 1 + (Math.random() < 0.45 ? 1 : 0) + (Math.random() < 0.12 ? 1 : 0);
-    AH.Audio.sfx('break'); this.shake(3); AH.fx.dust(this, v.x, v.y, '#8a8296', 16);
-    this.dropItem(v.x, v.y + 6, AH.makeCons(v.gem ? 'gem' : 'ore', n), p.pid);
+    AH.Audio.sfx('crumble'); this.shake(3); AH.fx.dust(this, v.x, v.y, '#8a8296', 16); this.rumble && this.rumble(p, 0.4, 120);
+    this.dropItem(v.x, v.y + 6, AH.makeCons(v.gem ? 'gem' : (v.ore || 'ore'), v.ore === 'coal' ? n + 1 : n), p.pid);
     if (Math.random() < 0.06) this.dropItem(v.x, v.y + 6, AH.genRune(AH.rand, this.floorNo), p.pid);
     this.map.set(v.tx, v.ty, AH.TILE.FLOOR);
-    for (let k = 0; k < 8; k++) this.fx.push({ k: 'px', x: v.x + (Math.random() - 0.5) * 12, y: v.y - 6 - Math.random() * 6, vx: (Math.random() - 0.5) * 60, vy: -30 - Math.random() * 40, col: Math.random() < 0.5 ? this.map.biome.brick[3] : (v.gem ? '#6fd6e8' : '#d8a048'), life: 0.6 });
+    for (let k = 0; k < 8; k++) this.fx.push({ k: 'px', x: v.x + (Math.random() - 0.5) * 12, y: v.y - 6 - Math.random() * 6, vx: (Math.random() - 0.5) * 60, vy: -30 - Math.random() * 40, col: Math.random() < 0.5 ? this.map.biome.brick[3] : (v.gem ? '#6fd6e8' : (AH.ORE_COLORS[v.ore || 'ore'] || [0, 0, '#d8a048'])[2]), life: 0.6 });
   }
 };
 GP.breakSecret = function (X, Y, p) {
@@ -284,7 +284,7 @@ GP.pickup = function (p, d) {
   const it = d.item;
   if (!p.addItem(it)) { if (!d.fullMsg) { this.toast(p, 'BAG IS FULL', '#ff8a8a'); d.fullMsg = true; } return; }
   d.taken = true;
-  AH.Audio.sfx(it.rarity >= 3 ? 'legend' : it.rarity >= 1 ? 'loot' : 'pickup');
+  AH.Audio.sfx(it.rarity >= 3 ? 'legend' : it.rarity >= 1 ? 'loot' : it.kind === 'cons' && AH.ORE_COLORS[it.cons] || it.cons === 'gem' ? 'ore' : 'pickup');
   const name = it.unid ? 'UNKNOWN ' + it.typeName : it.name + (it.stack > 1 ? ' X' + it.stack : '');
   this.toast(p, name, AH.RARITY[it.rarity || 0].col);
   if (this.bountyEvent) this.bountyEvent('item', it, p);

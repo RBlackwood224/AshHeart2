@@ -44,7 +44,11 @@ AH.BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 
 AH.uid = (() => { let n = 1; return () => n++; })();
 AH.fmt = n => String(Math.floor(n));
 AH.cap = s => s.charAt(0).toUpperCase() + s.slice(1);
-AH.isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+// phones and tablets: a coarse pointer and no hovering mouse. Touchscreen laptops keep the PC controls.
+AH.isTouch = (function () {
+  try { if (window.matchMedia) return window.matchMedia('(pointer: coarse)').matches && !window.matchMedia('(hover: hover)').matches; } catch (e) { /* old browser */ }
+  return ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+})();
 
 AH.makeCanvas = function (w, h, readback) {
   const c = document.createElement('canvas'); c.width = w; c.height = h;
