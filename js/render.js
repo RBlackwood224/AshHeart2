@@ -149,9 +149,14 @@ R.drawWorld = function (G, v) {
   for (const pt of G.pets) if (pt.active) list.push({ y: pt.y + (pt.kind === 'canary' ? 30 : 0), d: () => this.drawPet(G, pt) });
   for (const a of G.allies) list.push({ y: a.y, d: () => {
     if (a.kind !== 'minion') { AH.drawSpr(ctx, a.spr, a.x - a.spr.w / 2, a.y - a.spr.h + 2, a.face < 0); return; }
-    const s = a.spr; if (a.t < 3 && Math.floor(G.time * 10) % 2) return;
-    const lx = a.lunge > 0 ? a.face * 2 : 0, bob = a.walk && Math.floor(a.walk * 8) % 2 ? -1 : 0, fy = a.fly ? -6 + Math.round(Math.sin(G.time * 5 + a.id) * 1.5) : 0;
+    if (a.t < 3 && Math.floor(G.time * 10) % 2) return;
+    const s = AH.minionFrame(a, G);
+    // same motion as the living creature: hop while walking, bob while flying, lunge on a hit
+    const moving = a._px !== undefined && Math.hypot(a.x - a._px, a.y - a._py) > 0.02; a._px = a.x; a._py = a.y;
+    const lx = a.lunge > 0 ? a.face * 2 : 0, bob = !a.fly && moving && Math.floor(G.time * 8 + a.id) % 2 ? -1 : 0, fy = a.fly ? Math.round(Math.sin(G.time * 5 + a.id) * 2 - 6) : 0;
     const x = Math.round(a.x - s.w / 2) + lx, y = Math.round(a.y - s.h + 2) + bob + fy;
+    a._dx = x; a._dy = y; a._s = s;
+    ctx.fillStyle = 'rgba(6,4,10,0.5)'; ctx.fillRect(Math.round(a.x - s.w / 3), Math.round(a.y), Math.round(s.w / 1.5), 2);
     if (a.rise > 0) { const k = 1 - a.rise / 0.5, hh = Math.max(1, Math.round(s.h * k)); ctx.drawImage(a.face < 0 ? s.cf : s.c, 0, 0, s.w, hh, x, y + s.h - hh, s.w, hh); return; }
     if (a.flash > 0) AH.drawFlash(ctx, s, x, y, a.face < 0); else AH.drawSpr(ctx, s, x, y, a.face < 0);
     if (a.hp < a.maxHp) AH.bar(ctx, Math.round(a.x) - 5, y - 3, 10, 1, a.hp / a.maxHp, '#8ae08e', '#142014');
@@ -431,6 +436,15 @@ R.bloom = function (sctx, world, view) {
   sctx.save(); sctx.imageSmoothingEnabled = true; sctx.drawImage(B.vg, view.x, view.y, view.w, view.h); sctx.restore();
 };
 
+// a servant's current frame: bats keep flapping their wings after death too
+AH.minionFrame = function (a, G) {
+  const base = a.def ? a.def.spr : a.base;
+  if (base === 'bat') {
+    if (!a.spr2) a.spr2 = AH.raisedSprite(AH.creatureSprite({ spr: 'bat2', pal: (a.def && a.def.pal) || a.pal || {} }));
+    if (Math.floor(G.time * 11 + a.id * 3) % 2) return a.spr2;
+  }
+  return a.spr;
+};
 R.drawEmissive = function (G, v) {
   const ctx = this.ctx, m = G.map;
   ctx.save(); ctx.beginPath(); ctx.rect(v.x, v.y, v.w, v.h); ctx.clip();
@@ -454,7 +468,7 @@ R.drawEmissive = function (G, v) {
     if (fl === 0) { ctx.fillStyle = '#e0702a'; ctx.fillRect(p.x + 3, p.y - 1, 1, 1); }
   }
   for (const e of G.enemies) if (this.inView(v, e.x, e.y, 40)) e.drawEm(ctx, G);
-  for (const a of G.allies) if (a.kind === 'minion' && !(a.rise > 0) && this.inView(v, a.x, a.y, 30) && !(a.t < 3 && Math.floor(G.time * 10) % 2)) { const sp = a.spr, fy = a.fly ? -6 + Math.round(Math.sin(G.time * 5 + a.id) * 1.5) : 0, bob = a.walk && Math.floor(a.walk * 8) % 2 ? -1 : 0; AH.drawSprEm(ctx, sp, Math.round(a.x - sp.w / 2) + (a.lunge > 0 ? a.face * 2 : 0), Math.round(a.y - sp.h + 2) + bob + fy, a.face < 0); }
+  for (const a of G.allies) if (a.kind === 'minion' && !(a.rise > 0) && a._s && this.inView(v, a.x, a.y, 30) && !(a.t < 3 && Math.floor(G.time * 10) % 2)) AH.drawSprEm(ctx, a._s, a._dx, a._dy, a.face < 0);
   if (G.scene === 'mine') for (const p of m.props) if (p.type === 'tablet' && this.inView(v, p.x, p.y)) AH.drawSprEm(ctx, AH.SPR.tablet, p.x - 6, p.y - 8);
   // ore glints so rocks catch the eye even in the dark
   if (G.scene === 'mine') (m.veins || []).forEach((vn, i) => {

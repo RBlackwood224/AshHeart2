@@ -285,7 +285,9 @@ GG.guestSnap = function (d) {
   this.allies = d.al.map((a, i) => {
     if (!a[3]) return { x: a[0], y: a[1], face: a[2], spr: this.ghostWolf || (this.ghostWolf = AH.recolor(AH.SPR.wolf, { d: '#9ad8f8', D: '#5a9ac8', l: '#e8f8ff' })) };
     const key = a[4] + JSON.stringify(a[5]); const spr = this.raisedCache[key] || (this.raisedCache[key] = AH.raisedSprite(AH.creatureSprite({ spr: a[4], pal: a[5] })));
-    return { kind: 'minion', id: i, x: a[0], y: a[1], face: a[2], spr, hp: a[6], maxHp: 20, fly: !!a[7], rise: a[8] ? 0.25 : 0, t: a[9] ? 1 : 10 };
+    const old = this.allies && this.allies[i]; const m = { kind: 'minion', id: i, base: a[4], pal: a[5], x: a[0], y: a[1], face: a[2], spr, hp: a[6], maxHp: 20, fly: !!a[7], rise: a[8] ? 0.25 : 0, t: a[9] ? 1 : 10 };
+    if (old && old.kind === 'minion' && old.base === a[4]) { m.spr2 = old.spr2; m._px = old._px; m._py = old._py; m.x = old.x; m.y = old.y; } m.nx = a[0]; m.ny = a[1];
+    return m;
   });
   // corpses: new ones arrive once with their looks, known ones by id; missing ones were used or rotted away
   const CM = this.netMirror.cp = this.netMirror.cp || {}, keep = new Set();
@@ -329,6 +331,7 @@ GG.guestUpdate = function (dt) {
   this.time += dt;
   // interpolate
   for (const p of this.players) if (p.nx !== undefined) { p.x = AH.lerp(p.x, p.nx, Math.min(1, dt * 14)); p.y = AH.lerp(p.y, p.ny, Math.min(1, dt * 14)); }
+  for (const a of this.allies) if (a.nx !== undefined) { a.x = AH.lerp(a.x, a.nx, Math.min(1, dt * 14)); a.y = AH.lerp(a.y, a.ny, Math.min(1, dt * 14)); }
   for (const e of this.enemies) if (e.nx !== undefined) { e.x = AH.lerp(e.x, e.nx, Math.min(1, dt * 14)); e.y = AH.lerp(e.y, e.ny, Math.min(1, dt * 14)); }
   for (const pr of this.projs) { if (pr.vx) { pr.x += pr.vx * dt; pr.y += pr.vy * dt; } }
   for (const c of this.corpses || []) c.t = Math.max(0.5, c.t - dt);

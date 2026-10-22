@@ -128,7 +128,7 @@ GP.updateProjs = function (dt) {
           if (pr.k === 'fire') { this.explosion(pr.x, pr.y, 26, pr.dmg, 'player', false, pr.owner); pr.life = 0; break; }
           const roll = pr.roll || { dmg: pr.dmg, crit: false };
           const dealt = e.hurt(this, pr.dmg, pr.owner, this.dmgOpt(pr.owner, roll, { knock: pr.heavy ? 90 : 30 }));
-          if (pr.owner && pr.owner.S) this.applyHitEffects(pr.owner, e, roll, dealt);
+          if (pr.owner && pr.owner.S && !pr.minion) this.applyHitEffects(pr.owner, e, roll, dealt);
           if (pr.pierce > 0) pr.pierce--; else { pr.life = 0; break; }
         }
       }
@@ -329,19 +329,33 @@ GP.updateMinion = function (a, dt) {
   a.t -= dt; a.atk -= dt; if (a.flash > 0) a.flash -= dt; if (a.rise > 0) { a.rise -= dt; return; }
   if (a.owner.dead || this.scene !== 'mine') a.t = Math.min(a.t, 0.01);
   if (a.t <= 0) { AH.fx.dust(this, a.x, a.y, '#8a8478', 8); return; }
-  // stay near the master; fight what is near him
-  const foe = AH.dist(a, a.owner) < 150 ? this.nearestEnemy(a, 110) : null;
-  const spd = 78;
-  if (foe) {
+  // stay near the master; fight what is near him. Each keeps the habits it had in life:
+  // spitters shoot from a distance, slimes hop, spore bombs run in and burst
+  const ai = (a.def && a.def.ai) || 'chase', ranged = ai === 'spit' || ai === 'summon';
+  const foe = AH.dist(a, a.owner) < 150 ? this.nearestEnemy(a, ranged ? 140 : 110) : null;
+  let spd = 78;
+  if (ai === 'blob') { a.hop = (a.hop || 0) - dt; if (a.hop <= 0) a.hop = 0.9; spd = a.hop > 0.55 ? 140 : 0; }
+  const step = (an, s) => { this.moveEntity(a, Math.cos(an) * s * dt, Math.sin(an) * s * dt, 3, a.fly); a.face = Math.cos(an) > 0 ? 1 : -1; a.walk = (a.walk || 0) + dt; };
+  if (foe && ranged) {
+    const d = AH.dist(a, foe), an = Math.atan2(foe.y - a.y, foe.x - a.x);
+    if (d > 90) step(an, spd); else if (d < 45) step(an + Math.PI, spd * 0.8);
+    a.face = foe.x >= a.x ? 1 : -1;
+    if (a.atk <= 0 && this.map.los(a.x, a.y - 6, foe.x, foe.y - 6)) {
+      a.atk = 1.1; a.lunge = 0.1; const sp = 150, fy = a.fly ? -10 : -6;
+      this.projs.push({ k: 'spit', x: a.x, y: a.y + fy, vx: Math.cos(an) * sp, vy: Math.sin(an) * sp, a: an, owner: a.owner, minion: true, roll: { dmg: 0, crit: false }, dmg: a.owner.minionPower() * 0.9, life: 1.2, hit: new Set(), col: '#8aff7a', r: 3, light: true });
+      AH.Audio.sfx('magic');
+    }
+  } else if (foe) {
     const d = AH.dist(a, foe), reach = 8 + foe.r;
-    if (d > reach) { const an = Math.atan2(foe.y - a.y, foe.x - a.x); this.moveEntity(a, Math.cos(an) * spd * dt, Math.sin(an) * spd * dt, 3, a.fly); a.face = Math.cos(an) > 0 ? 1 : -1; a.walk = (a.walk || 0) + dt; }
+    if (d > reach) step(Math.atan2(foe.y - a.y, foe.x - a.x), spd);
+    else if (ai === 'explode') { this.boneBurst(a.owner, a.x, a.y, a.owner.minionPower() * 3); a.dead = true; return; }
     else if (a.atk <= 0) {
       a.atk = 0.8; a.lunge = 0.12; a.face = foe.x >= a.x ? 1 : -1;
       const dealt = foe.hurt(this, a.owner.minionPower() * (0.85 + Math.random() * 0.3), a.owner, { color: '#c8f0b0', knock: 30 });
       if (dealt > 0 && a.owner.S.loh) a.owner.heal(null, a.owner.S.loh * 0.25);
       AH.Audio.sfx('hit');
     }
-  } else if (AH.dist(a, a.owner) > 26) { const an = Math.atan2(a.owner.y - a.y, a.owner.x - a.x); this.moveEntity(a, Math.cos(an) * spd * 1.1 * dt, Math.sin(an) * spd * 1.1 * dt, 3, a.fly); a.face = Math.cos(an) > 0 ? 1 : -1; a.walk = (a.walk || 0) + dt; }
+  } else if (AH.dist(a, a.owner) > 26) step(Math.atan2(a.owner.y - a.y, a.owner.x - a.x), spd * 1.1);
   if (a.lunge > 0) a.lunge -= dt;
   // left far behind: crawl back out of the dark next to the master
   if (AH.dist(a, a.owner) > 260) { a.x = a.owner.x + AH.rand.range(-12, 12); a.y = a.owner.y + 6; }
