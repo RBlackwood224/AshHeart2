@@ -226,9 +226,9 @@ AH.genFloor = function (seed, floor, event) {
         if (done && path.length >= 1) {
           for (let y2 = r.y; y2 < r.y + r.h; y2++) for (let x2 = r.x; x2 < r.x + r.w; x2++) m.set(x2, y2, 1);
           path.forEach(([px, py], i) => m.set(px, py, i === path.length - 1 ? AH.TILE.SECRET : 1));
-          m.secret = { room: r, wall: path[path.length - 1], found: false };
+          m.secret = { room: r, wall: path[path.length - 1], path: path.slice(0, -1), found: false };
           m.props.push({ type: 'chest', x: c.x * T + 8, y: c.y * T + 10, secret: 1, rare: 1 });
-          if (rng() < 0.6) m.props.push({ type: 'tablet', x: c.x * T + 8 - 24, y: c.y * T + 10, lore: rng.int(0, AH.LORE.length - 1) });
+          if (rng() < 0.6) m.props.push({ type: 'tablet', x: c.x * T + 8 - 24, y: c.y * T + 10, lore: rng.int(0, AH.LORE.length - 1), secret: 1 });
           break;
         }
         done = false;
@@ -320,7 +320,20 @@ AH.genFloor = function (seed, floor, event) {
 };
 
 // ---------- prerender ----------
-AH.renderMap = function (m) {
+// until the cracked wall is broken, the room behind it stays solid rock: nothing of it shows on screen or map
+AH.secretNear = function (m, px, py) {
+  const s = m.secret; if (!s || s.found) return false;
+  const i = Math.floor(px / T), j = Math.floor(py / T), r = s.room;
+  return i >= r.x - 1 && i <= r.x + r.w && j >= r.y - 1 && j <= r.y + r.h;
+};
+AH.secretHidden = function (m, i, j) {
+  const s = m.secret; if (!s || s.found) return false;
+  const r = s.room; if (i >= r.x && i < r.x + r.w && j >= r.y && j < r.y + r.h) return true;
+  return !!(s.path && s.path.some(([x, y]) => x === i && y === j));
+};
+AH.renderMap = function (m0) {
+  // draw from a view of the map in which the hidden room is rock (the real map is untouched)
+  const m = m0.secret && !m0.secret.found ? Object.assign(Object.create(m0), { get: (i, j) => AH.secretHidden(m0, i, j) ? 0 : m0.get(i, j) }) : m0;
   const W = m.w * T, H = m.h * T;
   const c = AH.makeCanvas(W, H), x = c.getContext('2d');
   const em = AH.makeCanvas(W, H), ex = em.getContext('2d');
@@ -342,16 +355,24 @@ AH.renderMap = function (m) {
       if (!AH.wallTile(m.get(i, j + 1))) {
         x.drawImage(tx.brick[(i * 5 + j * 11) % 6], X, Y + 4);
         x.fillStyle = AH.shade(b.brick[3], 1.15); x.fillRect(X, Y + 4, T, 1);
-        if (t === 5) { // secret wall: subtly cracked
-          x.fillStyle = b.brick[0]; x.fillRect(X + 7, Y + 6, 1, 3); x.fillRect(X + 8, Y + 9, 1, 3); x.fillRect(X + 6, Y + 12, 1, 2);
+        if (t === 5) { // secret wall: a deep, jagged crack with loose stones at its foot
+          const pts = [[8, 4], [7, 5], [7, 6], [6, 7], [7, 8], [8, 9], [9, 10], [8, 11], [7, 12], [6, 13], [7, 14], [8, 15], [9, 13], [10, 12], [5, 10], [4, 11], [11, 8], [12, 7]];
+          for (const [cx, cy] of pts) { x.fillStyle = '#050307'; x.fillRect(X + cx, Y + cy, 1, 1); x.fillStyle = AH.shade(b.brick[3], 1.3); x.fillRect(X + cx + 1, Y + cy, 1, 1); }
+          x.fillStyle = '#050307'; x.fillRect(X + 7, Y + 9, 2, 3);
+          x.fillStyle = b.brick[2]; x.fillRect(X + 2, Y + 15, 3, 1); x.fillRect(X + 11, Y + 15, 2, 1); x.fillRect(X + 13, Y + 14, 1, 1);
         }
+      }
+      if (t === 5 && AH.wallTile(m.get(i, j + 1))) { // a cracked side wall: split rock seen from above
+        const pts = [[3, 2], [4, 3], [5, 4], [6, 5], [7, 6], [8, 7], [9, 7], [10, 8], [11, 9], [12, 10], [7, 7], [6, 8], [5, 9], [9, 6], [10, 5], [11, 4], [8, 9], [8, 10], [9, 11], [10, 12]];
+        for (const [cx, cy] of pts) { x.fillStyle = '#050307'; x.fillRect(X + cx, Y + cy, 1, 1); x.fillStyle = AH.shade(b.brick[3], 1.3); x.fillRect(X + cx, Y + cy - 1, 1, 1); }
+        x.fillStyle = '#050307'; x.fillRect(X + 7, Y + 6, 3, 2);
       }
       // side edges
       if (!AH.wallTile(m.get(i - 1, j))) { x.fillStyle = '#07050a'; x.fillRect(X, Y, 1, T); }
       if (!AH.wallTile(m.get(i + 1, j))) { x.fillStyle = '#07050a'; x.fillRect(X + T - 1, Y, 1, T); }
       if (!AH.wallTile(m.get(i, j - 1))) { x.fillStyle = AH.shade(b.brick[3], 0.9); x.fillRect(X, Y, T, 1); }
     } else {
-      { const r = rnd(); x.drawImage(tx.floor[r < 0.45 ? 4 : r < 0.6 ? 0 : r < 0.7 ? 5 : ((r * 100) | 0) % tx.floor.length], X, Y); }
+      { const r = AH.mulberry(((m0.seed || 1) + i * 92821 + j * 68917) >>> 0)(); x.drawImage(tx.floor[r < 0.45 ? 4 : r < 0.6 ? 0 : r < 0.7 ? 5 : ((r * 100) | 0) % tx.floor.length], X, Y); }
       if (t === 2) { // water
         x.fillStyle = '#1e3a5a'; x.fillRect(X, Y, T, T);
         x.fillStyle = '#2a4a6e'; for (let k = 0; k < 6; k++) x.fillRect(X + ((i * 5 + k * 3) % 14), Y + ((j * 3 + k * 5) % 14), 3, 1);
@@ -374,7 +395,7 @@ AH.renderMap = function (m) {
     }
   }
   // --- biome dressing: things on the wall faces and on the floor
-  const dr = AH.mulberry((m.seed || 1) * 7 + 3);
+  let dr; // seeded per tile, so opening a secret room never reshuffles the rest of the floor
   const P = (X, Y, col) => { x.fillStyle = col; x.fillRect(X, Y, 1, 1); };
   const R = (X, Y, w, h, col) => { x.fillStyle = col; x.fillRect(X, Y, w, h); };
   const E = (X, Y, w, h, col) => { ex.fillStyle = col; ex.fillRect(X, Y, w, h); };
@@ -382,6 +403,7 @@ AH.renderMap = function (m) {
   const isOpen = (i, j) => m.get(i, j) === 1 && !AH.wallTile(m.get(i, j - 1)) && !m.props.some(p => Math.abs(p.x - i * T - 8) < 14 && Math.abs(p.y - j * T - 8) < 14);
   const id = b.id;
   for (let j = 1; j < m.h - 1; j++) for (let i = 1; i < m.w - 1; i++) {
+    dr = AH.mulberry(((m0.seed || 1) * 7 + 3 + i * 7919 + j * 104729) >>> 0);
     const X = i * T, Y = j * T + 4;
     if (isFace(i, j) && dr() < 0.22) {
       const k = dr();
@@ -427,7 +449,7 @@ AH.renderMap = function (m) {
       ex.fillStyle = cols[2]; ex.fillRect(p.x + dx, p.y - hgt, 1, 1);
     }
   }
-  m.canvas = c; m.emCanvas = em;
+  m0.canvas = c; m0.emCanvas = em;
   return c;
 };
 

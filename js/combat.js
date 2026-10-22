@@ -71,10 +71,10 @@ GP.breakSecret = function (X, Y, p) {
   this.map.set(X, Y, AH.TILE.FLOOR);
   AH.Audio.sfx('break'); this.shake(4);
   AH.fx.dust(this, X * AH.T + 8, Y * AH.T + 12, '#6a6276', 20);
-  const x = this.map.canvas.getContext('2d');
-  x.fillStyle = this.map.biome.floor[2]; x.fillRect(X * AH.T, Y * AH.T, AH.T, AH.T);
-  x.fillStyle = this.map.biome.floor[0]; x.fillRect(X * AH.T, Y * AH.T, AH.T, 1);
+  for (let k = 0; k < 10; k++) this.fx.push({ k: 'px', x: X * AH.T + 4 + Math.random() * 8, y: Y * AH.T + 8 + Math.random() * 6, vx: (Math.random() - 0.5) * 70, vy: -20 - Math.random() * 50, col: this.map.biome.brick[2 + (k % 2)], life: 0.6, g: 160 });
   if (this.map.secret) this.map.secret.found = true;
+  AH.renderMap(this.map); if (AH.addLavaLights) AH.addLavaLights(this.map);
+  if (AH.R && AH.R.fz) AH.R.fz.sh.clear(); // wall shadows changed
   this.banner('A SECRET PASSAGE!', '#f2d36a');
 };
 
@@ -108,7 +108,7 @@ GP.updateProjs = function (dt) {
     }
     pr.x += pr.vx * dt; pr.y += pr.vy * dt;
     if (this.map.solidAt(pr.x, pr.y + 6)) {
-      if (!pr.enemy && pr.owner && pr.owner.ch && this.map.veins) { const tx = Math.floor(pr.x / AH.T), ty = Math.floor((pr.y + 6) / AH.T); const v = this.map.veins.find(v => v.hp > 0 && v.tx === tx && v.ty === ty); if (v) this.mineVein(pr.owner, v); }
+      if (!pr.enemy && pr.owner && pr.owner.ch && this.map.veins) { const tx = Math.floor(pr.x / AH.T), ty = Math.floor((pr.y + 6) / AH.T); const v = this.map.veins.find(v => v.hp > 0 && v.tx === tx && v.ty === ty); if (v) this.mineVein(pr.owner, v); else if (this.map.get(tx, ty) === AH.TILE.SECRET) this.breakSecret(tx, ty, pr.owner); }
       pr.life = 0; if (pr.k === 'fire') this.explosion(pr.x, pr.y, 26, pr.dmg, 'player', false, pr.owner); AH.fx.spark(this, pr.x, pr.y, pr.col, 3); continue; }
     if (pr.enemy) {
       for (const p of this.players) {

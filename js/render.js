@@ -201,8 +201,9 @@ R.drawMineProps = function (G, v) {
     if (m.stairs.locked) { ctx.fillStyle = '#5a1a12'; ctx.fillRect(m.stairs.x - 6, m.stairs.y - 1, 12, 1); ctx.fillRect(m.stairs.x - 6, m.stairs.y + 2, 12, 1); }
   }
   if (this.inView(v, m.rope.x, m.rope.y)) AH.drawSpr(ctx, m.hasLift ? AH.SPR.lift : AH.SPR.rope, m.rope.x - (m.hasLift ? 8 : 4), m.rope.y - (m.hasLift ? 2 : 6));
+  const hid = m.secret && !m.secret.found;
   for (const p of m.props) {
-    if (!this.inView(v, p.x, p.y)) continue;
+    if (!this.inView(v, p.x, p.y) || (hid && (p.secret || AH.secretNear(m, p.x, p.y + 8)))) continue;
     switch (p.type) {
       case 'chest': AH.drawSpr(ctx, p.open ? AH.SPR.chestOpen : AH.SPR.chest, p.x - 8, p.y - 9); break;
       case 'tablet': AH.drawSpr(ctx, AH.SPR.tablet, p.x - 6, p.y - 8); break;
@@ -275,7 +276,7 @@ R.collectLights = function (G, v) {
     const r = (G.scene === 'town' ? 70 : 112) * torchK * (1 + p.S.light / 100) * (p.dead ? 0.4 : 1);
     add(p.x, p.y - 8, r, 1.0, warm);
   }
-  for (const l of G.map.lights) { const f = l.flicker ? 0.9 + Math.sin(G.time * 13 + l.x) * 0.06 + Math.sin(G.time * 7.3 + l.y) * 0.05 : 1; add(l.x, l.y, l.r * f, l.i, l.tint, l.r); }
+  for (const l of G.map.lights) { if (G.scene === 'mine' && AH.secretNear(G.map, l.x, l.y + 8)) continue; const f = l.flicker ? 0.9 + Math.sin(G.time * 13 + l.x) * 0.06 + Math.sin(G.time * 7.3 + l.y) * 0.05 : 1; add(l.x, l.y, l.r * f, l.i, l.tint, l.r); }
   if (G.scene === 'mine' && G.map.lavaLights) for (const l of G.map.lavaLights) add(l.x, l.y, 30, 0.55, [1.25, 0.6, 0.35], 30);
   for (const pr of G.projs) if (pr.light || pr.enemy) add(pr.x, pr.y, pr.k === 'fire' ? 40 : 24, 0.7, pr.k === 'fire' ? [1.2, 0.7, 0.4] : [0.8, 0.95, 1.2]);
   for (const f of G.flashLights) add(f.x, f.y, f.r, f.i * (f.life / 0.25), f.tint);
@@ -460,7 +461,7 @@ R.drawEmissive = function (G, v) {
     if (G.map.chimney) { ctx.fillStyle = '#5a5468'; for (let k = 0; k < 6; k++) { const t = (G.time * 0.6 + k / 6) % 1; ctx.fillRect(Math.round(G.map.chimney.x + Math.sin(t * 6 + k) * 2), Math.round(G.map.chimney.y - t * 30), 2, 2); } }
   }
   // wall torch flames
-  if (G.scene === 'mine') for (const p of m.props) if (p.type === 'torchWall' && this.inView(v, p.x, p.y)) {
+  if (G.scene === 'mine') for (const p of m.props) if (p.type === 'torchWall' && this.inView(v, p.x, p.y) && !AH.secretNear(m, p.x, p.y + 8)) {
     const fl = Math.floor(G.time * 10 + p.x) % 3;
     ctx.fillStyle = '#ff8a2e'; ctx.fillRect(p.x + 1, p.y + 1 - fl % 2, 4, 3);
     ctx.fillStyle = '#ffd36a'; ctx.fillRect(p.x + 2, p.y + 1, 2, 3);
@@ -469,7 +470,7 @@ R.drawEmissive = function (G, v) {
   }
   for (const e of G.enemies) if (this.inView(v, e.x, e.y, 40)) e.drawEm(ctx, G);
   for (const a of G.allies) if (a.kind === 'minion' && !(a.rise > 0) && a._s && this.inView(v, a.x, a.y, 30) && !(a.t < 3 && Math.floor(G.time * 10) % 2)) AH.drawSprEm(ctx, a._s, a._dx, a._dy, a.face < 0);
-  if (G.scene === 'mine') for (const p of m.props) if (p.type === 'tablet' && this.inView(v, p.x, p.y)) AH.drawSprEm(ctx, AH.SPR.tablet, p.x - 6, p.y - 8);
+  if (G.scene === 'mine') for (const p of m.props) if (p.type === 'tablet' && !(p.secret && m.secret && !m.secret.found) && this.inView(v, p.x, p.y)) AH.drawSprEm(ctx, AH.SPR.tablet, p.x - 6, p.y - 8);
   // ore glints so rocks catch the eye even in the dark
   if (G.scene === 'mine') (m.veins || []).forEach((vn, i) => {
     if (vn.hp <= 0 || !this.inView(v, vn.x, vn.y)) return;
@@ -769,7 +770,7 @@ R.minimap = function (G, v) {
   }
   for (let j = 0; j < m.h; j++) for (let i = 0; i < m.w; i++) {
     if (!m.seen[j * m.w + i]) continue;
-    const t = m.get(i, j); if (AH.solidTile(t)) continue;
+    const t = m.get(i, j); if (AH.solidTile(t) || AH.secretHidden(m, i, j)) continue;
     ctx.fillStyle = t === 2 ? '#2a4a6e' : t === 3 ? '#a83a1a' : '#4a4256';
     ctx.fillRect(x + Math.floor(i * sx), y + Math.floor(j * sy), Math.ceil(sx), Math.ceil(sy));
   }

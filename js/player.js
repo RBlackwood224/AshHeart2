@@ -397,6 +397,7 @@ P.update = function (G, dt, pad) {
       // walk up to the ore rock and hit it until it breaks (ranged heroes shoot it from a distance)
       const vn = this.mVein, cy = vn.y - 6, d = Math.hypot(vn.x - this.x, cy - (this.y - 4)), b = this.wbase();
       const ok = b.ranged ? d < 110 && G.map.los(this.x, this.y - 6, vn.x, cy + 4) || d < 18 : d < 19;
+      if (vn.secret && G.map.get(vn.tx, vn.ty) !== AH.TILE.SECRET) vn.hp = 0;
       if (vn.hp <= 0) this.mVein = null;
       else if (!ok) { steer(vn.x, vn.y + 10); this.mStuck = Math.hypot(this.x - this.lastPosX, this.y - this.lastPosY) < 0.05 ? (this.mStuck || 0) + dt : 0; if (this.mStuck > 1.2) { this.mVein = null; this.mStuck = 0; } }
       else {

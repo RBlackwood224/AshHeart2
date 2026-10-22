@@ -307,7 +307,7 @@ GG.guestSnap = function (d) {
     const ps = d.ps;
     if (ps) {
       for (const i of ps.c) { const p = this.map.props[i]; if (p) { if (p.type === 'chest') p.open = true; if (p.type === 'shrine') p.used = true; if (p.type === 'dig') p.dug = true; } }
-      if (ps.sf && this.map.get(ps.sf[0], ps.sf[1]) === AH.TILE.SECRET) { this.map.set(ps.sf[0], ps.sf[1], AH.TILE.FLOOR); const x = this.map.canvas.getContext('2d'); x.fillStyle = this.map.biome.floor[2]; x.fillRect(ps.sf[0] * AH.T, ps.sf[1] * AH.T, AH.T, AH.T); this.map.secret.found = true; }
+      if (ps.sf && this.map.get(ps.sf[0], ps.sf[1]) === AH.TILE.SECRET) { this.map.set(ps.sf[0], ps.sf[1], AH.TILE.FLOOR); this.map.secret.found = true; AH.renderMap(this.map); if (AH.addLavaLights) AH.addLavaLights(this.map); }
       if (this.map.secret && ps.ss) this.map.secret.sniffed = true;
       for (const i of ps.v) { const v = this.map.veins[i]; if (v && v.hp > 0) { v.hp = 0; this.map.set(v.tx, v.ty, AH.TILE.FLOOR); } }
     }
