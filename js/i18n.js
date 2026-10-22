@@ -133,12 +133,12 @@ STRENGTH|FORCE|ERŐ
 DEXTERITY|DEXTÉRITÉ|ÜGYESSÉG
 INTELLECT|INTELLIGENCE|ÉRTELEM
 VITALITY|VITALITÉ|VITALITÁS
-MELEE DMG, HEAVY ARMOR|DÉGÂTS AU CORPS À CORPS, ARMURES LOURDES|KÖZELHARC, NEHÉZ PÁNCÉL
+MELEE DMG, HEAVY ARMOR|MÊLÉE, ARMURES LOURDES|KÖZELHARC, NEHÉZ PÁNCÉL
 CRIT, BOWS, DAGGERS|CRITIQUES, ARCS, DAGUES|KRITIKUS, ÍJAK, TŐRÖK
 SPELLS, MANA, STAVES|SORTS, MANA, BÂTONS|VARÁZSLAT, MANA, BOTOK
 CRIT CHANCE|CHANCE DE CRITIQUE|KRITIKUS ESÉLY
 ATTACK SPEED|VITESSE D'ATTAQUE|TÁMADÁSI SEBESSÉG
-MOVE SPEED|VITESSE DE DÉPLACEMENT|MOZGÁSI SEBESSÉG
+MOVE SPEED|DÉPLACEMENT|MOZGÁSI SEBESSÉG
 BLOCK|BLOCAGE|BLOKK
 MAGIC FIND|DÉCOUVERTE MAGIQUE|VARÁZSTALÁLÁS
 GOLD FIND|DÉCOUVERTE D'OR|ARANYTALÁLÁS
@@ -895,7 +895,7 @@ TYPE ON KEYBOARD OR PICK LETTERS   {0} RANDOM|TAPE AU CLAVIER OU CHOISIS DES LET
   AH.I18N_RX = [];
   for (const line of AH.I18N_TPL.split('\n')) {
     const p = line.split('|'); if (p.length < 3) continue;
-    const esc = p[0].replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/\{(\d)\}/g, '(.+?)');
+    const esc = p[0].replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/\{(\d)\}/g, '(.+?)').replace(/([A-Z])\(\.\+\?\)/g, '$1(\\d+)'); // a placeholder glued to a letter (P1, LV12) is always a number
     AH.I18N_RX.push({ re: new RegExp('^' + esc + '$'), fr: p[1], hu: p[2], src: p[0], lit: p[0].replace(/\{\d\}/g, '').length });
   }
   AH.I18N_RX.sort((a, b) => b.lit - a.lit);
@@ -907,7 +907,7 @@ AH.addI18n = function (src) {
   for (const line of src.split('\n')) {
     const p = line.split('|'); if (p.length < 3) continue;
     if (/\{\d\}/.test(p[0])) {
-      const esc = p[0].replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/\{(\d)\}/g, '(.+?)');
+      const esc = p[0].replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/\{(\d)\}/g, '(.+?)').replace(/([A-Z])\(\.\+\?\)/g, '$1(\\d+)'); // a placeholder glued to a letter (P1, LV12) is always a number
       AH.I18N_RX.push({ re: new RegExp('^' + esc + '$'), fr: p[1], hu: p[2], src: p[0], lit: p[0].replace(/\{\d\}/g, '').length });
     } else { AH.I18N.fr[p[0]] = p[1]; AH.I18N.hu[p[0]] = p[2]; }
   }
@@ -939,7 +939,7 @@ AH.addI18n = function (src) {
   for (const line of src.split('\n')) {
     const p = line.split('|'); if (p.length < 3) continue;
     if (/\{\d\}/.test(p[0])) {
-      const esc = p[0].replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/\{(\d)\}/g, '(.+?)');
+      const esc = p[0].replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/\{(\d)\}/g, '(.+?)').replace(/([A-Z])\(\.\+\?\)/g, '$1(\\d+)'); // a placeholder glued to a letter (P1, LV12) is always a number
       AH.I18N_RX.push({ re: new RegExp('^' + esc + '$'), fr: p[1], hu: p[2], src: p[0], lit: p[0].replace(/\{\d\}/g, '').length });
     } else { AH.I18N.fr[p[0]] = p[1]; AH.I18N.hu[p[0]] = p[2]; }
   }
@@ -1233,3 +1233,9 @@ AH.PRE_HU.minion = 'SÍRJÁRÓ'; AH.SUF_HU.minion = 'KRIPTAI';
 AH.RAR_FR.SET = "D'ENSEMBLE/D'ENSEMBLE"; AH.RAR_HU.SET = 'SZETT';
 AH.addI18n(`LAST BREATH! ONE MORE MISTAKE ON THIS FLOOR IS DEATH|DERNIER SOUFFLE ! UNE ERREUR DE PLUS À CET ÉTAGE ET C'EST LA MORT|UTOLSÓ LEHELET! MÉG EGY HIBA EZEN A SZINTEN, ÉS MEGHALSZ`);
 AH.addI18n(`CRACKED WALL|MUR FISSURÉ|REPEDT FAL`);
+AH.addI18n(`TIP: F11 FULLSCREEN KEEPS ESC FOR THE GAME|ASTUCE : EN PLEIN ÉCRAN F11, ÉCHAP RESTE AU JEU|TIPP: AZ F11-ES TELJES KÉPERNYŐN AZ ESC A JÁTÉKÉ MARAD`);
+AH.addI18n(`WARNS OF ENEMIES, FLUSHES OUT HIDDEN ONES, +20% LIGHT.|PRÉVIENT DES ENNEMIS, DÉBUSQUE CEUX QUI SE CACHENT, +20% DE LUMIÈRE.|FIGYELMEZTET AZ ELLENSÉGEKRE, ELŐCSALJA A REJTŐZKÖDŐKET, +20% FÉNY.
+BRINGS GOLD (+30%), SNIFFS OUT SECRET WALLS AND MIMICS.|RAPPORTE L'OR (+30%), FLAIRE LES MURS SECRETS ET LES MIMIQUES.|HOZZA AZ ARANYAT (+30%), KISZIMATOLJA A TITKOS FALAT ÉS A MIMIKET.
+YOUR RAT HISSES AT THAT CHEST. IT IS A MIMIC!|TON RAT CRACHE SUR CE COFFRE. C'EST UNE MIMIQUE !|A PATKÁNYOD RÁFÚJ ERRE A LÁDÁRA. EZ EGY MIMIK!`);
+AH.addI18n(`{0}: {1}|{0} : {1}|{0}: {1}`);
+AH.addI18n(`WARNS OF ENEMIES AND MARKS HIDDEN ONES. WARNED, YOU TAKE LESS DAMAGE. +20% LIGHT.|PRÉVIENT DES ENNEMIS ET SIGNALE CEUX QUI SE CACHENT. PRÉVENU, TU SUBIS MOINS DE DÉGÂTS. +20% DE LUMIÈRE.|FIGYELMEZTET AZ ELLENSÉGEKRE, MEGJELÖLI A REJTŐZKÖDŐKET. FIGYELMEZTETÉS UTÁN KEVESEBB SEBZÉST KAPSZ. +20% FÉNY.`);

@@ -101,7 +101,7 @@ U.itemPanel = function (G, ctx, it, x, y, w, h, cls, compareWith) {
     AH.rect(ctx, x + 6, yy - 3, w - 12, 1, '#3a3242');
     if (!compareWith) AH.text(ctx, x + 6, yy, 'NOTHING EQUIPPED', '#6f6880');
     else {
-      AH.text(ctx, x + 6, yy, AH.tr('WORN: ' + compareWith.name).slice(0, 21), AH.RARITY[compareWith.rarity].col);
+      AH.text(ctx, x + 6, yy, 'WORN: ' + compareWith.name, AH.RARITY[compareWith.rarity].col, { maxW: w - 12 });
       let d = 0, lab = '';
       if (it.dmg && compareWith.dmg) { d = Math.round((it.dmg[0] + it.dmg[1]) / 2 - (compareWith.dmg[0] + compareWith.dmg[1]) / 2); lab = ' DAMAGE'; }
       else if (it.armor !== undefined) { d = (it.armor || 0) - (compareWith.armor || 0); lab = ' ARMOR'; }
@@ -351,7 +351,7 @@ U.update.create = function (G, m, dt) {
       // phones: the in-game letter grid; tap a letter or steer with the stick and press A
       const tp = AH.Mouse && AH.Mouse.tap; if (AH.Mouse) AH.Mouse.tap = null;
       if (tp) U.GRID.forEach((k, i) => {
-        const cx = 102 + (i % 10) * 28, cy = 156 + Math.floor(i / 10) * 18;
+        const cx = 102 + (i % 10) * 28, cy = 154 + Math.floor(i / 10) * 17;
         if (tp.x >= cx - 9 && tp.x < cx + (k.length > 1 ? 30 : 19) && tp.y >= cy - 6 && tp.y < cy + 12) { m.gridSel = i; n.p.a = true; }
       });
       if (n.p.start && m.name.length) { m.step = 2; m.sel = 0; AH.Audio.sfx('select'); return; }
@@ -397,35 +397,39 @@ U.draw.create = function (G, ctx, m) {
   const clsKeys = AH.CLASS_KEYS;
   U.title(ctx, ['CHOOSE A CLASS', 'NAME YOUR HERO', 'COMPANION'][m.step], 14);
   if (!U.previews) U.previews = clsKeys.map(k => { const ch = AH.newCharacter(k, 'X', 'dog'); return new AH.Player(0, ch, null); });
+  // cards grow with the longest description in the current language
+  const lines = Math.max(...clsKeys.map(k => AH.wrap(AH.CLASSES[k].desc, U.CARD_W - 10).length));
+  const cardH = m.step >= 1 ? 68 : Math.max(162, 120 + lines * 10);
   clsKeys.forEach((k, i) => {
     const x = U.CARD_X(i), y = 44, on = i === m.cls, W = U.CARD_W, cx = x + W / 2;
-    AH.frame(ctx, x, y, W, 162, on ? { fill: '#211a28', edge: '#c9a24a', hi: '#f2e3b3' } : {});
+    AH.frame(ctx, x, y, W, cardH, on ? { fill: '#211a28', edge: '#c9a24a', hi: '#f2e3b3' } : {});
     const p = U.previews[i];
     const s = p.spr[Math.floor(G.time * 3) % 2 * (on ? 1 : 0)];
-    AH.drawSpr(ctx, s, cx - s.w * 2, y + 10, false, 4);
-    if (p.look.emissive) AH.drawSprEm(ctx, s, cx - s.w * 2, y + 10, false, 4);
-    AH.text(ctx, cx, y + 104, AH.CLASSES[k].name, on ? AH.CLASSES[k].color : '#8d8494', { align: 'center' });
-    AH.wrap(AH.CLASSES[k].desc, W - 10).forEach((l, j) => AH.text(ctx, cx, y + 116 + j * 9, l, '#6f6880', { align: 'center' }));
+    const sc = m.step >= 1 ? 2 : 4, sy = m.step >= 1 ? y + 4 : y + 10;
+    AH.drawSpr(ctx, s, cx - s.w * sc / 2, sy, false, sc);
+    if (p.look.emissive) AH.drawSprEm(ctx, s, cx - s.w * sc / 2, sy, false, sc);
+    AH.text(ctx, cx, m.step >= 1 ? y + 56 : y + 101, AH.CLASSES[k].name, on ? AH.CLASSES[k].color : '#8d8494', { align: 'center', maxW: W - 6 });
+    if (m.step === 0) AH.wrap(AH.CLASSES[k].desc, W - 10).forEach((l, j) => AH.text(ctx, cx, y + 116 + j * 10, l, '#6f6880', { align: 'center' }));
   });
   if (m.step >= 1) {
-    AH.frame(ctx, 90, 120, 300, 140, { fill: '#120e14', edge: '#c9a24a', hi: '#f2e3b3' });
+    AH.frame(ctx, 40, 118, 400, 137, { fill: '#120e14', edge: '#c9a24a', hi: '#f2e3b3' });
     if (m.step === 1) {
-      AH.text(ctx, UW / 2, 128, m.name + (Math.floor(G.time * 2) % 2 ? '_' : ' '), '#ffb347', { align: 'center', scale: 2 });
+      AH.text(ctx, UW / 2, 126, m.name + (Math.floor(G.time * 2) % 2 ? '_' : ' '), '#ffb347', { align: 'center', scale: 2 });
       U.GRID.forEach((k, i) => {
-        const cx = 102 + (i % 10) * 28, cy = 156 + Math.floor(i / 10) * 18;
+        const cx = 102 + (i % 10) * 28, cy = 154 + Math.floor(i / 10) * 17;
         if (i === m.gridSel) AH.frame(ctx, cx - 4, cy - 4, k.length > 1 ? 30 : 18, 15, { fill: '#2e2638', edge: '#c9a24a', hi: '#f2e3b3' });
         AH.text(ctx, cx, cy, k, i === m.gridSel ? '#ffb347' : '#cfc6b4');
       });
       const kb = m.kbTyping || (m.dev && m.dev.startsWith('kb')) || (m.lastDev && m.lastDev.startsWith('kb'));
-      if (AH.isTouch) AH.text(ctx, UW / 2, 244, 'TAP LETTERS   X: DELETE   Y: RANDOM   II: DONE', '#6a6274', { align: 'center' });
-      else AH.text(ctx, UW / 2, 244, kb ? 'TYPE A NAME   ENTER: DONE   ESC: BACK' : 'PICK LETTERS   ' + U.btnName(G, m, 'y') + ' RANDOM', '#6a6274', { align: 'center' });
+      if (AH.isTouch) AH.text(ctx, UW / 2, 243, 'TAP LETTERS   X: DELETE   Y: RANDOM   II: DONE', '#6a6274', { align: 'center' });
+      else AH.text(ctx, UW / 2, 243, kb ? 'TYPE A NAME   ENTER: DONE   ESC: BACK' : 'PICK LETTERS   ' + U.btnName(G, m, 'y') + ' RANDOM', '#6a6274', { align: 'center' });
     } else {
       const pets = ['canary', 'dog', 'rat'];
-      const rows = [{ label: 'COMPANION', right: '< ' + AH.PETS[pets[m.pet]].name + ' >' }, { label: 'PERMADEATH', right: m.hc ? 'ON - ONE LIFE ONLY' : 'OFF', rcol: m.hc ? '#ff6a5a' : '#8d8494' }, { label: 'BEGIN THE DESCENT', col: '#ffb347' }];
-      U.list(ctx, rows, m.sel, 100, 132, 280, { lh: 17 });
+      const rows = [{ label: 'COMPANION', right: '< ' + AH.tr(AH.PETS[pets[m.pet]].name) + ' >' }, { label: 'PERMADEATH', right: m.hc ? 'ON - ONE LIFE ONLY' : 'OFF', rcol: m.hc ? '#ff6a5a' : '#8d8494' }, { label: 'BEGIN THE DESCENT', col: '#ffb347' }];
+      U.list(ctx, rows, m.sel, 56, 132, 368, { lh: 17 });
       const s = AH.SPR[AH.PETS[pets[m.pet]].spr];
-      AH.drawSpr(ctx, s, UW / 2 - s.w * 1.5, 200, false, 3);
-      AH.wrap(AH.PETS[pets[m.pet]].desc, 270).forEach((l, j) => AH.text(ctx, UW / 2, 230 + j * 9, l, '#a39bb0', { align: 'center' }));
+      AH.drawSpr(ctx, s, UW / 2 - s.w * 1.5, 194, false, 3);
+      AH.wrap(AH.PETS[pets[m.pet]].desc, 370).forEach((l, j) => AH.text(ctx, UW / 2, 222 + j * 10, l, '#a39bb0', { align: 'center' }));
     }
   }
   if (!(m.step === 1 && (m.kbTyping || (m.dev && m.dev.startsWith('kb')) || (m.lastDev && m.lastDev.startsWith('kb'))))) U.hint(ctx, U.btnName(G, m, 'a') + ' CONFIRM   ' + U.btnName(G, m, 'b') + ' BACK');
@@ -675,7 +679,7 @@ U.drawPaperdoll = function (G, ctx, m, x0, y0, interactive) {
     const [sx, sy] = U.EQ_POS[slot]; const x = x0 + sx - 4, y = y0 + sy - 18;
     const it = ch.equip[slot];
     AH.slot(ctx, x, y, 22, it ? AH.RARITY[it.rarity].border : '#2c2634');
-    if (it) AH.iconIn(ctx, AH.itemIcon(it), x, y, 22);
+    if (it) { AH.iconIn(ctx, AH.itemIcon(it), x, y, 22); AH.socketPips(ctx, it, x, y, 22); }
     else AH.text(ctx, x + 11, y + 8, AH.SLOT_LABEL[slot][0], '#2c2634', { align: 'center', shadow: null });
     if (interactive && m.area === 'eq' && m.eq === slot) AH.cursor(ctx, x, y, 22);
     if (it && it.cursed && it.identified) { ctx.fillStyle = '#e05a5a'; ctx.fillRect(x + 18, y + 2, 2, 2); }
@@ -700,7 +704,7 @@ U.drawInvTab = function (G, ctx, m) {
     const it = ch.bag[i];
     AH.slot(ctx, x, y, 22, it ? AH.RARITY[it.rarity || 0].border : '#2c2634', it ? '#17131d' : '#120f16');
     if (it) {
-      AH.iconIn(ctx, AH.itemIcon(it), x, y, 22);
+      AH.iconIn(ctx, AH.itemIcon(it), x, y, 22); AH.socketPips(ctx, it, x, y, 22);
       if (it.stack > 1) AH.text(ctx, x + 21, y + 14, '' + it.stack, '#ffffff', { align: 'right' });
       if (it.unid) AH.text(ctx, x + 3, y + 2, '?', '#f2c94c');
       if ((it.kind === 'weapon' || it.kind === 'armor') && !p.canEquip(it)) { ctx.fillStyle = 'rgba(200,40,40,0.35)'; ctx.fillRect(x + 2, y + 2, 18, 18); }
@@ -749,10 +753,10 @@ U.drawCharTab = function (G, ctx, m) {
     if (on) AH.frame(ctx, 162, y - 4, 152, 24, { fill: '#2e2638', edge: '#c9a24a', hi: '#f2e3b3' });
     AH.text(ctx, 168, y, n, on ? '#ffb347' : '#cfc6b4');
     AH.text(ctx, 308, y, '' + Math.round(S[k]) + (ch.pts ? ' +' : ''), '#ffffff', { align: 'right' });
-    AH.text(ctx, 168, y + 9, d, '#6f6880');
+    AH.text(ctx, 168, y + 9, d, '#6f6880', { maxW: 142 });
   });
   const rows = [['LIFE', S.hp], ['MANA', S.mp], ['ARMOR', S.armor], ['CRIT CHANCE', Math.round(S.crit) + '%'], ['ATTACK SPEED', '+' + Math.round(S.ias) + '%'], ['MOVE SPEED', '+' + Math.round(S.move) + '%'], ['BLOCK', Math.round(S.block) + '%'], ['MAGIC FIND', '+' + Math.round(S.mf) + '%'], ['GOLD FIND', '+' + Math.round(S.gold) + '%'], ['XP', ch.xp + '/' + AH.xpNeed(ch.level)]];
-  rows.forEach(([a, b], i) => { AH.text(ctx, 168, 152 + i * 11, a, '#6f6880'); AH.text(ctx, 308, 152 + i * 11, '' + b, '#e9e2d0', { align: 'right' }); });
+  rows.forEach(([a, b], i) => { const vw = AH.textW('' + b); AH.text(ctx, 168, 146 + i * 10, a, '#6f6880', { maxW: 136 - vw }); AH.text(ctx, 308, 146 + i * 10, '' + b, '#e9e2d0', { align: 'right' }); });
   AH.frame(ctx, 322, 20, 154, 246);
   AH.text(ctx, 328, 26, 'POWERS', '#f2e3b3');
   let y = 40;
@@ -1214,7 +1218,7 @@ U.draw.stash = function (G, ctx, m) {
     for (let i = 0; i < 40; i++) {
       const x = x0 + (i % 8) * 24, y = 42 + Math.floor(i / 8) * 24, it = arr[i];
       AH.slot(ctx, x, y, 22, it ? AH.RARITY[it.rarity || 0].border : '#2c2634');
-      if (it) { AH.iconIn(ctx, AH.itemIcon(it), x, y, 22); if (it.stack > 1) AH.text(ctx, x + 21, y + 14, '' + it.stack, '#fff', { align: 'right' }); }
+      if (it) { AH.iconIn(ctx, AH.itemIcon(it), x, y, 22); AH.socketPips(ctx, it, x, y, 22); if (it.stack > 1) AH.text(ctx, x + 21, y + 14, '' + it.stack, '#fff', { align: 'right' }); }
       if (m.side === side && m.i === i) AH.cursor(ctx, x, y, 22);
     }
   });

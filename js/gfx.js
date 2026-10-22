@@ -205,6 +205,8 @@ AH.text = function (ctx, x, y, s, color, opt) {
   opt = opt || {};
   const scale = opt.scale || 1;
   s = AH.tr(String(s)).toUpperCase();
+  // opt.maxW: shorten the text to fit its box instead of spilling out
+  if (opt.maxW && AH.textW(s, scale) > opt.maxW) { while (s.length > 1 && AH.textW(s + '.', scale) > opt.maxW) s = s.slice(0, -1); s = s.trimEnd() + '.'; }
   if (opt.align === 'center') x -= Math.floor(AH.textW(s, scale) / 2);
   else if (opt.align === 'right') x -= AH.textW(s, scale);
   x = Math.round(x); y = Math.round(y);
@@ -263,6 +265,15 @@ AH.slot = function (ctx, x, y, s, border, fill) {
 AH.iconIn = function (ctx, spr, x, y, s, scale) {
   scale = scale || 1;
   AH.drawSpr(ctx, spr, x + Math.floor((s - spr.w * scale) / 2), y + Math.floor((s - spr.h * scale) / 2), false, scale);
+};
+// little socket pips in the corner of an item slot: dark when empty, rune-coloured when filled
+AH.socketPips = function (ctx, it, x, y, s) {
+  if (!it || !it.sockets) return;
+  for (let i = 0; i < it.sockets; i++) {
+    const r = it.runes && it.runes[i], px = x + 2 + i * 4, py = y + s - 5;
+    ctx.fillStyle = '#07060a'; ctx.fillRect(px - 1, py - 1, 4, 4);
+    ctx.fillStyle = r ? AH.RUNES[r].col : '#3a3442'; ctx.fillRect(px, py, 2, 2);
+  }
 };
 AH.cursor = function (ctx, x, y, s, col) {
   col = col || '#fff2b0';

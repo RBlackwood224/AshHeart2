@@ -2,9 +2,9 @@
 // Characters (persisted) and Player (runtime)
 AH.PLAYER_COLORS = ['#ff9a8a', '#8ae08e', '#9ec0ff'];
 AH.PETS = {
-  canary: { name: 'CANARY', desc: 'WARNS OF NEARBY ENEMIES AND LEGENDARY BEASTS.', spr: 'canary' },
+  canary: { name: 'CANARY', desc: 'WARNS OF ENEMIES AND MARKS HIDDEN ONES. WARNED, YOU TAKE LESS DAMAGE. +20% LIGHT.', spr: 'canary' },
   dog: { name: 'DOG', desc: 'DIGS UP TREASURE AND BITES YOUR FOES.', spr: 'dog' },
-  rat: { name: 'RAT', desc: 'COLLECTS GOLD AND SNIFFS OUT SECRET WALLS.', spr: 'pet_rat' },
+  rat: { name: 'RAT', desc: 'BRINGS GOLD (+30%), SNIFFS OUT SECRET WALLS AND MIMICS.', spr: 'pet_rat' },
 };
 // every level takes longer than the last: the deeper you are, the more you farm for the next one
 AH.xpNeed = L => Math.floor(30 + 20 * L + 8 * L * L + 0.25 * L * L * L);
@@ -78,6 +78,7 @@ P.recalc = function () {
   if (ch.cls === 'necro') { S.spell += 10; S.minion += 10; S.res += 5; } // the grave answers him
   S.maxMinions = 2 + S.minions + (S.keys.has('army') ? 2 : 0);
   S.speed = C.speed * (1 + S.move / 100);
+  if (ch.pet === 'canary') S.light += 20; // the canary's bright feathers
   S.light = Math.max(-50, S.light);
   if (S.keys.has('thousand')) { S.ias += 35; S.dmg -= 15; }
   S.mprTotal = S.noMpr ? 0 : (0.8 + S.int * 0.06 + S.mpr + (this.wbase().mpr ? 1 : 0));
@@ -321,6 +322,7 @@ P.hurt = function (G, dmg, src, raw) {
     d *= 1 - this.S.armor / (this.S.armor + 40 + fl * 9);
     d *= 1 - Math.min(60, this.S.res) / 100;
     if (this.buffs.aegis > 0) d *= 0.5;
+    if (this.buffs.alert > 0) d *= 0.85;
   }
   d = Math.max(1, Math.round(d));
   this.hp -= d; this.flash = 0.12; this.inv = raw ? 0 : 0.45;
@@ -444,7 +446,10 @@ P.update = function (G, dt, pad) {
   if (pad.held('a') && !inter && this.state === 'idle' || pad.held('a') && !inter && this.state === 'walk') this.tryAttack(G, true);
   if (mouseAtk && this.state !== 'attack') { this.tryAttack(G, true); if (this.mOnce && this.state === 'attack') { this.mOnce = false; this.mTarget = null; } }
   if (this.mHeavy !== undefined && this.mHeavy !== null) { this.aim = this.mHeavy; this.face = Math.cos(this.mHeavy) >= 0 ? 1 : -1; this.mAimLock = 0.3; this.mHeavy = null; this.tryHeavy(G); }
-  if (this.mCursor && AH.Mouse && AH.Mouse.player(G) === this && (pad.pressed('x') || pad.pressed('y') || pad.pressed('lb') || pad.pressed('rb') || pad.pressed('b') || pad.pressed('dodge'))) {
+  // a dodge goes where you are steering; with nothing held it follows the cursor (mouse) or the way you face
+  const steerX = pad.ax, steerY = pad.ay, steering = Math.hypot(steerX, steerY) > 0.3;
+  this.dodgeDir = steering ? Math.atan2(steerY, steerX) : null;
+  if (this.mCursor && AH.Mouse && AH.Mouse.player(G) === this && (pad.pressed('x') || pad.pressed('y') || pad.pressed('lb') || pad.pressed('rb') || (!steering && (pad.pressed('b') || pad.pressed('dodge'))))) {
     const c = this.mCursor; this.aim = Math.atan2(c.y - (this.y - 6), c.x - this.x); this.face = c.x >= this.x ? 1 : -1; this.mAimLock = 0.3; this.dodgeAimMouse = true;
   }
   if (pad.pressed('x')) this.tryHeavy(G);
@@ -502,7 +507,8 @@ P.tryDodge = function (G) {
   if (this.cd.dodge > 0 || this.state === 'dodge') return;
   this.state = 'dodge'; this.st = 0.22; this.inv = Math.max(this.inv, 0.28);
   this.cd.dodge = 0.85 * (1 - Math.min(70, this.S.dodgeCdr) / 100);
-  this.dodgeA = this.aim; AH.Audio.sfx('dodge');
+  this.dodgeA = this.dodgeDir !== null && this.dodgeDir !== undefined ? this.dodgeDir : this.aim; AH.Audio.sfx('dodge');
+  if (Math.abs(Math.cos(this.dodgeA)) > 0.15) this.face = Math.cos(this.dodgeA) > 0 ? 1 : -1;
   AH.fx.dust(G, this.x, this.y);
   if (this.S.powers.has('frostdodge')) G.nova(this, this.x, this.y, 40, this.spellPower(6) * 0.6, 'frost');
 };

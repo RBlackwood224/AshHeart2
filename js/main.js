@@ -59,11 +59,28 @@
   setInterval(() => { if (G.scene !== 'title') G.saveAll(); }, 30000);
   window.addEventListener('beforeunload', () => { if (G.scene !== 'title') G.saveAll(); });
 
+  // Esc in fullscreen: Chrome and Edge let the game keep Esc (hold it to leave fullscreen).
+  // Firefox always takes Esc to leave fullscreen, so there that press still counts as Esc for the game,
+  // and the game says once that F11 fullscreen keeps Esc for the game.
+  let fsByUs = false;
   AH.toggleFullscreen = function () {
     const el = document.documentElement;
-    if (!document.fullscreenElement) { (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el); try { screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(() => {}); } catch (e) { /* ignore */ } }
-    else (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    if (!document.fullscreenElement) {
+      const p = (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el);
+      const lock = () => { try { if (navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock(['Escape']).catch(() => {}); } catch (e) { /* ignore */ } };
+      if (p && p.then) p.then(lock).catch(() => {}); else lock();
+      try { screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(() => {}); } catch (e) { /* ignore */ }
+    } else { fsByUs = true; (document.exitFullscreen || document.webkitExitFullscreen).call(document); }
   };
+  document.addEventListener('fullscreenchange', () => {
+    if (document.fullscreenElement) return;
+    try { if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock(); } catch (e) { /* ignore */ }
+    if (fsByUs) { fsByUs = false; return; }
+    if (AH.isTouch || (navigator.keyboard && navigator.keyboard.lock)) return;
+    const G = AH.game;
+    if (G && G.menu && G.menu.type !== 'title' && G.menu.type !== 'options') AH.tapKey('Escape');
+    if (G && !AH._fsHint) { AH._fsHint = true; G.toast(null, 'TIP: F11 FULLSCREEN KEEPS ESC FOR THE GAME', '#f2c94c'); }
+  });
 
   // ---------- scaling ----------
   let view = { x: 0, y: 0, w: AH.W, h: AH.H };
@@ -118,17 +135,14 @@
     let dt = (now - last) / 1000; last = now;
     if (dt > 0.05) dt = 0.05;
     AH.Input.poll();
-    try {
-      if (!G.menu && G.scene === 'title') G.openMenu('title', null);
-      if (G.menu) AH.UI.tick(G, dt);
-      else handleDevices();
-      if (AH.Mouse) AH.Mouse.tick(G, dt);
-      if (G.net && !G.isHost) G.guestUpdate(dt); else G.update(dt);
-      if (G.menu && G.net && G.isHost) { /* online host keeps simulating under menus */ }
-      R.draw(G);
-      AH.UI.render(G, uctx);
-      if (AH.Mouse) AH.Mouse.drawCursor(G, uctx);
-    } catch (e) { console.error(e); AH.lastError = String(e && e.stack || e); }
+    // each step guarded on its own: one faulty piece must never freeze the whole game
+    const safe = f => { try { f(); } catch (e) { if (AH.lastError !== String(e && e.stack || e)) console.error(e); AH.lastError = String(e && e.stack || e); } };
+    safe(() => { if (!G.menu && G.scene === 'title') G.openMenu('title', null); if (G.menu) AH.UI.tick(G, dt); else handleDevices(); });
+    safe(() => { if (AH.Mouse) AH.Mouse.tick(G, dt); });
+    safe(() => { if (G.net && !G.isHost) G.guestUpdate(dt); else G.update(dt); });
+    safe(() => R.draw(G));
+    safe(() => AH.UI.render(G, uctx));
+    safe(() => { if (AH.Mouse) AH.Mouse.drawCursor(G, uctx); });
     sctx.fillStyle = '#000'; sctx.fillRect(0, 0, screen.width, screen.height);
     sctx.imageSmoothingEnabled = false;
     if (G.scene !== 'title' || !G.menu) { sctx.drawImage(world, view.x, view.y, view.w, view.h); if (G.scene !== 'title' && AH.fancyOn && AH.fancyOn()) R.bloom(sctx, world, view); }

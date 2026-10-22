@@ -272,7 +272,7 @@ AH.genFloor = function (seed, floor, event) {
     m.props.push({ type: 'deco', kind: rng.pick(decoKinds), x: p.x + rng.int(-6, 6), y: p.y + rng.int(-6, 6) });
   }
   // dig spots, chests
-  for (let k = 0; k < rng.int(3, 5); k++) { const p = m.randomFloorIn(rng.pick(rooms), rng); m.props.push({ type: 'dig', x: p.x, y: p.y }); }
+  for (let k = 0; k < rng.int(1, 2); k++) { const p = m.randomFloorIn(rng.pick(rooms), rng); m.props.push({ type: 'dig', x: p.x, y: p.y }); }
   const nChest = isBoss ? 0 : rng.int(1, 3);
   for (let k = 0; k < nChest; k++) {
     const r = rng.pick(rooms); if (r === start) continue;

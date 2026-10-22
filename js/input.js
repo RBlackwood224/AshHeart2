@@ -25,6 +25,11 @@ AH.Input = (function () {
     AH.Audio && AH.Audio.unlock();
   });
   window.addEventListener('keyup', e => { keys[e.code] = false; menuKeys[e.code] = false; });
+  // a key press that never reached the page (the browser kept Esc to leave fullscreen): replay it briefly
+  AH.tapKey = function (code) {
+    keys[code] = true; if (AH.game && (AH.game.menu || AH.game.scene === 'title')) menuKeys[code] = true;
+    setTimeout(() => { keys[code] = false; menuKeys[code] = false; }, 90);
+  };
   window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 
   function any(list) { for (const k of list) if (keys[k]) return true; return false; }

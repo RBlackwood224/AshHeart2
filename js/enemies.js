@@ -271,6 +271,7 @@ E.heartAttack = function (G, p, ang) {
 E.draw = function (ctx, G) {
   if (this.dead) return;
   if (this.hidden) {
+    if (this.canaryMark > 0) { this.canaryMark -= G.dt || 0.016; if (Math.floor(G.time * 4) % 2) AH.text(ctx, this.x, this.y - 12, '!', '#f8d83c', { align: 'center' }); }
     if (Math.floor(G.time * 3 + this.bob) % 4 === 0) { ctx.fillStyle = '#5a4e3a'; ctx.fillRect(Math.round(this.x - 3), Math.round(this.y - 1), 6, 1); ctx.fillRect(Math.round(this.x - 1), Math.round(this.y - 2), 2, 1); }
     return;
   }
@@ -298,7 +299,23 @@ E.draw = function (ctx, G) {
   }
   const flash = (this.flash > 0 && Math.floor(G.time * 30) % 2 === 0) || (this.state === 'wind' && Math.floor(G.time * 16) % 2 === 0);
   const img = flash ? null : (this.face < 0 ? s.cf : s.c);
-  if (flash) AH.drawFlash(ctx, s, x, y, this.face < 0, sc);
+  // big ones walk with weight: a heavy sway and bob while moving, slow breathing while standing,
+  // a thud and dust on every step
+  let tr = null;
+  if (this.isBig() || sc >= 1.5) {
+    const ph = G.time * (moving ? 7 : 2) + this.bob;
+    if (moving && !this.fly) {
+      tr = { rot: Math.sin(ph) * 0.08, lift: Math.abs(Math.sin(ph)) * 2 * sc, sx: 1, sy: 1 };
+      const step = Math.floor(ph / Math.PI);
+      if (step !== this._step) { this._step = step; AH.fx.dust(G, this.x + (step % 2 ? 4 : -4) * sc, this.y, '#5a4e3a', 4); if (this.boss && sc >= 2.4) G.shake(1); }
+    } else tr = { rot: 0, lift: 0, sx: 1 + Math.sin(ph) * 0.025, sy: 1 - Math.sin(ph) * 0.03 };
+  }
+  this._tr = tr;
+  if (tr) {
+    ctx.save(); ctx.translate(Math.round(this.x + lx), Math.round(this.y + 2 + fy - tr.lift)); ctx.rotate(tr.rot); ctx.scale(tr.sx, tr.sy);
+    if (flash) AH.drawFlash(ctx, s, -w / 2, -h, this.face < 0, sc); else ctx.drawImage(img, -w / 2, -h, w, h);
+    ctx.restore();
+  } else if (flash) AH.drawFlash(ctx, s, x, y, this.face < 0, sc);
   else ctx.drawImage(img, x, y, w, h);
   if (this.state === 'wind' && Math.floor(G.time * 10) % 2) AH.text(ctx, this.x, y - 9, '!', '#ff6a5a', { align: 'center' });
   if (this.freezeT > 0) { ctx.globalAlpha = 0.5; ctx.fillStyle = '#9ef0ff'; ctx.fillRect(x + 1, y + 1, w - 2, h - 2); ctx.globalAlpha = 1; }
@@ -306,7 +323,9 @@ E.draw = function (ctx, G) {
 };
 E.drawEm = function (ctx, G) {
   if (this.dead || this.hidden || this._dx === undefined) return;
-  AH.drawSprEm(ctx, this._s || this.spr, this._dx, this._dy, this.face < 0, this.scale);
+  const tr = this._tr, s = this._s || this.spr;
+  if (tr) { const w = s.w * this.scale, h = s.h * this.scale; ctx.save(); ctx.translate(this._dx + w / 2, this._dy + h - tr.lift); ctx.rotate(tr.rot); ctx.scale(tr.sx, tr.sy); AH.drawSprEm(ctx, s, -w / 2, -h, this.face < 0, this.scale); ctx.restore(); }
+  else AH.drawSprEm(ctx, s, this._dx, this._dy, this.face < 0, this.scale);
   // elite / legend marker
   if (this.elite || this.legend || this.nemesis || this.boss) {
     const col = this.boss ? '#ff6a5a' : this.legend ? '#ff9a3e' : this.nemesis ? '#e05a5a' : '#f2d36a';

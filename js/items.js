@@ -359,6 +359,12 @@ AH.itemLines = function (it, cls) {
   if (it.kind === 'armor' && AH.ARMORS[it.base].block) L.push({ t: `${AH.ARMORS[it.base].block}% BLOCK`, c: '#ffffff' });
   // what the base itself gives (a grimoire's spell power, a robe's mana...), shown even on plain items
   if (it.kind === 'armor' && AH.ARMORS[it.base].bonus) for (const t of AH.fxLabel(AH.ARMORS[it.base].bonus)) L.push({ t, c: '#ffffff' });
+  if (it.sockets && !it.unid) {
+    const rw = AH.runewordOf(it);
+    L.push({ t: `SOCKETS: ${it.runes.join(' ') || '-'} (${it.runes.length}/${it.sockets})`, c: '#a39bb0' });
+    for (const r of it.runes) L.push({ t: r + ': ' + AH.RUNES[r].lab, c: AH.RUNES[r].col });
+    if (rw) L.push({ t: 'RUNEWORD ' + rw.name + ': ' + rw.lab, c: '#6fbf73' });
+  }
   if (it.unid) L.push({ t: 'PUT IT ON OR IDENTIFY IT', c: '#a39bb0' });
   else for (const a of it.affixes || []) {
     const def = AH.AFFIXES.find(x => x.k === a.k);
@@ -373,11 +379,6 @@ AH.itemLines = function (it, cls) {
     const have = AH.setBonuses(worn).cnt[it.set] || 0;
     L.push({ t: 'SET: ' + set.name + ' (' + have + '/' + set.pieces.length + ')', c: '#5ee07a' });
     for (const n in set.b) for (const lab of AH.fxLabel(set.b[n])) L.push({ t: '(' + n + ') ' + lab, c: have >= +n ? '#8ae08e' : '#4e6a54' });
-  }
-  if (it.sockets) {
-    const rw = AH.runewordOf(it);
-    L.push({ t: `SOCKETS: ${it.runes.join(' ') || '-'} (${it.runes.length}/${it.sockets})`, c: '#a39bb0' });
-    if (rw) L.push({ t: 'RUNEWORD ' + rw.name + ': ' + rw.lab, c: '#6fbf73' });
   }
   if (it.kind === 'rune') { L.push({ t: AH.RUNES[it.rune].lab, c: '#9ec0ff' }); L.push({ t: 'SOCKET INTO GEAR AT THE SMITH OR IN THE BAG', c: '#6f6880' }); }
   if (it.kind === 'tome') { L.push({ t: AH.SKILLS[it.skill].desc, c: '#9ec0ff' }); L.push({ t: 'READ TO LEARN OR IMPROVE THIS SKILL', c: '#6f6880' }); }

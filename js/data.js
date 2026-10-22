@@ -7,7 +7,7 @@ AH.CLASSES = {
     skills: ['smite', 'aegis', 'consecrate'], desc: 'HOLY KNIGHT. TOUGH, BLOCKS WITH SHIELDS, PUNISHES THE UNDEAD.',
   },
   rogue: {
-    name: 'ROGUE', color: '#8ae08e', stat: 'dex', base: { str: 4, dex: 9, int: 4, vit: 5 }, hp: 45, mp: 26, speed: 1.12,
+    name: 'ROGUE', color: '#f2d36a', stat: 'dex', base: { str: 4, dex: 9, int: 4, vit: 5 }, hp: 45, mp: 26, speed: 1.12,
     look: { head: 'hood', torso: 'leather', legs: 'pants' }, start: { weapon: 'dagger', off: null },
     skills: ['shadowstep', 'knives', 'smoke'], desc: 'FAST AND DEADLY. CRITICAL HITS AND BACKSTABS.',
   },

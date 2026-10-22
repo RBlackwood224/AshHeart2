@@ -245,7 +245,7 @@ GG.findInteract = function (p) {
       if (pr.type === 'chest' && !pr.open) cand(pr, 'chest', pr.x, pr.y, 'OPEN');
       else if (pr.type === 'tablet') cand(pr, 'tablet', pr.x, pr.y, 'READ');
       else if (pr.type === 'shrine' && !pr.used) cand(pr, 'shrine', pr.x, pr.y, 'PRAY');
-      else if (pr.type === 'grave') cand(pr, 'grave', pr.x, pr.y + 2, pr.g.items && pr.g.owner === p.ch.created ? 'RECLAIM YOUR GEAR' : 'READ', 18);
+      else if (pr.type === 'grave') cand(pr, 'grave', pr.x, pr.y + 2, pr.g.items && p.ch && pr.g.owner === p.ch.created ? 'RECLAIM YOUR GEAR' : 'READ', 18);
       else if (pr.type === 'qitem' && !pr.taken) cand(pr, 'qitem', pr.x, pr.y, 'TAKE', 18);
     }
     for (const n of this.npcs) cand(n, n.kind, n.x, n.y, n.kind === 'merchant' ? 'TRADE' : 'HELP', 22);
@@ -512,7 +512,8 @@ GG.updatePets = function (dt) {
       if (pt.warnT <= 0) {
         const near = this.enemies.filter(e => !e.dead && !e.minion && AH.dist(e, o) < 125 && !pt.warned.has(e.id));
         if (near.length) {
-          near.forEach(e => pt.warned.add(e.id));
+          near.forEach(e => { pt.warned.add(e.id); if (e.hidden) e.canaryMark = 8; }); // hidden ones get a quiet mark, they are not woken
+          o.buffs.alert = 4; // forewarned: 15% less damage for a few seconds
           const hidden = near.filter(e => e.hidden).length;
           this.toast(o, near.length + (near.length > 1 ? ' ENEMIES' : ' ENEMY') + ' AHEAD!' + (hidden ? ' SOME ARE HIDING!' : ''), '#f8d83c');
           AH.Audio.sfx('chirp'); pt.warnT = 6; pt.chirp = 1.2;
@@ -532,7 +533,7 @@ GG.updatePets = function (dt) {
       if (foe) {
         const d = AH.dist(pt, foe);
         if (d > 10) { const a = Math.atan2(foe.y - pt.y, foe.x - pt.x); this.moveEntity(pt, Math.cos(a) * 110 * dt, Math.sin(a) * 110 * dt, 3); pt.face = Math.cos(a) > 0 ? 1 : -1; pt.moving = true; }
-        else if (pt.atk <= 0) { pt.atk = 0.9; const dmg = (4 + o.ch.level * 1.8 + this.floorNo * 0.8) * (1 + o.S.pet / 100) * (o.S.powers.has('petfury') ? 3 : 1); foe.hurt(this, dmg, o, { color: '#c48c56' }); AH.Audio.sfx('bark'); }
+        else if (pt.atk <= 0) { pt.atk = 1.2; const dmg = (3 + o.ch.level * 1.1 + this.floorNo * 0.5) * (1 + o.S.pet / 100) * (o.S.powers.has('petfury') ? 3 : 1); foe.hurt(this, dmg, o, { color: '#c48c56' }); AH.Audio.sfx('bark'); }
       } else if (spot) {
         const d = AH.dist(pt, spot);
         if (d > 4) { const a = Math.atan2(spot.y - pt.y, spot.x - pt.x); this.moveEntity(pt, Math.cos(a) * 95 * dt, Math.sin(a) * 95 * dt, 3); pt.face = Math.cos(a) > 0 ? 1 : -1; pt.moving = true; }
@@ -541,12 +542,14 @@ GG.updatePets = function (dt) {
       continue;
     }
     if (pt.kind === 'rat') {
+      const mim = this.map.props.find(c => c.type === 'chest' && c.mimic && !c.open && !c.ratWarned && AH.dist(c, o) < 60);
+      if (mim) { mim.ratWarned = true; this.toast(o, 'YOUR RAT HISSES AT THAT CHEST. IT IS A MIMIC!', '#b8b0c4'); AH.Audio.sfx('squeak'); }
       const coin = this.drops.find(d => d.gold && (d.owner === o.pid || d.owner < 0) && AH.dist(d, pt) < 90 && !d.taken);
       const sec = this.map.secret && !this.map.secret.found && !this.map.secret.sniffed ? this.map.secret : null;
       if (coin) {
         const d = AH.dist(pt, coin);
         if (d > 3) { const a = Math.atan2(coin.y - pt.y, coin.x - pt.x); this.moveEntity(pt, Math.cos(a) * 120 * dt, Math.sin(a) * 120 * dt, 2); pt.face = Math.cos(a) > 0 ? 1 : -1; pt.moving = true; }
-        else { coin.taken = true; o.ch.gold += coin.gold; AH.Audio.sfx('coin'); AH.fx.num(this, pt.x, pt.y - 10, '+' + coin.gold + 'G', '#f2c94c'); if (o.S.powers.has('goldheal')) o.heal(this, 2); }
+        else { coin.taken = true; const g = Math.round(coin.gold * 1.3); o.ch.gold += g; AH.Audio.sfx('coin'); AH.fx.num(this, pt.x, pt.y - 10, '+' + g + 'G', '#f2c94c'); if (o.S.powers.has('goldheal')) o.heal(this, 2); }
       } else if (sec) {
         const wx = sec.wall[0] * AH.T + 8, wy = sec.wall[1] * AH.T + 14;
         if (AH.dist(o, { x: wx, y: wy }) < 110) {
@@ -561,10 +564,10 @@ GG.updatePets = function (dt) {
 GG.dogDig = function (pt) {
   const o = pt.owner, s = pt.spot, r = AH.rand();
   AH.Audio.sfx('bark');
-  if (r < 0.3) this.dropGold(s.x, s.y, (4 + this.floorNo * 2) * 2, o.pid);
-  else if (r < 0.55) this.dropItem(s.x, s.y, AH.makeCons(AH.rand.pick([AH.oreForFloor(this.floorNo, AH.rand()), AH.oreForFloor(this.floorNo, AH.rand()), 'gem', 'potion', 'torch', 'murky'])), o.pid);
-  else if (r < 0.85) this.dropItem(s.x, s.y, AH.genItem(AH.rand, this.floorNo, { mf: o.S.mf + 60 }), o.pid);
-  else if (r < 0.95) this.dropItem(s.x, s.y, AH.genRune(AH.rand, this.floorNo), o.pid);
+  if (r < 0.35) this.dropGold(s.x, s.y, (4 + this.floorNo * 2) * 2, o.pid);
+  else if (r < 0.7) this.dropItem(s.x, s.y, AH.makeCons(AH.rand.pick([AH.oreForFloor(this.floorNo, AH.rand()), AH.oreForFloor(this.floorNo, AH.rand()), 'gem', 'potion', 'torch', 'murky'])), o.pid);
+  else if (r < 0.85) this.dropItem(s.x, s.y, AH.genItem(AH.rand, this.floorNo, { mf: o.S.mf + 20 }), o.pid);
+  else if (r < 0.9) this.dropItem(s.x, s.y, AH.genRune(AH.rand, this.floorNo), o.pid);
   else { this.toast(o, 'THE DOG FOUND A BONE. GOOD BOY.', '#c48c56'); }
 };
 GG.updateAllies = function (dt) {
