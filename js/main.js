@@ -131,7 +131,7 @@
     } catch (e) { console.error(e); AH.lastError = String(e && e.stack || e); }
     sctx.fillStyle = '#000'; sctx.fillRect(0, 0, screen.width, screen.height);
     sctx.imageSmoothingEnabled = false;
-    if (G.scene !== 'title' || !G.menu) sctx.drawImage(world, view.x, view.y, view.w, view.h);
+    if (G.scene !== 'title' || !G.menu) { sctx.drawImage(world, view.x, view.y, view.w, view.h); if (G.scene !== 'title' && AH.fancyOn && AH.fancyOn()) R.bloom(sctx, world, view); }
     sctx.drawImage(ui, view.x, view.y, view.w, view.h);
     requestAnimationFrame(frame);
   }

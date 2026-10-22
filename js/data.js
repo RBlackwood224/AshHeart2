@@ -16,7 +16,15 @@ AH.CLASSES = {
     look: { head: 'beard', torso: 'robe', legs: 'robe' }, start: { weapon: 'staff', off: null },
     skills: ['firebolt', 'frostnova', 'chain'], desc: 'MASTER OF FIRE, FROST AND STORM. FRAGILE BUT FIERCE.',
   },
+  necro: {
+    name: 'NECROMANCER', color: '#a8e88a', stat: 'int', base: { str: 3, dex: 4, int: 9, vit: 6 }, hp: 42, mp: 38, speed: 1.0,
+    look: { head: 'hood', torso: 'robe', legs: 'robe' }, start: { weapon: 'scepter', off: null },
+    skills: ['raise', 'curse', 'boneburst'], desc: 'RAISES THE SLAIN TO FIGHT FOR HIM. WEAK ALONE, DEADLY WITH AN ARMY.',
+  },
 };
+AH.CLASS_KEYS = ['paladin', 'rogue', 'wizard', 'necro'];
+AH.CLASS_START = { paladin: 'p0', rogue: 'r0', wizard: 'm0', necro: 'n0' };
+AH.isCaster = cls => cls === 'wizard' || cls === 'necro';
 
 // skills: mp cost, cooldown (s), icon
 AH.SKILLS = {
@@ -31,6 +39,9 @@ AH.SKILLS = {
   chain: { name: 'CHAIN LIGHTNING', mp: 14, cd: 3, icon: 'bolt', desc: 'LIGHTNING JUMPS BETWEEN FOES.' },
   whirl: { name: 'WHIRLWIND', mp: 14, cd: 8, icon: 'heavy', desc: 'SPIN AND HIT EVERYTHING AROUND.' },
   mend: { name: 'MEND', mp: 18, cd: 20, icon: 'potion', desc: 'HEAL 35% OF YOUR LIFE.' },
+  raise: { name: 'RAISE DEAD', mp: 12, cd: 2, icon: 'skull', desc: 'A NEARBY CORPSE RISES TO FIGHT FOR YOU.' },
+  curse: { name: 'DECAY', mp: 12, cd: 8, icon: 'curse', desc: 'CURSED FOES ROT, SLOW DOWN AND TAKE MORE DAMAGE.' },
+  boneburst: { name: 'CORPSE EXPLOSION', mp: 12, cd: 3, icon: 'boneburst', desc: 'A CORPSE BURSTS INTO SHARDS OF BONE.' },
   spiritwolf: { name: 'SPIRIT WOLF', mp: 20, cd: 30, icon: 'step', desc: 'SUMMON A GHOST WOLF FOR 20 SECONDS.' },
 };
 
@@ -103,7 +114,7 @@ AH.CREATURES = {
     C('GRAVE GHOST', 'ghost', {}, 'ghost', 100, 26, 1.0, { fly: 1, undead: 1, xp: 34 }),
     C('BONE SPIDER', 'spider', { K: '#e2dcc8', k: '#a8a08c' }, 'ambush', 120, 28, 1.3, { undead: 1, xp: 36 }),
     C('GHOUL HOUND', 'wolf', { d: '#8a8a6a', D: '#5a5a42', l: '#b4b48a' }, 'charge', 130, 30, 1.2, { undead: 1, xp: 38 }),
-    C('NECROMANCER', 'cultist', { p: '#3a3a3a', P: '#1e1e1e', e: '#6fff8a' }, 'summon', 140, 24, 0.8, { minion: 'BONE WALKER', xp: 50 }),
+    C('GRAVE CALLER', 'cultist', { p: '#3a3a3a', P: '#1e1e1e', e: '#6fff8a' }, 'summon', 140, 24, 0.8, { minion: 'BONE WALKER', xp: 50 }),
     C('CRYPT BAT', 'bat', { p: '#5a5a5a', P: '#2e2e2e' }, 'swarm', 70, 22, 1.8, { fly: 1, xp: 26 }),
   ],
   frozen: [

@@ -115,7 +115,8 @@ N.hostTick = function (dt) {
     zn: G.zones.map(z => [z.kind, r(z.x), r(z.y), z.r, r(z.t)]),
     pt: G.pets.map(pt => [G.players.indexOf(pt.owner), pt.kind, r(pt.x), r(pt.y), pt.face, pt.active ? 1 : 0, pt.chirp > 0 ? 1 : 0, pt.moving ? 1 : 0]),
     np: G.npcs.map(n => [r(n.x), r(n.y), n.face, n.kind]),
-    al: G.allies.map(a => [r(a.x), r(a.y), a.face]),
+    al: G.allies.map(a => a.kind === 'minion' ? [r(a.x), r(a.y), a.face, 1, a.def ? a.def.spr : 'skel', a.def ? a.def.pal : {}, Math.round(a.hp / a.maxHp * 20), a.fly ? 1 : 0, a.rise > 0 ? 1 : 0, a.t < 3 ? 1 : 0] : [r(a.x), r(a.y), a.face]),
+    cp: (G.corpses || []).filter(c => !c.used).map(c => { if (c.netSent) return c.id; c.netSent = true; return [c.id, r(c.x), r(c.y), c.face, c.def ? c.def.spr : 'skel', c.def ? c.def.pal : {}, c.sc, Math.round(c.t)]; }),
     fx: this.collectFx(), sfx: this.sfxQ, bn: this.bnQ || [],
     st: G.map && G.map.stairs ? (G.map.stairs.locked ? 1 : 0) : 0, rt: r(G.runTimer || 0), ct: r(G.collapseT || 0),
     ps: this.propState(),
@@ -224,13 +225,13 @@ GG.guestTown = function () {
   this.scene = 'town'; this.resetActors(); this.floorNo = 0;
   if (!this.townMap) { this.townMap = AH.genTown(); AH.renderTown(this.townMap); }
   this.map = this.townMap; AH.Audio.music('town');
-  if (this.netMirror) this.netMirror.en = {};
+  if (this.netMirror) { this.netMirror.en = {}; this.netMirror.cp = {}; }
 };
 GG.guestFloor = function (d) {
   this.scene = 'mine'; this.resetActors(); this.floorNo = d.floor; this.event = d.event; this.mode = d.mode || this.mode;
   this.map = AH.genFloor(d.seed, d.floor, d.event); AH.renderMap(this.map); AH.addLavaLights(this.map);
   this.mapSeed = d.seed;
-  if (this.netMirror) this.netMirror.en = {};
+  if (this.netMirror) { this.netMirror.en = {}; this.netMirror.cp = {}; }
   AH.Audio.music(d.floor % 10 === 0 ? 'boss' : 'mine');
   const me = this.localPlayers()[0];
   if (me) { if (d.floor > me.ch.deepest && this.mode === 'story') me.ch.deepest = d.floor; if (d.floor % 5 === 0 && me.ch.lifts.indexOf(d.floor) < 0 && this.mode !== 'time') me.ch.lifts.push(d.floor); }
@@ -280,7 +281,20 @@ GG.guestSnap = function (d) {
   this.zones = d.zn.map(a => ({ kind: a[0], x: a[1], y: a[2], r: a[3], t: a[4] }));
   this.pets = d.pt.map(a => ({ owner: this.players.find(p => p.pid === a[0]) || this.players[0], kind: a[1], x: a[2], y: a[3], face: a[4], active: !!a[5], chirp: a[6], moving: a[7] }));
   this.npcs = d.np.map((a, i) => { const old = this.npcs[i]; return { x: a[0], y: a[1], face: a[2], kind: a[3], spr: old && old.kind === a[3] ? old.spr : AH.SPR[{ villager: 'vill1', keeper: 'keeper', merchant: 'keeper', lost: 'miner' }[a[3]]], fixed: 1 }; });
-  this.allies = d.al.map(a => ({ x: a[0], y: a[1], face: a[2], spr: this.ghostWolf || (this.ghostWolf = AH.recolor(AH.SPR.wolf, { d: '#9ad8f8', D: '#5a9ac8', l: '#e8f8ff' })) }));
+  this.raisedCache = this.raisedCache || {};
+  this.allies = d.al.map((a, i) => {
+    if (!a[3]) return { x: a[0], y: a[1], face: a[2], spr: this.ghostWolf || (this.ghostWolf = AH.recolor(AH.SPR.wolf, { d: '#9ad8f8', D: '#5a9ac8', l: '#e8f8ff' })) };
+    const key = a[4] + JSON.stringify(a[5]); const spr = this.raisedCache[key] || (this.raisedCache[key] = AH.raisedSprite(AH.creatureSprite({ spr: a[4], pal: a[5] })));
+    return { kind: 'minion', id: i, x: a[0], y: a[1], face: a[2], spr, hp: a[6], maxHp: 20, fly: !!a[7], rise: a[8] ? 0.25 : 0, t: a[9] ? 1 : 10 };
+  });
+  // corpses: new ones arrive once with their looks, known ones by id; missing ones were used or rotted away
+  const CM = this.netMirror.cp = this.netMirror.cp || {}, keep = new Set();
+  for (const c of d.cp || []) {
+    if (Array.isArray(c)) { keep.add(c[0]); if (!CM[c[0]]) CM[c[0]] = { id: c[0], x: c[1], y: c[2], face: c[3], spr: AH.creatureSprite({ spr: c[4], pal: c[5] }), sc: c[6], t: c[7], max: 30 }; }
+    else keep.add(c);
+  }
+  for (const id in CM) if (!keep.has(+id)) delete CM[id];
+  this.corpses = Object.values(CM);
   this.drops = d.dr.map(a => ({ id: a[0], x: a[1], y: a[2], z: a[3], gold: a[4], item: a[5], owner: -1, t: 1 }));
   for (const [msg, col] of d.to || []) this.toast(this.localPlayers()[0], msg, col);
   for (const [msg, col, sub] of d.bn || []) this.banners.push({ msg, col, sub: sub || '', t: 3.2 });
@@ -317,6 +331,7 @@ GG.guestUpdate = function (dt) {
   for (const p of this.players) if (p.nx !== undefined) { p.x = AH.lerp(p.x, p.nx, Math.min(1, dt * 14)); p.y = AH.lerp(p.y, p.ny, Math.min(1, dt * 14)); }
   for (const e of this.enemies) if (e.nx !== undefined) { e.x = AH.lerp(e.x, e.nx, Math.min(1, dt * 14)); e.y = AH.lerp(e.y, e.ny, Math.min(1, dt * 14)); }
   for (const pr of this.projs) { if (pr.vx) { pr.x += pr.vx * dt; pr.y += pr.vy * dt; } }
+  for (const c of this.corpses || []) c.t = Math.max(0.5, c.t - dt);
   for (const f of this.fx) { f.life -= dt; if (f.k === 'px') { f.x += f.vx * dt; f.y += f.vy * dt; f.vy += (f.g || 0) * dt; } else if (f.k === 'num') { f.y += f.vy * dt; f.vy *= 0.92; } }
   this.fx = this.fx.filter(f => f.life > 0);
   // local input -> host

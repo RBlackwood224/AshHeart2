@@ -1,4 +1,6 @@
-# ASHHEART — The Mines of Dunmere beta
+**BETA** — this is a beta version; bugs and balance changes are still expected.
+
+# ASHHEART — The Mines of Dunmere
 
 A pixel-art action roguelite for the browser. Dive 100 floors below the town of Dunmere, keep its lamps burning, and silence the Heart of Ash.
 
@@ -35,8 +37,12 @@ English, Français and Magyar — switch under Options → Language (the first s
 - Mining: coal, copper, iron, silver, gold and mithril rocks (deeper floors hold better ore) plus crystal rocks. Any weapon breaks them. The smith needs the right ore for each tier; coal feeds your torch.
 - 15 achievements under the RECORDS tab. Ore upgrades and reforges gear at the smith, crystals add sockets.
 - Gravestones: where a hero falls, a grave stays on that floor. Read it to see who died there, to what, and with which stats.
-- A 142-point passive tree with three branches and a keystone per class, plus shared outer paths. Levels come slower the deeper you go.
+- Four classes: Paladin, Rogue, Wizard and Necromancer. The Necromancer raises fallen monsters as servants, curses foes and makes corpses explode; the slain now stay on the floor for a while.
+- A passive tree of about 190 points with three branches and a keystone per class, plus shared outer paths. Levels come slower the deeper you go.
 - Nemesis system, legendary beasts, floor events, bounties, a town that remembers what you did.
+
+## Graphics
+Options → Spectacular lights: normal-mapped pixel lighting, walls and monsters cast shadows, glow and vignette. On by default on computers, off on phones (it costs more power). Toggle it any time.
 
 ## Co-op
 - **Local:** up to 3 players. Title → Local co-op: every controller (or keyboard) presses A / Enter to pick a hero, then A again to start. You can also join mid-game: Title → Local co-op: every controller (or keyboard) presses A / Enter to pick a hero, then A again to start. You can also join mid-game: Press START on another controller (or NumEnter for the second keyboard player) to join with your own hero. Together you share one screen; wander apart and it splits, with arrows pointing at your friends.

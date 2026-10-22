@@ -19,7 +19,7 @@ GP.dmgOpt = function (p, roll, extra) { return Object.assign({ crit: roll.crit, 
 GP.applyHitEffects = function (p, e, roll, dealt) {
   if (dealt <= 0) return;
   const S = p.S;
-  if (S.loh) p.heal(null, S.loh * S.lohMult);
+  if (S.loh) p.heal(null, S.loh * S.lohMult * Math.min(1, p.atkTime() / 0.45)); // fast weapons heal less per hit
   if (roll.crit) { AH.Audio.sfx('crit'); this.shake(1); if (S.powers.has('chaincrit')) this.chainLightning(p, e, p.rollDamage(0.6, { noCrit: true }).dmg, 3); }
   else AH.Audio.sfx('hit');
   if (roll.fire && Math.random() < 0.25) { e.burnT = 2; e.burnDmg = S.fire * 0.4 + 1; e.burnBy = p; }
@@ -37,7 +37,7 @@ GP.meleeSwing = function (p, mult, range, arc, heavy) {
     if (Math.abs(da) > arc / 2 && d > 9) continue;
     p.hitList.add(e.id);
     let m = mult;
-    if (p.S.powers.has('triple') && p.hitCount % 4 === 0) m *= 3;
+    if (p.S.powers.has('triple') && p.hitCount % 4 === 0) m *= 2;
     const roll = p.rollDamage(m);
     const dealt = e.hurt(this, roll.dmg, p, this.dmgOpt(p, roll, { knock: heavy ? 140 : 50, stun: p.wbase().undead && heavy ? 0.6 : 0 }));
     this.applyHitEffects(p, e, roll, dealt); hits++;
@@ -82,7 +82,7 @@ GP.shoot = function (p, kind, mult, heavy, spread) {
   const a = p.aim + (spread || 0);
   const roll = p.rollDamage(mult);
   const sp = kind === 'arrow' ? 230 : kind === 'wave' ? 150 : 175;
-  const col = kind === 'arrow' ? '#e9e2d0' : kind === 'wave' ? '#ffd36a' : (p.weapon() && p.weapon().rarity >= 3 ? '#ffb347' : '#6fd6e8');
+  const col = kind === 'arrow' ? '#e9e2d0' : kind === 'wave' ? '#ffd36a' : (p.weapon() && p.weapon().rarity >= 3 ? '#ffb347' : p.ch && p.ch.cls === 'necro' ? '#8aff7a' : '#6fd6e8');
   if (kind === 'magic') roll.dmg = roll.dmg * 0.7 + p.spellPower(2) * 0.35 * mult;
   this.projs.push({ k: kind, x: p.x + Math.cos(a) * 6, y: p.y - 9 + Math.sin(a) * 4, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, a, owner: p, roll, dmg: roll.dmg, life: kind === 'wave' ? 0.35 : 0.9, pierce: heavy ? 4 : 0, hit: new Set(), col, r: heavy ? 5 : 3, heavy, light: kind === 'magic' });
   AH.Audio.sfx(kind === 'arrow' ? 'shoot' : 'magic');
@@ -114,6 +114,10 @@ GP.updateProjs = function (dt) {
       for (const p of this.players) {
         if (p.dead) continue;
         if (Math.abs(p.x - pr.x) < 6 && Math.abs(p.y - 8 - pr.y) < 9) { p.hurt(this, pr.dmg, pr.owner); pr.life = 0; AH.fx.spark(this, pr.x, pr.y, pr.col, 4); break; }
+      }
+      if (pr.life > 0) for (const a of this.allies) {
+        if (a.kind !== 'minion' || a.dead) continue;
+        if (Math.abs(a.x - pr.x) < 6 && Math.abs(a.y - 6 - pr.y) < 8) { a.hurt(this, pr.dmg, pr.owner); pr.life = 0; AH.fx.spark(this, pr.x, pr.y, pr.col, 4); break; }
       }
     } else {
       for (const e of this.enemies) {
@@ -154,7 +158,7 @@ GP.explosion = function (x, y, r, dmg, side, telegraphed, owner) {
   AH.Audio.sfx('boom'); this.shake(4);
   this.fx.push({ k: 'boom', x, y, r, life: 0.3, max: 0.3, em: 1 });
   this.flashLights.push({ x, y, r: r * 2.5, i: 1, tint: [1.2, 0.8, 0.5], life: 0.25 });
-  if (side === 'enemy') { for (const p of this.players) if (!p.dead && AH.dist(p, { x, y }) < r + 4) p.hurt(this, dmg, null); }
+  if (side === 'enemy') { for (const p of this.players) if (!p.dead && AH.dist(p, { x, y }) < r + 4) p.hurt(this, dmg, null); for (const a of this.allies) if (a.kind === 'minion' && !a.dead && AH.dist(a, { x, y }) < r + 4) a.hurt(this, dmg, null); }
   else for (const e of this.enemies) if (!e.dead && !e.hidden && AH.dist(e, { x, y }) < r + e.r) { const d = e.hurt(this, dmg, owner, { knock: 80, color: '#ffb347' }); }
 };
 GP.telegraph = function (x, y, r, t, cb) { this.fx.push({ k: 'tele', x, y, r, life: t, max: t, cb }); AH.Audio.sfx('warn'); };
@@ -216,7 +220,131 @@ GP.castSkill = function (p, id, rm) {
     case 'whirl': p.whirl = 1.2; p.whirlTick = 0; AH.Audio.sfx('heavy'); break;
     case 'mend': p.heal(this, p.S.hp * 0.35 * rm); AH.Audio.sfx('holy'); AH.fx.ring(this, p.x, p.y - 8, '#8ae08e', 22); break;
     case 'spiritwolf': this.summonAlly(p, 20 * rm); break;
+    case 'raise': {
+      const c = this.nearestCorpse(p, 120, true);
+      if (!c) { this.toast(p, 'NO CORPSE NEARBY', '#a39bb0'); return false; }
+      this.raiseMinion(p, c, rm); break;
+    }
+    case 'curse': {
+      const e = this.nearestEnemy(p, 150);
+      if (!e) { this.toast(p, 'NO TARGET', '#a39bb0'); return false; }
+      this.curseArea(p, e.x, e.y, 46, 0.25 * (1 + p.S.curse / 100) * rm, 7);
+      break;
+    }
+    case 'boneburst': {
+      // the corpse with the most foes around it; with none left, a servant gives itself
+      let best = null, bs = -1;
+      for (const c of this.corpses) { if (c.used || AH.dist(c, p) > 140) continue; let n = 0; for (const e of this.enemies) if (!e.dead && AH.dist(e, c) < 44) n++; if (n > bs) { bs = n; best = c; } }
+      let mult = 1;
+      if (!best) { best = this.allies.filter(a => a.kind === 'minion' && a.owner === p && !a.dead).sort((a, b) => a.t - b.t)[0]; mult = 1.5; if (best) { best.dead = true; } }
+      if (!best) { this.toast(p, 'NO CORPSE NEARBY', '#a39bb0'); return false; }
+      const dmg = (p.spellPower(8) * rm + Math.min(best.maxHp || 0, p.S.hp * 2) * 0.12) * mult;
+      this.boneBurst(p, best.x, best.y, dmg);
+      if (best.id !== undefined && this.corpses.indexOf(best) >= 0) this.useCorpse(best);
+      break;
+    }
   }
+};
+
+// ---------- the dead ----------
+// a fallen creature: dark, lying on its side (wide ones on their backs)
+AH.deadSprite = function (s) {
+  if (s._dead) return s._dead;
+  const wide = s.w > s.h * 1.1, c = document.createElement('canvas');
+  c.width = wide ? s.w : s.h; c.height = wide ? s.h : s.w;
+  const x = c.getContext('2d');
+  if (wide) { x.translate(0, s.h); x.scale(1, -1); x.drawImage(s.c, 0, 0); }
+  else { x.translate(s.h, 0); x.rotate(Math.PI / 2); x.drawImage(s.c, 0, 0); }
+  x.setTransform(1, 0, 0, 1, 0, 0); x.globalCompositeOperation = 'source-atop'; x.fillStyle = 'rgba(24,14,20,0.5)'; x.fillRect(0, 0, c.width, c.height);
+  const cf = document.createElement('canvas'); cf.width = c.width; cf.height = c.height; const y = cf.getContext('2d'); y.translate(c.width, 0); y.scale(-1, 1); y.drawImage(c, 0, 0);
+  Object.defineProperty(s, '_dead', { value: { c, cf, w: c.width, h: c.height }, enumerable: false });
+  return s._dead;
+};
+// a risen servant: the same creature, bleached to bone with a green glow in its eyes
+AH.raisedSprite = function (s) {
+  if (s._raised) return s._raised;
+  const pal = {}, em = (s.opt && s.opt.emissive) || '';
+  for (const k in s.pal) {
+    const h = s.pal[k]; if (typeof h !== 'string' || h[0] !== '#') { pal[k] = h; continue; }
+    const n = parseInt(h.slice(1), 16), L = (((n >> 16) & 255) * 0.3 + ((n >> 8) & 255) * 0.55 + (n & 255) * 0.15) / 255;
+    const c = v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0');
+    pal[k] = em.indexOf(k) >= 0 ? '#8aff7a' : '#' + c(40 + L * 170) + c(52 + L * 190) + c(44 + L * 150);
+  }
+  const r = AH.sprite(s.grid, pal, { emissive: em });
+  Object.defineProperty(s, '_raised', { value: r, enumerable: false });
+  return r;
+};
+GP.addCorpse = function (e) {
+  if (this.scene !== 'mine' || e.gone) return;
+  this.corpses.push({ id: e.id, x: e.x, y: e.y, spr: e.spr, sc: Math.min(e.scale || 1, 2.5), face: e.face, t: 30, max: 30, maxHp: e.maxHp, big: e.isBig(), def: e.def });
+  if (this.corpses.length > 40) this.corpses.shift();
+};
+GP.updateCorpses = function (dt) {
+  if (!this.corpses || !this.corpses.length) return;
+  for (const c of this.corpses) c.t -= dt;
+  this.corpses = this.corpses.filter(c => c.t > 0 && !c.used);
+};
+GP.useCorpse = function (c) { c.used = true; AH.fx.dust(this, c.x, c.y, '#8a7a7a', 10); };
+GP.nearestCorpse = function (p, maxD, raisable) {
+  let best = null, bd = maxD;
+  for (const c of this.corpses) { if (c.used || (raisable && c.big)) continue; const d = AH.dist(c, p); if (d < bd) { bd = d; best = c; } }
+  return best;
+};
+GP.curseArea = function (p, x, y, r, amt, t, quiet) {
+  if (!quiet) { AH.Audio.sfx('magic'); this.fx.push({ k: 'ring', x, y: y - 6, col: '#8aff7a', r0: 4, r1: r, life: 0.45, max: 0.45, em: 1 }); this.flashLights.push({ x, y, r: r * 1.6, i: 0.7, tint: [0.7, 1.2, 0.7], life: 0.3 }); }
+  for (const e of this.enemies) if (!e.dead && !e.hidden && AH.dist(e, { x, y }) < r + e.r) {
+    e.curseT = t; e.curseAmt = Math.max(e.curseAmt || 0, amt); e.curseBy = p; e.curseDot = p.spellPower(2) * 0.35 * (1 + p.S.curse / 100); e.aggro = true;
+  }
+};
+GP.boneBurst = function (p, x, y, dmg) {
+  AH.Audio.sfx('boom'); this.shake(3);
+  this.fx.push({ k: 'ring', x, y: y - 4, col: '#e2dcc8', r0: 3, r1: 42, life: 0.3, max: 0.3, em: 1 });
+  this.flashLights.push({ x, y, r: 70, i: 0.9, tint: [0.9, 1.2, 0.8], life: 0.25 });
+  for (let k = 0; k < 18; k++) { const a = Math.random() * Math.PI * 2, s = 60 + Math.random() * 90; this.fx.push({ k: 'px', x, y: y - 4, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 30, col: Math.random() < 0.7 ? '#e2dcc8' : '#8a2a30', life: 0.45, g: 160 }); }
+  for (const e of this.enemies) if (!e.dead && !e.hidden && AH.dist(e, { x, y }) < 42 + e.r) e.hurt(this, dmg, p, { knock: 90, color: '#e2dcc8' });
+};
+GP.raiseMinion = function (p, c, rm) {
+  const mine = this.allies.filter(a => a.kind === 'minion' && a.owner === p && !a.dead);
+  if (mine.length >= p.S.maxMinions) { const old = mine.sort((a, b) => a.t - b.t)[0]; old.dead = true; AH.fx.puff(this, old.x, old.y - 6, '#8a8478'); }
+  const S = p.S, army = S.keys.has('army') ? 0.75 : 1;
+  const hp = Math.round(S.hp * 0.33 * (1 + S.minionHp / 100) * army * rm);
+  const spr = AH.raisedSprite(c.spr), m = {
+    kind: 'minion', id: AH.uid(), owner: p, x: c.x, y: c.y, t: 22, atk: 0.4, face: c.face, spr, sc: 1, r: 4, hp, maxHp: hp, buffs: {}, flash: 0, rise: 0.5,
+    fly: !!(c.def && c.def.fly), def: c.def,
+    hurt(G, dmg, src) {
+      if (this.dead) return 0;
+      const fl = Math.max(1, G.floorNo || 1), o = this.owner.S;
+      let d = dmg * (1 - (o.armor * 0.5) / (o.armor * 0.5 + 40 + fl * 9)) * (1 - Math.min(50, o.res) / 100);
+      d = Math.max(1, Math.round(d)); this.hp -= d; this.flash = 0.1;
+      AH.fx.num(G, this.x, this.y - this.spr.h, '-' + d, '#c8b4a0');
+      if (this.hp <= 0) { this.dead = true; AH.fx.burst(G, this.x, this.y - 4, this.spr, 1); AH.Audio.sfx('break'); }
+      return d;
+    },
+  };
+  this.allies.push(m); this.useCorpse(c);
+  AH.Audio.sfx('magic'); AH.fx.puff(this, c.x, c.y - 4, '#8aff7a');
+  this.flashLights.push({ x: c.x, y: c.y, r: 50, i: 0.8, tint: [0.7, 1.25, 0.7], life: 0.3 });
+};
+GP.updateMinion = function (a, dt) {
+  a.t -= dt; a.atk -= dt; if (a.flash > 0) a.flash -= dt; if (a.rise > 0) { a.rise -= dt; return; }
+  if (a.owner.dead || this.scene !== 'mine') a.t = Math.min(a.t, 0.01);
+  if (a.t <= 0) { AH.fx.dust(this, a.x, a.y, '#8a8478', 8); return; }
+  // stay near the master; fight what is near him
+  const foe = AH.dist(a, a.owner) < 150 ? this.nearestEnemy(a, 110) : null;
+  const spd = 78;
+  if (foe) {
+    const d = AH.dist(a, foe), reach = 8 + foe.r;
+    if (d > reach) { const an = Math.atan2(foe.y - a.y, foe.x - a.x); this.moveEntity(a, Math.cos(an) * spd * dt, Math.sin(an) * spd * dt, 3, a.fly); a.face = Math.cos(an) > 0 ? 1 : -1; a.walk = (a.walk || 0) + dt; }
+    else if (a.atk <= 0) {
+      a.atk = 0.8; a.lunge = 0.12; a.face = foe.x >= a.x ? 1 : -1;
+      const dealt = foe.hurt(this, a.owner.minionPower() * (0.85 + Math.random() * 0.3), a.owner, { color: '#c8f0b0', knock: 30 });
+      if (dealt > 0 && a.owner.S.loh) a.owner.heal(null, a.owner.S.loh * 0.25);
+      AH.Audio.sfx('hit');
+    }
+  } else if (AH.dist(a, a.owner) > 26) { const an = Math.atan2(a.owner.y - a.y, a.owner.x - a.x); this.moveEntity(a, Math.cos(an) * spd * 1.1 * dt, Math.sin(an) * spd * 1.1 * dt, 3, a.fly); a.face = Math.cos(an) > 0 ? 1 : -1; a.walk = (a.walk || 0) + dt; }
+  if (a.lunge > 0) a.lunge -= dt;
+  // left far behind: crawl back out of the dark next to the master
+  if (AH.dist(a, a.owner) > 260) { a.x = a.owner.x + AH.rand.range(-12, 12); a.y = a.owner.y + 6; }
 };
 GP.summonAlly = function (p, t) {
   this.allies.push({ kind: 'wolf', owner: p, x: p.x + 10, y: p.y, t, atk: 0, face: 1, spr: AH.recolor(AH.SPR.wolf, { d: '#9ad8f8', D: '#5a9ac8', l: '#e8f8ff', k: '#ffffff' }) });
@@ -249,7 +377,7 @@ GP.rollLoot = function (x, y, src, p) {
   if (legendary && src.legend && src.legend.drop) this.dropItem(x, y, f >= 10 ? AH.genMythic(rng, f, src.legend) : AH.genItem(rng, f, { rarity: 2 }), p.pid);
   const r = rng();
   if (r < 0.035) this.dropItem(x, y, AH.makeCons('potion'), p.pid);
-  else if (r < 0.08) this.dropItem(x, y, AH.makeCons(p.ch.cls === 'wizard' ? 'mana' : 'torch'), p.pid);
+  else if (r < 0.08) this.dropItem(x, y, AH.makeCons(AH.isCaster(p.ch.cls) ? 'mana' : 'torch'), p.pid);
   else if (r < 0.095) this.dropItem(x, y, AH.makeCons('murky'), p.pid);
   else if (r < 0.105 + (elite ? 0.1 : 0)) this.dropItem(x, y, AH.genRune(rng, f), p.pid);
   else if (r < 0.11 + (legendary ? 0.5 : 0)) { const sk = rng.pick(Object.keys(AH.SKILLS)); this.dropItem(x, y, AH.makeTome(sk), p.pid); }

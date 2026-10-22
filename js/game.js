@@ -2,7 +2,7 @@
 // Game core: scenes, flow, interactions, companions, events, bounties, nemesis
 AH.Game = function () {
   this.scene = 'title'; this.time = 0; this.dt = 0;
-  this.players = []; this.enemies = []; this.projs = []; this.drops = []; this.fx = []; this.zones = []; this.allies = []; this.pets = []; this.npcs = [];
+  this.players = []; this.enemies = []; this.projs = []; this.drops = []; this.fx = []; this.zones = []; this.allies = []; this.pets = []; this.npcs = []; this.corpses = [];
   this.flashLights = []; this.toasts = []; this.banners = [];
   this.shakeT = 0; this.shakeA = 0; this.menu = null; this.menus = [];
   this.isHost = true; this.net = null; this.floorNo = 0; this.event = null; this.mode = 'story';
@@ -71,7 +71,7 @@ GG.placeSafe = function (e) {
   if (!this.map.blocked(e.x, e.y, 4)) return;
   for (let r = 4; r < 80; r += 4) for (let a = 0; a < 6.28; a += 0.5) { const x = e.x + Math.cos(a) * r, y = e.y + Math.sin(a) * r; if (!this.map.blocked(x, y, 4)) { e.x = x; e.y = y; return; } }
 };
-GG.resetActors = function () { this.banners = []; this.enemies = []; this.projs = []; this.drops = []; this.fx = []; this.zones = []; this.allies = []; this.npcs = []; this.flashLights = []; };
+GG.resetActors = function () { this.banners = []; this.enemies = []; this.projs = []; this.drops = []; this.fx = []; this.zones = []; this.allies = []; this.npcs = []; this.flashLights = []; this.corpses = []; };
 
 GG.enterTown = function (why) {
   this.buryDead();
@@ -391,7 +391,7 @@ GG.reclaimGrave = function (p, g) {
 // the smith lends plain gear to heroes who lost theirs (worth nothing when sold)
 GG.lendGear = function (p) {
   const C = AH.CLASSES[p.ch.cls], f = Math.max(1, Math.floor((p.ch.deepest || 1) * 0.7)), rng = AH.rand;
-  const chest = { paladin: 'plate', rogue: 'leather', wizard: 'robe' }[p.ch.cls];
+  const chest = { paladin: 'plate', rogue: 'leather', wizard: 'robe', necro: 'robe' }[p.ch.cls];
   const mk = base => { const it = AH.genItem(rng, f, { rarity: 0, base, noSet: true }); it.loaner = 1; it.req = null; return it; };
   if (!p.ch.equip.weapon) p.ch.equip.weapon = mk(C.start.weapon);
   if (C.start.off && !p.ch.equip.off) p.ch.equip.off = mk(C.start.off);
@@ -564,6 +564,7 @@ GG.dogDig = function (pt) {
 };
 GG.updateAllies = function (dt) {
   for (const a of this.allies) {
+    if (a.kind === 'minion') { this.updateMinion(a, dt); continue; }
     a.t -= dt; a.atk -= dt;
     const foe = this.nearestEnemy(a, 120);
     if (foe) {
@@ -572,7 +573,7 @@ GG.updateAllies = function (dt) {
       else if (a.atk <= 0) { a.atk = 0.6; foe.hurt(this, a.owner.spellPower(5), a.owner, { color: '#9ad8f8' }); }
     } else if (AH.dist(a, a.owner) > 24) { const an = Math.atan2(a.owner.y - a.y, a.owner.x - a.x); this.moveEntity(a, Math.cos(an) * 110 * dt, Math.sin(an) * 110 * dt, 3); a.face = Math.cos(an) > 0 ? 1 : -1; }
   }
-  this.allies = this.allies.filter(a => a.t > 0);
+  this.allies = this.allies.filter(a => a.t > 0 && !a.dead);
 };
 
 // ---------- main update ----------
@@ -624,6 +625,7 @@ GG.update = function (dt) {
     else if (f.k === 'tele' && f.life <= 0 && f.cb) { const cb = f.cb; f.cb = null; cb(); }
   }
   this.fx = this.fx.filter(f => f.life > 0);
+  this.updateCorpses(dt);
   for (const l of this.flashLights) l.life -= dt; this.flashLights = this.flashLights.filter(l => l.life > 0);
   if (this.net && this.isHost) this.net.hostTick(dt);
 };

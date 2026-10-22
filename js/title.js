@@ -171,6 +171,10 @@
     } else if (kind === 'wizard') {
       poly(x, [[X - 2, B - 30], [X + 12, B - 30], [X + 7, B - 34], [X + 3 + wv(4), B - 46], [X + 4, B - 34]]); // pointed hat
       x.fillRect(X + 10, B - 22, 2, 3); line(x, X + 12, B - 40, X + 12, B, 2); // staff
+    } else if (kind === 'necro') {
+      poly(x, [[X, B - 33], [X + 9, B - 33], [X + 10, B - 25], [X - 1, B - 25]]); x.fillRect(X + 3, B - 35, 4, 2); // deep cowl
+      poly(x, [[X - 1, B - 13], [X + 11, B - 13], [X + 13, B], [X - 3, B]]); // long robe
+      x.fillRect(X + 10, B - 22, 3, 2); line(x, X + 13, B - 36, X + 13, B - 4, 1); x.fillRect(X + 11, B - 40, 5, 4); // skull scepter
     } else {
       poly(x, [[X + 1, B - 32], [X + 8, B - 32], [X + 9, B - 26], [X - 4 + wv(5), B - 27]]); // hood
       x.fillRect(X + 9, B - 21, 4, 2);
@@ -182,6 +186,10 @@
   function pet(x, X, B, kind, t) {
     x.fillStyle = '#000';
     if (kind === 'dog') { x.fillRect(X, B - 6, 10, 4); x.fillRect(X + 8, B - 9, 4, 4); x.fillRect(X + 11, B - 7, 2, 2); x.fillRect(X + 9, B - 10, 1, 1); x.fillRect(X, B - 2, 2, 2); x.fillRect(X + 7, B - 2, 2, 2); line(x, X, B - 6, X - 3, B - 8 - (Math.floor(t * 6) % 2), 1); }
+    else if (kind === 'bones') { // a risen servant clawing out of the ground
+      const r = Math.min(1, (t % 6) / 1.5), h = Math.round(14 * r);
+      x.fillRect(X + 1, B - h, 4, Math.min(h, 4)); if (h > 5) { x.fillRect(X + 2, B - h + 4, 2, h - 4); x.fillRect(X, B - h + 6, 6, 1); line(x, X + 5, B - h + 6, X + 8, B - h + 2, 1); }
+    }
     else if (kind === 'rat') { x.fillRect(X, B - 3, 6, 3); x.fillRect(X + 5, B - 4, 3, 3); line(x, X, B - 1, X - 5, B - 2, 1); }
     else { const f = Math.floor(t * 10) % 2; const cx = X + Math.round(Math.cos(t * 1.5) * 14), cy = B - 52 + Math.round(Math.sin(t * 3) * 3); x.fillRect(cx, cy, 4, 3); x.fillRect(cx + 3, cy - 1, 2, 2); x.fillRect(cx - 2, cy - 1 - f * 2, 3, 2); }
   }
@@ -190,10 +198,11 @@
     x.clearRect(0, 0, HW, HH);
     const base = X => TA.cliffTop(X) ;
     const OY = 206 - HH + 8; // canvas placed so its bottom sits just under the cliff line
-    const figs = [['rogue', 'rat', 34, 0], ['paladin', 'dog', 76, 1.7], ['wizard', 'canary', 120, 3.1]];
+    const figs = [['rogue', 'rat', 14, 0], ['paladin', 'dog', 50, 1.7], ['wizard', 'canary', 86, 3.1], ['necro', 'bones', 118, 4.4]];
     for (const [k, pk, X, ph] of figs) {
       figure(x, X, base(X + 5) - OY + 1, k, t, ph);
       if (pk === 'canary') pet(x, X + 4, base(X) - OY, pk, t);
+      else if (pk === 'bones') pet(x, X - 9, base(X - 6) - OY + 1, pk, t);
       else pet(x, X + 20, base(X + 24) - OY + 1, pk, t);
     }
     // rim light from the mountain (to the right)
@@ -212,8 +221,10 @@
     x.putImageData(out, 0, 0);
     ctx.drawImage(c, 0, OY);
     // wizard's crystal and the paladin's blade catch the light
-    const wy = base(125) + 1 - 40;
-    ctx.fillStyle = Math.floor(t * 4) % 2 ? '#9ef0ff' : '#6fd6e8'; ctx.fillRect(132, wy - 2, 2, 3); ctx.fillStyle = 'rgba(110,214,232,0.3)'; ctx.fillRect(131, wy - 5, 4, 9); ctx.fillRect(129, wy - 2, 8, 3);
+    const wy = base(91) + 1 - 40;
+    ctx.fillStyle = Math.floor(t * 4) % 2 ? '#9ef0ff' : '#6fd6e8'; ctx.fillRect(98, wy - 2, 2, 3); ctx.fillStyle = 'rgba(110,214,232,0.3)'; ctx.fillRect(97, wy - 5, 4, 9); ctx.fillRect(95, wy - 2, 8, 3);
+    const ny = base(123) + 1 - 39;
+    ctx.fillStyle = '#8aff7a'; ctx.fillRect(130, ny, 1, 1); ctx.fillRect(132, ny, 1, 1); ctx.fillStyle = 'rgba(138,255,122,0.22)'; ctx.fillRect(128, ny - 2, 7, 5);
   };
 
   // ASHHEART logo: molten gradient letters, beveled, cracked, outlined

@@ -20,7 +20,7 @@ AH.Enemy = function (def, x, y, floor, opt) {
   const lv = f > 100 ? 1 + (f - 100) * 0.06 : 1;
   const pc = opt.players || 1;
   const hpScale = (1 + f * 0.072) * lv * (1 + (pc - 1) * 0.65);
-  const dmgScale = (1 + f * 0.056) * lv * (1 + (pc - 1) * 0.15);
+  const dmgScale = (1 + Math.min(f, 50) * 0.056 + Math.max(0, f - 50) * 0.04) * lv * (1 + (pc - 1) * 0.15);
   this.maxHp = Math.round(def.hp * 1.3 * hpScale * (opt.hpMult || 1));
   this.hp = this.maxHp;
   this.dmg = def.dmg * 1.5 * dmgScale * (opt.dmgMult || 1);
@@ -51,6 +51,7 @@ E.hurt = function (G, dmg, by, opt) {
   if (this.shieldT > 0) { AH.fx.num(G, this.x, this.y - this.spr.h * this.scale, 'SHIELD', '#9ec0ff'); return 0; }
   if (by && by.S && by.S.powers && by.S.powers.has('executioner') && this.hp < this.maxHp * 0.3) dmg *= 1.5;
   let d = dmg;
+  if (this.curseT > 0) d *= 1 + this.curseAmt;
   if (by && by.pid !== undefined) {
     if (this.undead) { const w = by.wbase(); if (w.undead) d *= w.undead; if (by.ch.cls === 'paladin') d *= 1.25; }
   }
@@ -75,7 +76,9 @@ E.reveal = function (G) {
 E.die = function (G, by) {
   this.dead = true;
   if (by && by.S && by.S.powers && by.S.powers.has('souleater') && by.heal) by.heal(G, by.S.hp * 0.03);
-  G.fx.push({ k: 'corpse', spr: this.spr, x: this.x, y: this.y, face: this.face, sc: this.scale, life: 0.6, max: 0.6, fly: this.fly });
+  G.fx.push({ k: 'corpse', spr: this.spr, x: this.x, y: this.y, face: this.face, sc: this.scale, life: 0.15, max: 0.15, fly: this.fly });
+  if (G.addCorpse) G.addCorpse(this);
+  if (this.curseT > 0 && this.curseBy && this.curseBy.S && this.curseBy.S.powers.has('pestilence')) G.curseArea(this.curseBy, this.x, this.y, 40, this.curseAmt, 5, true);
   AH.Audio.sfx('kill');
   AH.fx.burst(G, this.x, this.y - 6, this.spr, this.scale);
   if (this.has('explosive') || this.ai === 'explode') G.explosion(this.x, this.y, 30, this.dmg * 1.2, 'enemy');
@@ -92,6 +95,12 @@ E.target = function (G) {
     const d = AH.dist2(this.x, this.y, p.x, p.y);
     if (d < bd) { bd = d; best = p; }
   }
+  // the necromancer's servants are targets too: whoever is closer gets hit
+  if (G.allies && G.allies.length) for (const a of G.allies) {
+    if (a.kind !== 'minion' || a.dead) continue;
+    const d = AH.dist2(this.x, this.y, a.x, a.y) * 1.8; // a servant must stand clearly closer to draw the blow
+    if (d < bd) { bd = d; best = a; }
+  }
   return best ? { p: best, d: Math.sqrt(bd) } : null;
 };
 
@@ -101,6 +110,11 @@ E.update = function (G, dt) {
   if (this.shieldT > 0) this.shieldT -= dt;
   if (this.bleed > 0) { this.bleed -= dt; this.bleedT = (this.bleedT || 0) - dt; if (this.bleedT <= 0) { this.bleedT = 0.5; this.hurt(G, this.maxHp * 0.02 + 1, null, { color: '#ff6a5a' }); if (this.dead) return; } }
   if (this.burnT > 0) { this.burnT -= dt; this.burnTick = (this.burnTick || 0) - dt; if (this.burnTick <= 0) { this.burnTick = 0.5; this.hurt(G, this.burnDmg || 2, this.burnBy, { color: '#ffb347' }); if (this.dead) return; } }
+  if (this.curseT > 0) {
+    this.curseT -= dt; this.curseTick = (this.curseTick || 0) - dt; this.slowT = Math.max(this.slowT, 0.2);
+    if (this.curseTick <= 0) { this.curseTick = 0.5; this.hurt(G, this.curseDot, this.curseBy, { color: '#8aff7a' }); if (this.dead) return; }
+    if (Math.random() < dt * 6) G.fx.push({ k: 'px', x: this.x + AH.rand.range(-4, 4), y: this.y - this.spr.h * this.scale + AH.rand.range(0, 6), vx: 0, vy: -14, col: Math.random() < 0.5 ? '#8aff7a' : '#5a2a6a', life: 0.5, em: 1 });
+  }
   if (this.freezeT > 0) { this.freezeT -= dt; return; }
   if (this.stunT > 0) { this.stunT -= dt; return; }
   const slow = this.slowT > 0 ? 0.55 : 1; if (this.slowT > 0) this.slowT -= dt;
@@ -323,9 +337,10 @@ AH.spawnLegend = function (G, L, x, y, opt) {
 };
 AH.findCreatureBySpr = function (spr) { for (const b in AH.CREATURES) for (const c of AH.CREATURES[b]) if (c.spr === spr) return c; return AH.CREATURES.stone[0]; };
 AH.spawnAshheart = function (G, x, y) {
-  const def = { name: 'ASHHEART', spr: 'heart', pal: {}, ai: 'spit', hp: 900, dmg: 70, spd: 0.25, xp: 2000, minion: 'HELL IMP', proj: '#ff8a2e', fly: 1 };
-  const e = new AH.Enemy(def, x, y, G.floorNo, { boss: true, hpMult: 6, scale: 3, players: G.players.length, legend: { abil: ['nova', 'spit3', 'summon'] }, name: 'ASHHEART', noHide: true });
-  e.heartPhase = true; e.title = 'THE BURNING DREAM'; e.aggro = true;
+  // the heart woke: a towering demon lord that stomps toward you, hurls fire and calls imps from the ash
+  const def = { name: 'ASHHEART', spr: 'heart', pal: {}, ai: 'spit', hp: 900, dmg: 70, spd: 0.3, xp: 2000, minion: 'HELL IMP', proj: '#ff8a2e' };
+  const e = new AH.Enemy(def, x, y, G.floorNo, { boss: true, hpMult: 6, scale: 2.5, players: G.players.length, legend: { abil: ['nova', 'spit3', 'summon', 'enrage'] }, name: 'ASHHEART', noHide: true });
+  e.heartPhase = true; e.title = 'THE HEART THAT WOKE'; e.aggro = true;
   G.enemies.push(e); return e;
 };
 AH.spawnNemesis = function (G, nem, x, y) {

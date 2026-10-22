@@ -333,12 +333,17 @@ U.nameInput = function (G, m, show) {
 };
 U.update.create = function (G, m, dt) {
   const n = U.nav(G, m, dt);
-  const clsKeys = ['paladin', 'rogue', 'wizard'], pets = ['canary', 'dog', 'rat'];
+  const clsKeys = AH.CLASS_KEYS, pets = ['canary', 'dog', 'rat'], NC = clsKeys.length;
   if (m.skipA) { m.skipA = false; n.p.a = false; }
   if (m.skipB) { m.skipB = false; n.p.b = false; n.p.start = false; }
   if (m.step !== 1 || G.menu !== m) U.nameInput(G, m, false);
   if (m.step === 0) {
-    if (n.dx) { m.cls = (m.cls + n.dx + 3) % 3; AH.Audio.sfx('move'); }
+    // mouse or finger on a class card: first picks it, a second click confirms
+    const M = AH.Mouse; let pt = null;
+    if (M && M.tap) { pt = M.tap; M.tap = null; } else if (M && M.active && !AH.isTouch && M.leftPressed) { pt = M.uiPos(); M.leftPressed = false; }
+    if (M && M.active && !AH.isTouch && M.moved) { const c = M.uiPos(); M.moved = false; if (c && c.y > 44 && c.y < 206) for (let i = 0; i < NC; i++) if (c.x >= U.CARD_X(i) && c.x < U.CARD_X(i) + U.CARD_W) m.cls = i; }
+    if (pt && pt.y > 44 && pt.y < 206) for (let i = 0; i < NC; i++) if (pt.x >= U.CARD_X(i) && pt.x < U.CARD_X(i) + U.CARD_W) { if (m.cls === i) n.p.a = true; else { m.cls = i; AH.Audio.sfx('move'); } }
+    if (n.dx) { m.cls = (m.cls + n.dx + NC) % NC; AH.Audio.sfx('move'); }
     if (n.p.a) { m.step = 1; AH.Audio.sfx('select'); }
     if (n.p.b || n.p.start) { window.removeEventListener('keydown', m.keyHandler); G.closeMenu(); }
   } else if (m.step === 1) {
@@ -386,19 +391,21 @@ U.update.create = function (G, m, dt) {
     if (n.p.b || n.p.start) { m.step = 1; m.kbTyping = false; AH.Audio.sfx('back'); }
   }
 };
+U.CARD_W = 106; U.CARD_X = i => 14 + i * 114;
 U.draw.create = function (G, ctx, m) {
   U.bg(ctx, false);
-  const clsKeys = ['paladin', 'rogue', 'wizard'];
+  const clsKeys = AH.CLASS_KEYS;
   U.title(ctx, ['CHOOSE A CLASS', 'NAME YOUR HERO', 'COMPANION'][m.step], 14);
   if (!U.previews) U.previews = clsKeys.map(k => { const ch = AH.newCharacter(k, 'X', 'dog'); return new AH.Player(0, ch, null); });
   clsKeys.forEach((k, i) => {
-    const x = 40 + i * 140, y = 44, on = i === m.cls;
-    AH.frame(ctx, x, y, 120, 150, on ? { fill: '#211a28', edge: '#c9a24a', hi: '#f2e3b3' } : {});
+    const x = U.CARD_X(i), y = 44, on = i === m.cls, W = U.CARD_W, cx = x + W / 2;
+    AH.frame(ctx, x, y, W, 162, on ? { fill: '#211a28', edge: '#c9a24a', hi: '#f2e3b3' } : {});
     const p = U.previews[i];
     const s = p.spr[Math.floor(G.time * 3) % 2 * (on ? 1 : 0)];
-    AH.drawSpr(ctx, s, x + 60 - s.w * 2, y + 10, false, 4);
-    AH.text(ctx, x + 60, y + 104, AH.CLASSES[k].name, on ? AH.CLASSES[k].color : '#8d8494', { align: 'center' });
-    AH.wrap(AH.CLASSES[k].desc, 108).forEach((l, j) => AH.text(ctx, x + 60, y + 116 + j * 9, l, '#6f6880', { align: 'center' }));
+    AH.drawSpr(ctx, s, cx - s.w * 2, y + 10, false, 4);
+    if (p.look.emissive) AH.drawSprEm(ctx, s, cx - s.w * 2, y + 10, false, 4);
+    AH.text(ctx, cx, y + 104, AH.CLASSES[k].name, on ? AH.CLASSES[k].color : '#8d8494', { align: 'center' });
+    AH.wrap(AH.CLASSES[k].desc, W - 10).forEach((l, j) => AH.text(ctx, cx, y + 116 + j * 9, l, '#6f6880', { align: 'center' }));
   });
   if (m.step >= 1) {
     AH.frame(ctx, 90, 120, 300, 140, { fill: '#120e14', edge: '#c9a24a', hi: '#f2e3b3' });
@@ -428,7 +435,7 @@ U.draw.create = function (G, ctx, m) {
 U.update.options = function (G, m, dt) {
   const o = AH.options;
   const n = U.nav(G, m, dt);
-  const rows = 6;
+  const rows = 7;
   const ms = U.mouseList(G, m);
   if (ms && ms.pick) { if (m.sel === 1 || m.sel === 2) n.dx = (m.sel === 1 ? o.music : o.sfx) >= 1 ? -10 : 1; else n.p.a = true; }
   if (ms && ms.back) n.p.b = true;
@@ -440,15 +447,16 @@ U.update.options = function (G, m, dt) {
   if (m.sel === 1 && n.dx) o.music = AH.clamp(Math.round((o.music + n.dx * 0.1) * 10) / 10, 0, 1);
   if (m.sel === 2 && n.dx) o.sfx = AH.clamp(Math.round((o.sfx + n.dx * 0.1) * 10) / 10, 0, 1);
   if (m.sel === 3 && (n.dx || n.p.a)) o.shake = !o.shake;
-  if (m.sel === 4 && n.p.a) AH.toggleFullscreen();
-  if (m.sel === 5 && n.p.a || n.p.b || n.p.start) { AH.Save.setOptions(o); G.closeMenu(); }
+  if (m.sel === 4 && (n.dx || n.p.a)) { o.fancy = !AH.fancyOn(); AH.Save.setOptions(o); AH.Audio.sfx('move'); }
+  if (m.sel === 5 && n.p.a) AH.toggleFullscreen();
+  if (m.sel === 6 && n.p.a || n.p.b || n.p.start) { AH.Save.setOptions(o); G.closeMenu(); }
   AH.Audio.setVol(o.music, o.sfx);
 };
 U.draw.options = function (G, ctx, m) {
   U.bg(ctx); U.title(ctx, 'OPTIONS', 30);
   const o = AH.options, bar = v => '#'.repeat(Math.round(v * 10)) + '-'.repeat(10 - Math.round(v * 10)) + ' ' + Math.round(v * 100) + '%';
   const ln = (AH.LANGS.find(l => l.id === (o.lang || 'en')) || AH.LANGS[0]).name;
-  U.list(ctx, [{ label: 'LANGUAGE', right: '< ' + ln + ' >' }, { label: 'MUSIC', right: bar(o.music) }, { label: 'SOUND', right: bar(o.sfx) }, { label: 'SCREEN SHAKE', right: o.shake ? 'ON' : 'OFF' }, { label: 'FULLSCREEN' }, { label: 'BACK' }], m.sel, 120, 70, 240, { lh: 18 });
+  U.list(ctx, [{ label: 'LANGUAGE', right: '< ' + ln + ' >' }, { label: 'MUSIC', right: bar(o.music) }, { label: 'SOUND', right: bar(o.sfx) }, { label: 'SCREEN SHAKE', right: o.shake ? 'ON' : 'OFF' }, { label: 'SPECTACULAR LIGHTS', right: AH.fancyOn() ? 'ON' : 'OFF' }, { label: 'FULLSCREEN' }, { label: 'BACK' }], m.sel, 120, 70, 240, { lh: 18 });
 };
 U.update.help = function (G, m, dt) { const n = U.nav(G, m, dt); if (n.p.a || n.p.b || n.p.start) G.closeMenu(); };
 U.draw.help = function (G, ctx, m) {
@@ -493,7 +501,7 @@ U.TABS = ['INVENTORY', 'CHARACTER', 'PASSIVES', 'SKILLS', 'BESTIARY', 'SETS', 'R
 U.EQ_POS = { head: [10, 46], amulet: [10, 72], chest: [10, 98], cloak: [10, 124], hands: [10, 150], weapon: [124, 46], off: [124, 72], ring1: [124, 98], ring2: [124, 124], feet: [124, 150] };
 U.EQ_ORDER_L = ['head', 'amulet', 'chest', 'cloak', 'hands'], U.EQ_ORDER_R = ['weapon', 'off', 'ring1', 'ring2', 'feet'];
 U.init.inv = function (G, m) {
-  m.tab = m.tab || 0; m.area = 'bag'; m.i = 0; m.eq = 'weapon'; m.pnode = { paladin: 'p0', rogue: 'r0', wizard: 'm0' }[m.p.ch.cls]; m.ssel = 0; m.csel = 0; m.socket = null; m.bsel = 0;
+  m.tab = m.tab || 0; m.area = 'bag'; m.i = 0; m.eq = 'weapon'; m.pnode = AH.CLASS_START[m.p.ch.cls]; m.ssel = 0; m.csel = 0; m.socket = null; m.bsel = 0;
 };
 U.invItem = function (m) { const ch = m.p.ch; return m.area === 'bag' ? ch.bag[m.i] : ch.equip[m.eq]; };
 // mouse in the character screens: tabs, bag and gear slots, stats, passive nodes, skills, lists

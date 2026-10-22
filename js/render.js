@@ -127,6 +127,13 @@ R.drawWorld = function (G, v) {
     else { ctx.globalAlpha = 1 - k; ctx.drawImage(f.face < 0 ? s.cf : s.c, 0, 0, s.w, Math.max(1, Math.round(s.h * (1 - k * 0.8))), x, y, w, h); ctx.globalAlpha = 1; }
     if (Math.random() < 0.4) G.fx.push({ k: 'px', x: f.x + (Math.random() - 0.5) * w, y: y + Math.random() * h, vx: (Math.random() - 0.5) * 8, vy: -10 - Math.random() * 14, col: Math.random() < 0.5 ? '#5a5060' : '#8a7a7a', life: 0.5 });
   }
+  // the fallen stay where they fell, and slowly turn to ash
+  if (G.corpses) for (const c of G.corpses) if (this.inView(v, c.x, c.y, 30)) {
+    const d = AH.deadSprite(c.spr), sc = c.sc || 1, w = Math.round(d.w * sc), h = Math.round(d.h * sc);
+    ctx.globalAlpha = Math.min(1, c.t / 4) * 0.95;
+    ctx.drawImage(c.face < 0 ? d.cf : d.c, Math.round(c.x - w / 2), Math.round(c.y - h + 3), w, h);
+    ctx.globalAlpha = 1;
+  }
   // sortable actors
   const list = [];
   if (G.scene === 'mine') for (const pr of m.props) if (pr.type === 'grave' && this.inView(v, pr.x, pr.y)) list.push({ y: pr.y, d: () => AH.drawGrave(ctx, pr.x, pr.y, false) });
@@ -140,7 +147,15 @@ R.drawWorld = function (G, v) {
   for (const p of G.players) list.push({ y: p.y, d: () => p.draw(ctx, G) });
   for (const e of G.enemies) if (this.inView(v, e.x, e.y, 40)) list.push({ y: e.y, d: () => e.draw(ctx, G) });
   for (const pt of G.pets) if (pt.active) list.push({ y: pt.y + (pt.kind === 'canary' ? 30 : 0), d: () => this.drawPet(G, pt) });
-  for (const a of G.allies) list.push({ y: a.y, d: () => AH.drawSpr(ctx, a.spr, a.x - a.spr.w / 2, a.y - a.spr.h + 2, a.face < 0) });
+  for (const a of G.allies) list.push({ y: a.y, d: () => {
+    if (a.kind !== 'minion') { AH.drawSpr(ctx, a.spr, a.x - a.spr.w / 2, a.y - a.spr.h + 2, a.face < 0); return; }
+    const s = a.spr; if (a.t < 3 && Math.floor(G.time * 10) % 2) return;
+    const lx = a.lunge > 0 ? a.face * 2 : 0, bob = a.walk && Math.floor(a.walk * 8) % 2 ? -1 : 0, fy = a.fly ? -6 + Math.round(Math.sin(G.time * 5 + a.id) * 1.5) : 0;
+    const x = Math.round(a.x - s.w / 2) + lx, y = Math.round(a.y - s.h + 2) + bob + fy;
+    if (a.rise > 0) { const k = 1 - a.rise / 0.5, hh = Math.max(1, Math.round(s.h * k)); ctx.drawImage(a.face < 0 ? s.cf : s.c, 0, 0, s.w, hh, x, y + s.h - hh, s.w, hh); return; }
+    if (a.flash > 0) AH.drawFlash(ctx, s, x, y, a.face < 0); else AH.drawSpr(ctx, s, x, y, a.face < 0);
+    if (a.hp < a.maxHp) AH.bar(ctx, Math.round(a.x) - 5, y - 3, 10, 1, a.hp / a.maxHp, '#8ae08e', '#142014');
+  } });
   for (const n of G.npcs) if (this.inView(v, n.x, n.y)) list.push({ y: n.y, d: () => { const bob = (!n.fixed && n.wa !== null && Math.floor(G.time * 4) % 2) ? -1 : 0; AH.drawSpr(ctx, n.spr, n.x - n.spr.w / 2, n.y - n.spr.h + 2 + bob, n.face < 0); if (n.kind === 'lost' && Math.floor(G.time * 2) % 2) AH.text(ctx, n.x, n.y - 24, '!', '#f2c94c', { align: 'center' });
     if (n.say && n.sayUntil > G.time) this.bubbles.push(n); } });
   if (G.scene === 'town') {
@@ -247,7 +262,7 @@ R.ambientOf = function (G) {
 };
 R.collectLights = function (G, v) {
   const L = [];
-  const add = (x, y, r, i, tint) => { if (x + r > v.camX && x - r < v.camX + v.w && y + r > v.camY && y - r < v.camY + v.h) L.push([x, y, r, i, tint]); };
+  const add = (x, y, r, i, tint, st) => { if (x + r > v.camX && x - r < v.camX + v.w && y + r > v.camY && y - r < v.camY + v.h) L.push([x, y, r, i, tint, st]); };
   const warm = [1.0, 0.86, 0.66];
   for (const p of G.players) {
     if (p.remote && G.isHost === false) { /* still light */ }
@@ -255,28 +270,31 @@ R.collectLights = function (G, v) {
     const r = (G.scene === 'town' ? 70 : 112) * torchK * (1 + p.S.light / 100) * (p.dead ? 0.4 : 1);
     add(p.x, p.y - 8, r, 1.0, warm);
   }
-  for (const l of G.map.lights) { const f = l.flicker ? 0.9 + Math.sin(G.time * 13 + l.x) * 0.06 + Math.sin(G.time * 7.3 + l.y) * 0.05 : 1; add(l.x, l.y, l.r * f, l.i, l.tint); }
-  if (G.scene === 'mine' && G.map.lavaLights) for (const l of G.map.lavaLights) add(l.x, l.y, 30, 0.55, [1.25, 0.6, 0.35]);
+  for (const l of G.map.lights) { const f = l.flicker ? 0.9 + Math.sin(G.time * 13 + l.x) * 0.06 + Math.sin(G.time * 7.3 + l.y) * 0.05 : 1; add(l.x, l.y, l.r * f, l.i, l.tint, l.r); }
+  if (G.scene === 'mine' && G.map.lavaLights) for (const l of G.map.lavaLights) add(l.x, l.y, 30, 0.55, [1.25, 0.6, 0.35], 30);
   for (const pr of G.projs) if (pr.light || pr.enemy) add(pr.x, pr.y, pr.k === 'fire' ? 40 : 24, 0.7, pr.k === 'fire' ? [1.2, 0.7, 0.4] : [0.8, 0.95, 1.2]);
   for (const f of G.flashLights) add(f.x, f.y, f.r, f.i * (f.life / 0.25), f.tint);
+  for (const a of G.allies) if (a.kind === 'minion' && !a.dead) add(a.x, a.y - 6, 26, 0.3, [0.7, 1.2, 0.7]);
   for (const z of G.zones) if (z.kind === 'fire' || z.kind === 'efire' || z.kind === 'holy') add(z.x, z.y, z.r * 1.6, 0.5, z.kind === 'holy' ? [1.1, 1.05, 0.85] : [1.2, 0.7, 0.4]);
   for (const e of G.enemies) if ((e.legend || e.boss || e.nemesis) && !e.dead && !e.hidden) add(e.x, e.y - 10, 96, 0.7, [1.25, 0.7, 0.55]);
   if (G.scene === 'town') {
     const night = 1 - this.ambientOf(G);
     if (night > 0.15) {
-      for (const w of G.map.windows) add(w.x, w.y, 34, 0.55 * night, [1.0, 0.78, 0.48]);
+      for (const w of G.map.windows) add(w.x, w.y, 34, 0.55 * night, [1.0, 0.78, 0.48], 34);
       const lit = G.lampsLit();
-      G.map.lamps.forEach((l, i) => { if (i < lit) add(l.x + 1, l.y - 16, 62 + Math.sin(G.time * 9 + i * 3) * 3, 0.9 * night + 0.1, [1.0, 0.8, 0.5]); });
+      G.map.lamps.forEach((l, i) => { if (i < lit) add(l.x + 1, l.y - 16, 62 + Math.sin(G.time * 9 + i * 3) * 3, 0.9 * night + 0.1, [1.0, 0.8, 0.5], 66); });
     }
-    if (G.map.forge) add(G.map.forge.x, G.map.forge.y, 56, 0.9, [1.0, 0.62, 0.32]);
+    if (G.map.forge) add(G.map.forge.x, G.map.forge.y, 56, 0.9, [1.0, 0.62, 0.32], 56);
   }
-  if (G.scene === 'mine') for (const vn of G.map.veins || []) if (vn.hp > 0) if (vn.ore !== 'coal') add(vn.x, vn.y - 8, vn.gem ? 30 : 22, vn.gem ? 0.5 : 0.3, vn.gem ? [0.7, 1.05, 1.3] : [1.25, 0.95, 0.55]);
+  if (G.scene === 'mine') for (const vn of G.map.veins || []) if (vn.hp > 0) if (vn.ore !== 'coal') add(vn.x, vn.y - 8, vn.gem ? 30 : 22, vn.gem ? 0.5 : 0.3, vn.gem ? [0.7, 1.05, 1.3] : [1.25, 0.95, 0.55], vn.gem ? 30 : 22);
   if (G.scene === 'mine' && G.map.biome.id === 'ashen') add(v.camX + v.w / 2, v.camY - 40, 220, 0.18, [1.3, 0.6, 0.4]);
   return L;
 };
+AH.fancyOn = () => AH.options && (AH.options.fancy === undefined ? !AH.isTouch : !!AH.options.fancy);
 R.applyLight = function (G, v) {
   const amb = this.ambientOf(G);
   if (amb >= 0.995) return;
+  if (AH.fancyOn()) return this.applyLightFancy(G, v, amb);
   const ctx = this.ctx;
   const W = v.w, H = v.h;
   const Ls = this.L, LR = this.LR, LG = this.LG, LB = this.LB;
@@ -321,6 +339,98 @@ R.applyLight = function (G, v) {
   ctx.putImageData(img, v.x, v.y);
 };
 
+// "Spectacular lights": normals from the pixel art, walls that cut the light, actors that cast shadows, smooth falloff
+R.applyLightFancy = function (G, v, amb) {
+  const ctx = this.ctx, W = v.w, H = v.h, n = W * H;
+  const tint = G.scene === 'town' ? [0.82, 0.88, 1.08] : G.map.biome.tint;
+  const img = ctx.getImageData(v.x, v.y, W, H), px = img.data;
+  if (!this.fz || this.fz.n !== n) this.fz = { n, hgt: new Float32Array(n), NX: new Float32Array(n), NY: new Float32Array(n), NZ: new Float32Array(n), R: new Float32Array(n), G: new Float32Array(n), B: new Float32Array(n), sh: new Map(), mapRef: null };
+  const F = this.fz, hgt = F.hgt, NX = F.NX, NY = F.NY, NZ = F.NZ, LR = F.R, LG = F.G, LB = F.B;
+  if (F.mapRef !== G.map) { F.mapRef = G.map; F.sh.clear(); }
+  for (let i = 0; i < n; i++) { const p4 = i * 4; hgt[i] = (px[p4] * 0.3 + px[p4 + 1] * 0.55 + px[p4 + 2] * 0.15) * (1 / 255); }
+  for (let i = 0; i < n; i++) {
+    const nx = -(hgt[i < n - 1 ? i + 1 : i] - hgt[i > 0 ? i - 1 : i]) * 2.2, ny = -(hgt[i < n - W ? i + W : i] - hgt[i >= W ? i - W : i]) * 2.2;
+    const nl = 1 / Math.sqrt(nx * nx + ny * ny + 1); NX[i] = nx * nl; NY[i] = ny * nl; NZ[i] = nl;
+  }
+  const a0 = amb * 1.15; for (let i = 0; i < n; i++) { LR[i] = a0 * tint[0]; LG[i] = a0 * tint[1]; LB[i] = a0 * tint[2]; }
+  const T = AH.T, map = G.map;
+  const wall = (wx, wy) => AH.wallTile(map.get(Math.floor(wx / T), Math.floor(wy / T)));
+  const actors = []; for (const p of G.players) if (!p.dead) actors.push(p); for (const e of G.enemies) if (!e.dead && !e.hidden && e.r) actors.push(e);
+  const lights = this.collectLights(G, v);
+  let built = false;
+  for (const [lx, ly, r, inten, tn, st] of lights) {
+    if (inten < 0.04) continue;
+    const cx = lx - v.camX, cy = ly - v.camY;
+    const x0 = Math.max(0, Math.floor(cx - r)), x1 = Math.min(W - 1, Math.ceil(cx + r)), y0 = Math.max(0, Math.floor(cy - r)), y1 = Math.min(H - 1, Math.ceil(cy + r));
+    // wall shadows only for lights that stay put (torches, crystals, lava, lamps); built once per map
+    let sm = null;
+    if (st && st <= 120) {
+      const key = (lx | 0) + ',' + (ly | 0); sm = F.sh.get(key);
+      if (!sm && !built) {
+        // one mask per frame, on a 2px grid, so entering a floor never stutters
+        built = true;
+        const R0 = Math.ceil(st * 1.15), S = R0 + 1; sm = new Uint8Array(S * S);
+        for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) {
+          const wx = lx - R0 + i * 2, wy = ly - R0 + j * 2; if (wall(wx, wy + 2)) { sm[j * S + i] = 255; continue; }
+          const dist = Math.hypot(lx - wx, ly - wy); if (dist > R0) { sm[j * S + i] = 255; continue; }
+          const steps = Math.ceil(dist / 4); let lit = 255;
+          for (let s = 1; s < steps; s++) { const t = s / steps; if (wall(wx + (lx - wx) * t, wy + (ly - wy) * t)) { lit = 40; break; } }
+          sm[j * S + i] = lit;
+        }
+        sm.R0 = R0; sm.S = S; F.sh.set(key, sm);
+      }
+    }
+    const casters = sm ? actors.filter(a => { const d = Math.hypot(a.x - lx, a.y - ly); return d < r && d > 8; }) : [];
+    const ir = 1 / r;
+    for (let y = y0; y <= y1; y++) {
+      const dy = (y - cy) * 1.15, row = y * W;
+      for (let x = x0; x <= x1; x++) {
+        const dx = x - cx, d = Math.sqrt(dx * dx + dy * dy) * ir; if (d >= 1) continue;
+        const o = row + x;
+        const lx3 = cx - x, ly3 = cy - y, ll = 1 / Math.sqrt(lx3 * lx3 + ly3 * ly3 + 196);
+        let ndl = (NX[o] * lx3 + NY[o] * ly3 + NZ[o] * 14) * ll; if (ndl < 0) ndl = 0;
+        let sh = 1;
+        if (sm) {
+          const wx = x + v.camX, wy = y + v.camY, i2 = (wx - lx + sm.R0 + 1) >> 1, j2 = (wy - ly + sm.R0 + 1) >> 1;
+          if (i2 >= 0 && j2 >= 0 && i2 < sm.S && j2 < sm.S) sh = sm[j2 * sm.S + i2] / 255;
+          for (const a of casters) {
+            const vx = lx - wx, vy = ly - wy, len2 = vx * vx + vy * vy; const t = ((a.x - wx) * vx + (a.y - 4 - wy) * vy) / len2;
+            if (t <= 0.02 || t >= 1) continue;
+            const qx = wx + vx * t - a.x, qy = wy + vy * t - (a.y - 4), dd = Math.sqrt(qx * qx + qy * qy), rr = (a.r || 4) * 0.8 + 1;
+            if (dd < rr + 2) { const k = 0.3 + 0.7 * Math.max(0, (dd - rr) / 2); if (k < sh) sh = k; }
+          }
+        }
+        const f = 1 - d, val = inten * f * Math.sqrt(f) * (0.4 + 1.0 * ndl) * sh * 1.5;
+        LR[o] += val * tn[0]; LG[o] += val * tn[1]; LB[o] += val * tn[2];
+      }
+    }
+  }
+  for (let i = 0; i < n; i++) {
+    const p4 = i * 4;
+    let a = LR[i], b = LG[i], c = LB[i]; if (a > 1.7) a = 1.7; if (b > 1.7) b = 1.7; if (c > 1.7) c = 1.7;
+    a = ((a * 8 + 0.5) | 0) / 8; b = ((b * 8 + 0.5) | 0) / 8; c = ((c * 8 + 0.5) | 0) / 8;
+    const r = px[p4] * a, g = px[p4 + 1] * b, bb = px[p4 + 2] * c;
+    px[p4] = r > 255 ? 255 : r; px[p4 + 1] = g > 255 ? 255 : g; px[p4 + 2] = bb > 255 ? 255 : bb;
+  }
+  ctx.putImageData(img, v.x, v.y);
+};
+// glow on the final screen: bright pixels bleed light (cheap: tiny canvases scaled up smoothly)
+R.bloom = function (sctx, world, view) {
+  if (!this.bl) { const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }; this.bl = { a: mk(80, 45), b: mk(40, 23), c: mk(20, 12), vg: null }; }
+  const B = this.bl, a = B.a.getContext('2d'), b = B.b.getContext('2d'), c = B.c.getContext('2d');
+  a.globalCompositeOperation = 'copy'; a.filter = 'brightness(0.6) contrast(4) saturate(1.5)'; a.imageSmoothingEnabled = true; a.drawImage(world, 0, 0, 80, 45);
+  b.globalCompositeOperation = 'copy'; b.imageSmoothingEnabled = true; b.drawImage(B.a, 0, 0, 40, 23);
+  c.globalCompositeOperation = 'copy'; c.imageSmoothingEnabled = true; c.drawImage(B.b, 0, 0, 20, 12);
+  sctx.save(); sctx.globalCompositeOperation = 'lighter'; sctx.imageSmoothingEnabled = true;
+  sctx.globalAlpha = 0.5; sctx.drawImage(B.b, view.x, view.y, view.w, view.h);
+  sctx.globalAlpha = 0.55; sctx.drawImage(B.c, view.x, view.y, view.w, view.h);
+  sctx.restore();
+  // vignette
+  if (!B.vg || B.vgW !== view.w) { B.vgW = view.w; const v2 = document.createElement('canvas'); v2.width = 160; v2.height = 90; const x = v2.getContext('2d');
+    const g = x.createRadialGradient(80, 45, 28, 80, 45, 95); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.55)'); x.fillStyle = g; x.fillRect(0, 0, 160, 90); B.vg = v2; }
+  sctx.save(); sctx.imageSmoothingEnabled = true; sctx.drawImage(B.vg, view.x, view.y, view.w, view.h); sctx.restore();
+};
+
 R.drawEmissive = function (G, v) {
   const ctx = this.ctx, m = G.map;
   ctx.save(); ctx.beginPath(); ctx.rect(v.x, v.y, v.w, v.h); ctx.clip();
@@ -344,6 +454,7 @@ R.drawEmissive = function (G, v) {
     if (fl === 0) { ctx.fillStyle = '#e0702a'; ctx.fillRect(p.x + 3, p.y - 1, 1, 1); }
   }
   for (const e of G.enemies) if (this.inView(v, e.x, e.y, 40)) e.drawEm(ctx, G);
+  for (const a of G.allies) if (a.kind === 'minion' && !(a.rise > 0) && this.inView(v, a.x, a.y, 30) && !(a.t < 3 && Math.floor(G.time * 10) % 2)) { const sp = a.spr, fy = a.fly ? -6 + Math.round(Math.sin(G.time * 5 + a.id) * 1.5) : 0, bob = a.walk && Math.floor(a.walk * 8) % 2 ? -1 : 0; AH.drawSprEm(ctx, sp, Math.round(a.x - sp.w / 2) + (a.lunge > 0 ? a.face * 2 : 0), Math.round(a.y - sp.h + 2) + bob + fy, a.face < 0); }
   if (G.scene === 'mine') for (const p of m.props) if (p.type === 'tablet' && this.inView(v, p.x, p.y)) AH.drawSprEm(ctx, AH.SPR.tablet, p.x - 6, p.y - 8);
   // ore glints so rocks catch the eye even in the dark
   if (G.scene === 'mine') (m.veins || []).forEach((vn, i) => {
@@ -619,7 +730,7 @@ R.hotbar = function (G, p) {
   ];
   ['y', 'lb', 'rb'].forEach((k, i) => { if (p.ch.slots[i]) items.push({ k: KL[k], sk: p.ch.slots[i] }); });
   items.push({ k: KL.pot, ic: AH.ICON.potion, n: p.countCons('potion') });
-  if (p.ch.cls === 'wizard' || p.countCons('mana')) items.push({ k: KL.mana, ic: AH.ICON.mana, n: p.countCons('mana') });
+  if (AH.isCaster(p.ch.cls) || p.countCons('mana')) items.push({ k: KL.mana, ic: AH.ICON.mana, n: p.countCons('mana') });
   const S = 18, Gp = 2, x0 = Math.floor((RW - (items.length * S + (items.length - 1) * Gp)) / 2), y = RH - 30;
   items.forEach((it, i) => {
     const x = x0 + i * (S + Gp);

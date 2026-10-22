@@ -14,20 +14,20 @@ AH.newCharacter = function (cls, name, pet, hardcore) {
   const rng = AH.mulberry(AH.hashStr(name + cls + Date.now()));
   const ch = {
     v: 1, name, cls, pet, hardcore: !!hardcore, level: 1, xp: 0, base: Object.assign({}, C.base), pts: 0, ppts: 0,
-    passives: [{ paladin: 'p0', rogue: 'r0', wizard: 'm0' }[cls]], treeV: AH.TREE_V, skills: {}, slots: [C.skills[0], null, null],
+    passives: [AH.CLASS_START[cls]], treeV: AH.TREE_V, skills: {}, slots: [C.skills[0], null, null],
     equip: {}, bag: new Array(40).fill(null), gold: 30, deepest: 0, lifts: [], kills: 0, deaths: 0,
     bestiary: {}, created: Date.now(), playTime: 0, bestTimes: {}, storyDone: false,
   };
   ch.skills[C.skills[0]] = 1;
   const w = AH.genItem(rng, 1, { rarity: 0, base: C.start.weapon }); ch.equip.weapon = w;
   if (C.start.off) ch.equip.off = AH.genItem(rng, 1, { rarity: 0, base: C.start.off });
-  const head = { paladin: 'helm', rogue: 'hood', wizard: 'hat' }[cls];
+  const head = { paladin: 'helm', rogue: 'hood', wizard: 'hat', necro: 'hood' }[cls];
   ch.equip.head = AH.genItem(rng, 1, { rarity: 0, base: head });
-  ch.equip.chest = AH.genItem(rng, 1, { rarity: 0, base: { paladin: 'plate', rogue: 'leather', wizard: 'robe' }[cls] });
+  ch.equip.chest = AH.genItem(rng, 1, { rarity: 0, base: { paladin: 'plate', rogue: 'leather', wizard: 'robe', necro: 'robe' }[cls] });
   ch.equip.chest.req = null;
   ch.bag[0] = AH.makeCons('potion', 3);
   ch.bag[1] = AH.makeCons('torch', 3);
-  if (cls === 'wizard') ch.bag[2] = AH.makeCons('mana', 2);
+  if (AH.isCaster(cls)) ch.bag[2] = AH.makeCons('mana', 2);
   return ch;
 };
 
@@ -51,13 +51,13 @@ P.wbase = function () { const w = this.weapon(); return w ? AH.WEAPONS[w.base] :
 
 P.recalc = function () {
   const ch = this.ch, C = AH.CLASSES[ch.cls];
-  const S = { str: ch.base.str, dex: ch.base.dex, int: ch.base.int, vit: ch.base.vit, hp: 0, mp: 0, armor: 0, dmg: 0, ias: 0, crit: 0, critDmg: 0, loh: 0, lohMult: 1, fire: 0, frost: 0, move: 0, light: 0, gold: 0, mf: 0, thorns: 0, potion: 0, mpr: 0, spell: 0, cdr: 0, res: 0, block: 0, pet: 0, dodgeCdr: 0, freeze: 0, firePct: 0, hpPct: 0, armorPct: 0, noMpr: 0, enemySpd: 0, powers: new Set(), keys: new Set(), runewords: [] };
+  const S = { str: ch.base.str, dex: ch.base.dex, int: ch.base.int, vit: ch.base.vit, hp: 0, mp: 0, armor: 0, dmg: 0, ias: 0, crit: 0, critDmg: 0, loh: 0, lohMult: 1, fire: 0, frost: 0, move: 0, light: 0, gold: 0, mf: 0, thorns: 0, potion: 0, mpr: 0, spell: 0, cdr: 0, res: 0, block: 0, pet: 0, dodgeCdr: 0, freeze: 0, firePct: 0, hpPct: 0, armorPct: 0, noMpr: 0, enemySpd: 0, minion: 0, minionHp: 0, minions: 0, curse: 0, powers: new Set(), keys: new Set(), runewords: [] };
   const add = (fx, mult) => { for (const k in fx) { if (k === 'power') S.powers.add(fx[k]); else if (k === 'key') S.keys.add(fx[k]); else if (k === 'lohMult') S.lohMult *= fx[k]; else if (k === 'noMpr') S.noMpr = 1; else S[k] = (S[k] || 0) + fx[k] * (mult || 1); } };
   for (const slot of AH.EQUIP_SLOTS) {
     const it = ch.equip[slot]; if (!it) continue;
     if (it.armor) S.armor += it.armor;
     if (it.kind === 'armor') { const b = AH.ARMORS[it.base]; if (b.bonus) add(b.bonus); if (b.block) S.block += b.block; }
-    if (!it.unid) for (const a of it.affixes) { const def = AH.AFFIXES.find(x => x.k === a.k); S[a.k] += a.v * (def.fit === ch.cls ? 1.5 : 1); }
+    if (!it.unid) for (const a of it.affixes) { const def = AH.AFFIXES.find(x => x.k === a.k); S[a.k] = (S[a.k] || 0) + a.v * (AH.fits(def, ch.cls) ? 1.5 : 1); }
     if (it.bargain !== undefined && !it.unid) add(AH.BARGAINS[it.bargain].fx);
     if (it.legend) S.powers.add(it.legend);
     for (const r of it.runes || []) add(AH.RUNES[r].fx);
@@ -71,7 +71,11 @@ P.recalc = function () {
   S.mp += C.mp + S.int * 3 + (ch.level - 1) * 2;
   S.armor = Math.round(S.armor * (1 + S.armorPct / 100));
   S.crit += 5 + S.dex * 0.3 + (this.wbase().crit || 0);
-  if (ch.cls === 'rogue') S.critDmg += 25; // assassin's edge
+  if (ch.cls === 'rogue') S.critDmg += 10; // assassin's edge
+  if (ch.cls === 'paladin') { S.armorPct += 20; S.res += 5; } // holy plate: the sturdiest hero
+  if (ch.cls === 'wizard') S.spell += 25; // arcane training
+  if (ch.cls === 'necro') { S.spell += 10; S.minion += 10; } // the grave answers him
+  S.maxMinions = 2 + S.minions + (S.keys.has('army') ? 2 : 0);
   S.speed = C.speed * (1 + S.move / 100);
   S.light = Math.max(-50, S.light);
   if (S.keys.has('thousand')) { S.ias += 35; S.dmg -= 15; }
@@ -93,9 +97,10 @@ P.buildLook = function () {
     const mat = AH.MATERIALS[chest.tier].metal;
     if (b.look === 'plate') { pal.a = mat[0]; pal.m = mat[1]; pal.n = mat[2]; if (chest.rarity >= 1) { pal.t = rarCol(chest.rarity); pal.T = AH.shade(pal.t, 0.6); } }
     else if (b.look === 'leather') { const lc = ['#8a6440', '#7a5a3a', '#5a4a3a', '#6a5a5a', '#4a6a64', '#5a3a32'][chest.tier]; pal.a = AH.shade(lc, 1.2); pal.m = lc; pal.n = AH.shade(lc, 0.65); }
-    else { const rc = chest.rarity ? rarCol(chest.rarity) : AH.CLASS_PAL.wizard.m; pal.a = AH.shade(rc, 1.25); pal.m = rc; pal.n = AH.shade(rc, 0.6); look.legs = 'robe'; pal.x = '#e8c25a'; pal.X = '#a8823a'; }
+    else { const rc = chest.rarity ? rarCol(chest.rarity) : (ch.cls === 'necro' ? AH.CLASS_PAL.necro.m : AH.CLASS_PAL.wizard.m); pal.a = AH.shade(rc, 1.25); pal.m = rc; pal.n = AH.shade(rc, 0.6); look.legs = 'robe'; pal.x = '#e8c25a'; pal.X = '#a8823a'; }
   } else { look.torso = 'leather'; pal.a = '#b8a888'; pal.m = '#9a8a6a'; pal.n = '#6a5a4a'; }
   if (ch.cls === 'wizard' && chest && AH.ARMORS[chest.base].look === 'robe') look.legs = 'robe';
+  if (ch.cls === 'necro' && look.torso === 'robe') { pal.x = '#5a8a4a'; pal.X = '#3a5a34'; pal.g = AH.shade(pal.m, 1.35); }
   // head
   const head = eq.head;
   if (head) {
@@ -103,10 +108,11 @@ P.buildLook = function () {
     if (b.look === 'hat' && ch.cls === 'wizard') look.head = 'beard';
     const mat = AH.MATERIALS[head.tier].metal;
     if (b.look === 'helm' || b.look === 'greathelm') { pal.W = mat[0]; pal.w = mat[1]; pal.k = mat[2]; pal.K = AH.shade(mat[2], 0.7); if (head.rarity) { pal.p = rarCol(head.rarity); pal.P = AH.shade(pal.p, 0.6); } }
-    if (b.look === 'hood') { const hc = head.rarity ? rarCol(head.rarity) : AH.CLASS_PAL.rogue.h; pal.h = hc; pal.H = AH.shade(hc, 0.6); }
+    if (b.look === 'hood') { const hc = head.rarity ? rarCol(head.rarity) : AH.CLASS_PAL[ch.cls === 'necro' ? 'necro' : 'rogue'].h; pal.h = hc; pal.H = AH.shade(hc, 0.6); }
     if (b.look === 'hat') { const hc = head.rarity ? rarCol(head.rarity) : AH.CLASS_PAL.wizard.U; pal.U = hc; pal.u = AH.shade(hc, 1.3); pal.q = AH.shade(hc, 0.6); }
     if (head.rarity === 4) look.head = 'crown';
-  } else { look.head = 'bare'; pal.h = ch.cls === 'wizard' ? '#c8c0b0' : ch.cls === 'rogue' ? '#3a2a1a' : '#6a3a20'; }
+  } else { look.head = 'bare'; pal.h = ch.cls === 'wizard' ? '#c8c0b0' : ch.cls === 'rogue' ? '#3a2a1a' : ch.cls === 'necro' ? '#d8d4cc' : '#6a3a20'; }
+  if (ch.cls === 'necro') look.emissive = 'e'; // eyes that glow in the dark
   // held
   const w = eq.weapon;
   const hp = {};
@@ -146,6 +152,7 @@ P.rollDamage = function (mult, opt) {
   d *= mult || 1;
   if (this.buffs.fury > 0) d *= 1.3;
   if (this.S.powers.has('emberheart') && this.hp < this.S.hp * 0.5) d *= 1.4;
+  if (this.S.powers.has('lastlight') && this.hp < this.S.hp * 0.3) d *= 1.4;
   const fire = this.S.fire * (1 + this.S.firePct / 100) * (mult || 1);
   const frost = this.S.frost * (mult || 1);
   let crit = Math.random() * 100 < this.S.crit || this.nextCrit;
@@ -154,11 +161,17 @@ P.rollDamage = function (mult, opt) {
   return { dmg: d + fire + frost, crit, fire: fire > 0, frost: frost > 0, freeze: this.S.freeze };
 };
 P.spellPower = function (base) {
-  let m = (base + this.S.int * 1.0 + this.ch.level * 0.9) * (1 + this.S.spell / 100);
-  if (this.S.keys.has('ashstorm')) m *= 1.6;
+  // spells grow with the weapon in hand (better staves hit harder) and multiply with intellect, like weapons do with their stat
+  const w = this.weapon(), wa = w ? (w.dmg[0] + w.dmg[1]) / 2 : 3;
+  let m = (base * 1.6 + wa + this.ch.level * 0.5) * (1 + this.S.int * 0.03) * (1 + this.S.spell / 100);
+  if (this.S.keys.has('ashstorm')) m *= 1.4;
+  if (this.S.keys.has('bloodmagic')) m *= 1.3;
+  if (this.S.powers.has('lastlight') && this.hp < this.S.hp * 0.3) m *= 1.4;
   return m;
 };
-P.manaCost = function (c) { return Math.round(c * (this.S.keys.has('ashstorm') ? 1.5 : 1)); };
+P.manaCost = function (c) { return Math.round(c * (this.S.keys.has('ashstorm') ? 1.4 : 1)); };
+// a servant's hit: grows with spell power and servant damage
+P.minionPower = function () { return this.spellPower(4) * (1 + this.S.minion / 100) * (this.S.keys.has('army') ? 0.75 : 1); };
 P.atkTime = function () { return this.wbase().spd / (1 + this.S.ias / 100); };
 
 P.gainXp = function (G, n) {
@@ -494,12 +507,21 @@ P.trySkill = function (G, slot) {
   const sk = AH.SKILLS[id], rank = this.ch.skills[id] || 1;
   if ((this.skillCd[id] || 0) > 0) return;
   const cost = this.manaCost(sk.mp);
-  if (this.mp < cost) { G.toast(this, 'NOT ENOUGH MANA', '#9ec0ff'); AH.Audio.sfx('error'); return; }
   const native = AH.CLASSES[this.ch.cls].skills.indexOf(id) >= 0;
+  if (this.S.keys.has('bloodmagic')) {
+    // blood magic: spells are paid with life, never with the last of it
+    const hpCost = cost * (native ? 1 : 1.3) * 1.2;
+    if (this.hp <= hpCost + 1) { G.toast(this, 'NOT ENOUGH LIFE', '#ff6a5a'); AH.Audio.sfx('error'); return; }
+    this.skillCd[id] = sk.cd * (1 - Math.min(50, this.S.cdr) / 100);
+    if (G.castSkill(this, id, 1 + (rank - 1) * 0.22) === false) { this.skillCd[id] = 0.3; return; }
+    this.hp -= hpCost; AH.fx.num(G, this.x, this.y - 22, '-' + Math.round(hpCost), '#c83a4a');
+    return;
+  }
+  if (this.mp < cost) { G.toast(this, 'NOT ENOUGH MANA', '#9ec0ff'); AH.Audio.sfx('error'); return; }
   this.mp -= cost * (native ? 1 : 1.3);
   this.skillCd[id] = sk.cd * (1 - Math.min(50, this.S.cdr) / 100);
   const rm = 1 + (rank - 1) * 0.22;
-  G.castSkill(this, id, rm);
+  if (G.castSkill(this, id, rm) === false) { this.skillCd[id] = 0.3; this.mp += cost * (native ? 1 : 1.3); }
 };
 
 // ---------- draw ----------
