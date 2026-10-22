@@ -17,7 +17,7 @@ AH.CLASSES = {
     skills: ['firebolt', 'frostnova', 'chain'], desc: 'MASTER OF FIRE, FROST AND STORM. FRAGILE BUT FIERCE.',
   },
   necro: {
-    name: 'NECROMANCER', color: '#a8e88a', stat: 'int', base: { str: 3, dex: 4, int: 9, vit: 6 }, hp: 42, mp: 38, speed: 1.0,
+    name: 'NECROMANCER', color: '#a8e88a', stat: 'int', base: { str: 3, dex: 4, int: 9, vit: 6 }, hp: 46, mp: 38, speed: 1.0,
     look: { head: 'hood', torso: 'robe', legs: 'robe' }, start: { weapon: 'scepter', off: null },
     skills: ['raise', 'curse', 'boneburst'], desc: 'RAISES THE SLAIN TO FIGHT FOR HIM. WEAK ALONE, DEADLY WITH AN ARMY.',
   },

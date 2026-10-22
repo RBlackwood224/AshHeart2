@@ -25,7 +25,7 @@ AH.WEAPONS = {
   axe: { name: 'AXE', dmg: [9, 15], spd: 0.58, range: 19, arc: 1.5, stat: 'str', icon: 'axe', held: 'axe' },
   mace: { name: 'MACE', dmg: [8, 12], spd: 0.5, range: 17, arc: 1.5, stat: 'str', icon: 'mace', held: 'mace', undead: 1.5 },
   dagger: { name: 'DAGGER', dmg: [5, 9], spd: 0.3, range: 15, arc: 1.1, stat: 'dex', icon: 'dagger', held: 'dagger', crit: 10 },
-  bow: { name: 'BOW', dmg: [6, 11], spd: 0.5, range: 0, ranged: 'arrow', stat: 'dex', icon: 'bow', held: 'bow', twoHand: 1 },
+  bow: { name: 'BOW', dmg: [7, 12], spd: 0.5, range: 0, ranged: 'arrow', stat: 'dex', icon: 'bow', held: 'bow', twoHand: 1 },
   staff: { name: 'STAFF', dmg: [4, 7], spd: 0.55, range: 0, ranged: 'magic', stat: 'int', icon: 'staff', held: 'staff', twoHand: 1, mpr: 1 },
   scepter: { name: 'SCEPTER', dmg: [3, 6], spd: 0.6, range: 0, ranged: 'magic', stat: 'int', icon: 'scepter', held: 'scepter' },
 };
@@ -113,17 +113,17 @@ AH.SET_POWERS = {
 AH.SET_POWER_LAB = id => AH.SET_POWERS[id] || (AH.LEGEND_POWERS.find(p => p.id === id) || {}).lab || id;
 // item sets: wear more pieces for stronger bonuses
 AH.SETS = [
-  { id: 'dawn', name: 'DAWNGUARD', cls: 'paladin', minF: 6, pieces: ['greathelm', 'plate', 'shield', 'mace'], b: { 2: { vit: 8 }, 3: { block: 10, armor: 20 }, 4: { power: 'secondwind', res: 10 } } },
-  { id: 'light', name: 'LIGHTBRINGER', cls: 'paladin', minF: 18, pieces: ['helm', 'gloves', 'sword', 'amulet'], b: { 2: { dmg: 12 }, 3: { spell: 20, light: 25 }, 4: { power: 'chaincrit', crit: 8 } } },
-  { id: 'ironvow', name: 'IRON VOW', cls: 'paladin', minF: 34, pieces: ['plate', 'boots', 'gloves', 'shield', 'helm'], b: { 2: { armor: 30 }, 4: { res: 12, hp: 40 }, 5: { power: 'bleed', thorns: 25 } } },
+  { id: 'dawn', name: 'DAWNGUARD', cls: 'paladin', minF: 6, pieces: ['greathelm', 'plate', 'shield', 'mace'], b: { 2: { vit: 8 }, 3: { block: 10, armor: 20 }, 4: { power: 'secondwind', res: 6 } } },
+  { id: 'light', name: 'LIGHTBRINGER', cls: 'paladin', minF: 18, pieces: ['helm', 'gloves', 'sword', 'amulet'], b: { 2: { dmg: 18 }, 3: { spell: 20, light: 25 }, 4: { power: 'chaincrit', crit: 8 } } },
+  { id: 'ironvow', name: 'IRON VOW', cls: 'paladin', minF: 34, pieces: ['plate', 'boots', 'gloves', 'shield', 'helm'], b: { 2: { armor: 30, hp: 30 }, 4: { res: 12, hp: 40, dmg: 15 }, 5: { power: 'bleed', thorns: 25, dmg: 10 } } },
   { id: 'night', name: 'NIGHTSTALKER', cls: 'rogue', minF: 6, pieces: ['hood', 'leather', 'dagger', 'boots'], b: { 2: { crit: 6 }, 3: { move: 12 }, 4: { power: 'triple', critDmg: 15 } } },
-  { id: 'hawk', name: 'HAWKEYE', cls: 'rogue', minF: 18, pieces: ['bow', 'hood', 'gloves', 'cloak'], b: { 2: { ias: 12 }, 3: { crit: 10 }, 4: { power: 'multishot', dmg: 10 } } },
+  { id: 'hawk', name: 'HAWKEYE', cls: 'rogue', minF: 18, pieces: ['bow', 'hood', 'gloves', 'cloak'], b: { 2: { ias: 10 }, 3: { crit: 10 }, 4: { power: 'multishot' } } },
   { id: 'viper', name: 'VIPERFANG', cls: 'rogue', minF: 34, pieces: ['dagger', 'ring', 'amulet', 'gloves'], b: { 2: { loh: 3 }, 3: { critDmg: 15 }, 4: { power: 'executioner', dex: 10 } } },
   { id: 'emberw', name: 'EMBERWEAVE', cls: 'wizard', minF: 6, pieces: ['staff', 'robe', 'hat', 'tomeoff'], b: { 2: { spell: 15, hp: 25 }, 3: { fire: 12, firePct: 20 }, 4: { power: 'burnground', int: 10 } } },
   { id: 'frostm', name: 'FROSTMANTLE', cls: 'wizard', minF: 18, pieces: ['robe', 'hat', 'boots', 'cloak'], b: { 2: { frost: 10, spell: 10 }, 3: { cdr: 15, int: 8 }, 4: { power: 'frostdodge', freeze: 15, res: 8, spell: 15 } } },
-  { id: 'storm', name: 'STORMSAGE', cls: 'wizard', minF: 34, pieces: ['staff', 'ring', 'amulet', 'hat'], b: { 2: { mp: 25, spell: 10, vit: 8 }, 3: { mpr: 2, spell: 20 }, 4: { power: 'stormstrike', crit: 8, int: 12 } } },
-  { id: 'graveward', name: 'GRAVEWARD', cls: 'necro', minF: 6, pieces: ['scepter', 'robe', 'hood', 'tomeoff'], b: { 2: { minion: 20, hp: 25 }, 3: { minions: 1, int: 8 }, 4: { power: 'pestilence', curse: 20 } } },
-  { id: 'bonethrone', name: 'BONE THRONE', cls: 'necro', minF: 22, pieces: ['scepter', 'amulet', 'ring', 'cloak'], b: { 2: { minionHp: 30, vit: 6 }, 3: { spell: 15, minion: 15 }, 4: { power: 'souleater', minions: 1 } } },
+  { id: 'storm', name: 'STORMSAGE', cls: 'wizard', minF: 34, pieces: ['staff', 'ring', 'amulet', 'hat'], b: { 2: { mp: 25, spell: 20, vit: 8 }, 3: { mpr: 2, spell: 30 }, 4: { power: 'stormstrike', crit: 8, int: 12 } } },
+  { id: 'graveward', name: 'GRAVEWARD', cls: 'necro', minF: 6, pieces: ['scepter', 'robe', 'hood', 'tomeoff'], b: { 2: { minion: 15, hp: 25 }, 3: { minions: 1 }, 4: { power: 'pestilence', curse: 20 } } },
+  { id: 'bonethrone', name: 'BONE THRONE', cls: 'necro', minF: 22, pieces: ['scepter', 'amulet', 'ring', 'cloak'], b: { 2: { minionHp: 30, vit: 6 }, 3: { spell: 10, minion: 10 }, 4: { power: 'souleater', minionHp: 20 } } },
   { id: 'miner', name: "MINER'S PRIDE", minF: 3, pieces: ['helm', 'gloves', 'boots', 'leather'], b: { 2: { light: 25 }, 3: { gold: 35 }, 4: { power: 'goldheal', mf: 20 } } },
   { id: 'beast', name: 'BEASTMASTER', minF: 9, pieces: ['cloak', 'gloves', 'amulet'], b: { 2: { pet: 35 }, 3: { power: 'petfury', vit: 6 } } },
   { id: 'grave', name: 'GRAVEDIGGER', minF: 12, pieces: ['gloves', 'boots', 'axe', 'cloak'], b: { 2: { dmg: 10 }, 3: { loh: 5 }, 4: { power: 'souleater', str: 8 } } },
@@ -135,11 +135,11 @@ AH.SETS = [
   { id: 'lantern', name: 'LANTERN KEEPER', minF: 8, pieces: ['amulet', 'helm', 'cloak'], b: { 2: { light: 40 }, 3: { power: 'goldheal', mf: 40 } } },
   { id: 'delver', name: 'DEEP DELVER', minF: 52, pieces: ['greatsword', 'plate', 'boots', 'gloves'], b: { 2: { dmg: 15 }, 3: { ias: 10 }, 4: { power: 'triple', str: 12 } } },
   { id: 'scholar', name: 'SCHOLAR', minF: 14, pieces: ['tomeoff', 'robe', 'ring'], b: { 2: { mp: 30, spell: 10 }, 3: { power: 'thirst', spell: 15 } } },
-  { id: 'hollow', name: 'HOLLOW KING', minF: 58, pieces: ['greathelm', 'plate', 'mace', 'shield', 'amulet'], b: { 2: { str: 12, vit: 10 }, 4: { dmg: 25 }, 5: { power: 'souleater', res: 10 } } },
+  { id: 'hollow', name: 'HOLLOW KING', minF: 58, pieces: ['greathelm', 'plate', 'mace', 'shield', 'amulet'], b: { 2: { str: 12, vit: 10 }, 4: { dmg: 32 }, 5: { power: 'souleater', res: 10 } } },
   { id: 'spore', name: 'SPORELORD', minF: 30, pieces: ['staff', 'hood', 'robe'], b: { 2: { spell: 18, hp: 40 }, 3: { power: 'killboom', int: 14, res: 8 } } },
   { id: 'tide', name: 'TIDECALLER', minF: 40, pieces: ['bow', 'leather', 'boots'], b: { 2: { frost: 14 }, 3: { power: 'multishot', ias: 12 } } },
   { id: 'forge', name: 'EMBERFORGED', minF: 66, pieces: ['sword', 'gloves', 'helm', 'boots'], b: { 2: { fire: 20 }, 3: { firePct: 35 }, 4: { power: 'burnground', dmg: 25 } } },
-  { id: 'abyss', name: 'ABYSSWALKER', minF: 76, pieces: ['hood', 'cloak', 'boots', 'ring', 'amulet'], b: { 2: { move: 12 }, 3: { crit: 10 }, 5: { power: 'stormstrike', dodgeCdr: 30 } } },
+  { id: 'abyss', name: 'ABYSSWALKER', minF: 76, pieces: ['hood', 'cloak', 'boots', 'ring', 'amulet'], b: { 2: { move: 12, dmg: 12 }, 3: { crit: 12, critDmg: 20 }, 5: { power: 'stormstrike', dodgeCdr: 30 } } },
   { id: 'heart', name: 'HEARTBREAKER', minF: 86, pieces: ['greatsword', 'greathelm', 'plate', 'amulet'], b: { 2: { dmg: 20 }, 3: { hp: 80 }, 4: { power: 'executioner', critDmg: 40 } } },
 ];
 AH.setOf = id => AH.SETS.find(s => s.id === id);
@@ -357,6 +357,8 @@ AH.itemLines = function (it, cls) {
   if (it.kind === 'weapon') { const b = AH.WEAPONS[it.base]; L.push({ t: `${it.dmg[0]}-${it.dmg[1]} DAMAGE`, c: '#ffffff' }); L.push({ t: (b.ranged ? 'RANGED' : 'MELEE') + (b.twoHand ? ', TWO-HANDED' : ''), c: '#6f6880' }); }
   if (it.armor) L.push({ t: `${it.armor} ARMOR`, c: '#ffffff' });
   if (it.kind === 'armor' && AH.ARMORS[it.base].block) L.push({ t: `${AH.ARMORS[it.base].block}% BLOCK`, c: '#ffffff' });
+  // what the base itself gives (a grimoire's spell power, a robe's mana...), shown even on plain items
+  if (it.kind === 'armor' && AH.ARMORS[it.base].bonus) for (const t of AH.fxLabel(AH.ARMORS[it.base].bonus)) L.push({ t, c: '#ffffff' });
   if (it.unid) L.push({ t: 'PUT IT ON OR IDENTIFY IT', c: '#a39bb0' });
   else for (const a of it.affixes || []) {
     const def = AH.AFFIXES.find(x => x.k === a.k);

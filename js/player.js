@@ -72,10 +72,10 @@ P.recalc = function () {
   S.mp += C.mp + S.int * 3 + (ch.level - 1) * 2;
   S.armor = Math.round(S.armor * (1 + S.armorPct / 100));
   S.crit += 5 + S.dex * 0.3 + (this.wbase().crit || 0);
-  if (ch.cls === 'rogue') S.critDmg += 10; // assassin's edge
+  if (ch.cls === 'rogue') { S.critDmg += 10; S.evade = 12; } // assassin's edge, and a knack for not being where the blow lands
   if (ch.cls === 'paladin') { S.armorPct += 20; S.res += 5; } // holy plate: the sturdiest hero
-  if (ch.cls === 'wizard') S.spell += 25; // arcane training
-  if (ch.cls === 'necro') { S.spell += 10; S.minion += 10; } // the grave answers him
+  if (ch.cls === 'wizard') S.spell += 25 + Math.min(80, Math.round(ch.level * 1.25)); // arcane training grows with every level
+  if (ch.cls === 'necro') { S.spell += 10; S.minion += 10; S.res += 5; } // the grave answers him
   S.maxMinions = 2 + S.minions + (S.keys.has('army') ? 2 : 0);
   S.speed = C.speed * (1 + S.move / 100);
   S.light = Math.max(-50, S.light);
@@ -172,7 +172,7 @@ P.spellPower = function (base) {
 };
 P.manaCost = function (c) { return Math.round(c * (this.S.keys.has('ashstorm') ? 1.4 : 1)); };
 // a servant's hit: grows with spell power and servant damage
-P.minionPower = function () { return this.spellPower(4) * (1 + this.S.minion / 100) * (this.S.keys.has('army') ? 0.75 : 1); };
+P.minionPower = function () { return this.spellPower(4) * 0.85 * (1 + this.S.minion / 100) * (this.S.keys.has('army') ? 0.75 : 1); };
 P.atkTime = function () { return this.wbase().spd / (1 + this.S.ias / 100); };
 
 P.gainXp = function (G, n) {
@@ -313,6 +313,7 @@ P.heal = function (G, n) {
 P.hurt = function (G, dmg, src, raw) {
   if (G.rumble && !this.dead) G.rumble(this, Math.min(1, 0.25 + dmg / Math.max(1, this.S.hp) * 2), 140);
   if (this.dead || (this.inv > 0 && !raw)) return 0;
+  if (!raw && this.S.evade > 0 && Math.random() * 100 < this.S.evade) { AH.fx.num(G, this.x, this.y - 22, 'DODGE', '#8ae08e'); this.inv = 0.15; return 0; }
   if (!raw && this.S.block > 0 && Math.random() * 100 < Math.min(50, this.S.block)) { AH.fx.num(G, this.x, this.y - 22, 'BLOCK', '#9ec0ff'); AH.Audio.sfx('block'); this.inv = 0.15; return 0; }
   let d = dmg;
   if (!raw) {
@@ -323,6 +324,7 @@ P.hurt = function (G, dmg, src, raw) {
   }
   d = Math.max(1, Math.round(d));
   this.hp -= d; this.flash = 0.12; this.inv = raw ? 0 : 0.45;
+  if (this.hp <= 0 && this.ch.hardcore && !this.lbUsed && (!this.S.powers.has('secondwind') || this.swUsed)) { this.lbUsed = true; this.hp = 1; this.inv = 2; G.toast(this, 'LAST BREATH! ONE MORE MISTAKE ON THIS FLOOR IS DEATH', '#ff6a5a'); AH.fx.ring(G, this.x, this.y - 8, '#ff6a5a', 30); AH.Audio.sfx('warn'); }
   if (this.hp <= 0 && this.S.powers.has('secondwind') && !this.swUsed) { this.swUsed = true; this.hp = Math.round(this.S.hp * 0.3); this.inv = 1.5; G.toast(this, 'SECOND WIND!', '#f2c94c'); AH.fx.ring(G, this.x, this.y - 8, '#f2c94c', 30); }
   AH.fx.num(G, this.x, this.y - 22, '-' + d, '#ff6a5a');
   AH.Audio.sfx('hurt');
@@ -359,7 +361,7 @@ P.update = function (G, dt, pad) {
   if (tile === AH.TILE.WATER) spdMul = 0.62;
   if (this.slow > 0) spdMul *= 0.6;
   if (this.buffs.haste > 0) spdMul *= 1.35;
-  if (tile === AH.TILE.LAVA && this.state !== 'dodge') { this.lavaT = (this.lavaT || 0) - dt; if (this.lavaT <= 0) { this.lavaT = 0.5; this.hurt(G, 4 + G.floorNo * 0.9, null, true); } }
+  if (tile === AH.TILE.LAVA && this.state !== 'dodge') { this.lavaT = (this.lavaT || 0) - dt; if (this.lavaT <= 0) { this.lavaT = 0.5; this.hurt(G, 3 + this.S.hp * 0.05, null, true); } }
   // input (keyboard/pad, or mouse goals for the PC player)
   let ax = pad.ax, ay = pad.ay, mouseAtk = false;
   if (Math.hypot(ax, ay) > 0.2) { this.mTarget = this.mInter = this.mDest = this.mVein = null; }

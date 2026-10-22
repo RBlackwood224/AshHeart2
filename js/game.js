@@ -136,7 +136,7 @@ GG.spawnVillagers = function () {
 
 GG.enterMine = function (floor, mode) {
   if (this.scene === 'mine') this.buryDead();
-  for (const p of this.players) { p.swUsed = false; p.mTarget = p.mInter = p.mDest = null; p.mPath = null; }
+  for (const p of this.players) { p.swUsed = false; p.lbUsed = false; p.mTarget = p.mInter = p.mDest = null; p.mPath = null; }
   this.mode = mode || this.mode || 'story';
   this.scene = 'mine'; this.resetActors();
   this.floorNo = floor;
@@ -181,7 +181,7 @@ GG.enterMine = function (floor, mode) {
   }
   // nemesis
   const nem = (W.nemeses || []).find(n => floor >= n.floor - 2 && !n.dead);
-  if (!isBoss && nem && rng() < 0.35) {
+  if (!isBoss && nem && rng() < 0.25) {
     const r = rng.pick(this.map.rooms.filter(r => r !== this.map.startRoom)) || this.map.stairsRoom;
     const pos = this.map.randomFloorIn(r, rng);
     this.nemesisHere = AH.spawnNemesis(this, nem, pos.x, pos.y);
@@ -390,12 +390,17 @@ GG.reclaimGrave = function (p, g) {
 };
 // the smith lends plain gear to heroes who lost theirs (worth nothing when sold)
 GG.lendGear = function (p) {
-  const C = AH.CLASSES[p.ch.cls], f = Math.max(1, Math.floor((p.ch.deepest || 1) * 0.7)), rng = AH.rand;
+  const C = AH.CLASSES[p.ch.cls], f = Math.max(1, Math.floor((p.ch.deepest || 1) * 0.85)), rng = AH.rand;
   const chest = { paladin: 'plate', rogue: 'leather', wizard: 'robe', necro: 'robe' }[p.ch.cls];
   const mk = base => { const it = AH.genItem(rng, f, { rarity: 0, base, noSet: true }); it.loaner = 1; it.req = null; return it; };
   if (!p.ch.equip.weapon) p.ch.equip.weapon = mk(C.start.weapon);
   if (C.start.off && !p.ch.equip.off) p.ch.equip.off = mk(C.start.off);
   if (!p.ch.equip.chest) p.ch.equip.chest = mk(chest);
+  // a full plain set, so the walk back to the grave is hard but not hopeless
+  const head = { paladin: 'helm', rogue: 'hood', wizard: 'hat', necro: 'hood' }[p.ch.cls];
+  if (!p.ch.equip.head) p.ch.equip.head = mk(head);
+  if (!p.ch.equip.hands) p.ch.equip.hands = mk('gloves');
+  if (!p.ch.equip.feet) p.ch.equip.feet = mk('boots');
   if (p.countCons('potion') < 3) p.addItem(AH.makeCons('potion', 3 - p.countCons('potion')));
   p.recalc(); this.onLocalEquip && this.onLocalEquip(p);
   AH.Audio.sfx('heavy'); this.toast(p, 'DORAN LENDS YOU SOME GEAR', '#f2c94c');
@@ -406,7 +411,7 @@ GG.allDead = function () {
   // nemesis
   const k = this.lastKiller;
   if (k && this.scene === 'mine' && this.mode !== 'time') {
-    if (k.nemesis) { k.nemesis.rank++; k.nemesis.floor = this.floorNo; k.nemesis.title = AH.rand.pick(AH.NEMESIS_TITLES); this.banner(k.nemesis.name + ' GROWS STRONGER', '#e05a5a'); }
+    if (k.nemesis) { k.nemesis.rank = Math.min(4, k.nemesis.rank + 1); k.nemesis.floor = this.floorNo; k.nemesis.title = AH.rand.pick(AH.NEMESIS_TITLES); this.banner(k.nemesis.name + ' GROWS STRONGER', '#e05a5a'); }
     else if (!k.boss && (W.nemeses || []).filter(n => !n.dead).length < 4) {
       const nm = (k.legend ? k.name : AH.rand.pick(['GRUK', 'MORL', 'VASH', 'SKREE', 'OLGRA', 'THRAX', 'NIBB', 'KORR', 'ZEL', 'URGOTH'])) + ' ' + AH.rand.pick(AH.NEMESIS_TITLES).split(' ')[0];
       const nem = { name: nm.replace(' DOOM', ' THE DOOM').replace(' NIGHTMARE', ' THE NIGHTMARE'), base: k.def.name, floor: this.floorNo, rank: 1, affixes: [AH.rand.pick(AH.ELITE_AFFIX).id], title: 'WHO KILLED ' + this.players[0].ch.name };

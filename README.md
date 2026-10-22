@@ -44,6 +44,9 @@ English, Français and Magyar — switch under Options → Language (the first s
 ## Graphics
 Options → Spectacular lights: normal-mapped pixel lighting, walls and monsters cast shadows, glow and vignette. On by default on computers, off on phones (it costs more power). Toggle it any time.
 
+## Permadeath
+One life only: if your hero falls for good, the save is gone. Once per floor a killing blow leaves you at 1 life (Last Breath) — a second mistake on the same floor is the end.
+
 ## Co-op
 - **Local:** up to 3 players. Title → Local co-op: every controller (or keyboard) presses A / Enter to pick a hero, then A again to start. You can also join mid-game: Title → Local co-op: every controller (or keyboard) presses A / Enter to pick a hero, then A again to start. You can also join mid-game: Press START on another controller (or NumEnter for the second keyboard player) to join with your own hero. Together you share one screen; wander apart and it splits, with arrows pointing at your friends.
 - **Online:** Title → Online co-op → Host a game opens a lobby with the 5-letter room code. Friends choose Join a game and type the code; they wait in the lobby until the host starts. Nobody can join a game that has already started. The host runs the game; everyone keeps their own loot and their own save.

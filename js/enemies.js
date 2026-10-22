@@ -11,6 +11,22 @@ AH.findCreature = function (name) {
   return null;
 };
 
+// Each region's creatures are a big step up from the last. To avoid a wall on the first floor of every region,
+// a creature's strength is eased toward a smooth curve through the regions' averages: the first floors of a
+// region are a bit gentler, the last ones a bit harsher, so every floor is only a little harder than the one before.
+AH.regionEase = function (f, key) {
+  if (!AH._regAvg) {
+    AH._regAvg = { hp: [], dmg: [] };
+    AH.BIOMES.forEach((b, i) => { const l = AH.CREATURES[b.id] || []; for (const k of ['hp', 'dmg']) AH._regAvg[k][i] = l.length ? l.reduce((s, c) => s + c[k], 0) / l.length : 1; });
+  }
+  const A = AH._regAvg[key], n = A.length;
+  const ff = Math.min(Math.max(1, f), 100), i = Math.min(n - 1, Math.floor((ff - 1) / 10));
+  const pos = (ff - 1) - i * 10 - 4.5; // -4.5 .. 4.5 around the region's middle floor
+  const j = pos < 0 ? Math.max(0, i - 1) : Math.min(n - 1, i + 1);
+  if (j === i) return 1;
+  const t = Math.abs(pos) / 10; // halfway to the next region's middle at the border
+  return Math.pow(A[j] / A[i], t);
+};
 AH.Enemy = function (def, x, y, floor, opt) {
   opt = opt || {};
   this.id = AH.uid(); this.def = def; this.name = opt.name || def.name;
@@ -19,11 +35,11 @@ AH.Enemy = function (def, x, y, floor, opt) {
   const f = Math.max(1, floor);
   const lv = f > 100 ? 1 + (f - 100) * 0.06 : 1;
   const pc = opt.players || 1;
-  const hpScale = (1 + f * 0.072) * lv * (1 + (pc - 1) * 0.65);
-  const dmgScale = (1 + Math.min(f, 50) * 0.056 + Math.max(0, f - 50) * 0.04) * lv * (1 + (pc - 1) * 0.15);
-  this.maxHp = Math.round(def.hp * 1.3 * hpScale * (opt.hpMult || 1));
+  const hpScale = (1 + f * 0.072) * lv * (1 + (pc - 1) * 0.72);
+  const dmgScale = (1 + Math.min(f, 50) * 0.056 + Math.max(0, f - 50) * 0.04) * lv * (1 + (pc - 1) * 0.18);
+  this.maxHp = Math.round(def.hp * 1.3 * hpScale * AH.regionEase(f, 'hp') * (opt.hpMult || 1));
   this.hp = this.maxHp;
-  this.dmg = def.dmg * 1.5 * dmgScale * (opt.dmgMult || 1);
+  this.dmg = def.dmg * 1.5 * dmgScale * AH.regionEase(f, 'dmg') * (opt.dmgMult || 1);
   this.spd = def.spd * 38 * (opt.spdMult || 1);
   this.xp = Math.round((def.xp || 5) * (1 + f * 0.05) * (opt.xpMult || 1));
   this.scale = opt.scale || 1;
@@ -345,7 +361,7 @@ AH.spawnAshheart = function (G, x, y) {
 };
 AH.spawnNemesis = function (G, nem, x, y) {
   const def = AH.findCreature(nem.base) || AH.CREATURES.stone[1];
-  const e = new AH.Enemy(def, x, y, Math.max(G.floorNo, nem.floor), { nemesis: nem, name: nem.name, hpMult: 6 + nem.rank * 2, dmgMult: 1.4 + nem.rank * 0.15, xpMult: 12, scale: 1.5, players: G.players.length, elite: nem.affixes, aggro: true, noHide: true });
+  const e = new AH.Enemy(def, x, y, Math.max(G.floorNo, nem.floor), { nemesis: nem, name: nem.name, hpMult: 6 + Math.min(4, nem.rank) * 2, dmgMult: 1.4 + Math.min(4, nem.rank) * 0.15, xpMult: 12, scale: 1.5, players: G.players.length, elite: nem.affixes, aggro: true, noHide: true });
   e.title = nem.title;
   G.enemies.push(e); return e;
 };

@@ -307,14 +307,14 @@ GP.raiseMinion = function (p, c, rm) {
   const mine = this.allies.filter(a => a.kind === 'minion' && a.owner === p && !a.dead);
   if (mine.length >= p.S.maxMinions) { const old = mine.sort((a, b) => a.t - b.t)[0]; old.dead = true; AH.fx.puff(this, old.x, old.y - 6, '#8a8478'); }
   const S = p.S, army = S.keys.has('army') ? 0.75 : 1;
-  const hp = Math.round(S.hp * 0.33 * (1 + S.minionHp / 100) * army * rm);
+  const hp = Math.round(S.hp * 0.38 * (1 + S.minionHp / 100) * army * rm);
   const spr = AH.raisedSprite(c.spr), m = {
     kind: 'minion', id: AH.uid(), owner: p, x: c.x, y: c.y, t: 22, atk: 0.4, face: c.face, spr, sc: 1, r: 4, hp, maxHp: hp, buffs: {}, flash: 0, rise: 0.5,
     fly: !!(c.def && c.def.fly), def: c.def,
     hurt(G, dmg, src) {
       if (this.dead) return 0;
       const fl = Math.max(1, G.floorNo || 1), o = this.owner.S;
-      let d = dmg * (1 - (o.armor * 0.5) / (o.armor * 0.5 + 40 + fl * 9)) * (1 - Math.min(50, o.res) / 100);
+      let d = dmg * 0.65 * (1 - o.armor / (o.armor + 40 + fl * 9)) * (1 - Math.min(50, o.res) / 100); // bone shrugs off a third of every blow
       d = Math.max(1, Math.round(d)); this.hp -= d; this.flash = 0.1;
       AH.fx.num(G, this.x, this.y - this.spr.h, '-' + d, '#c8b4a0');
       if (this.hp <= 0) { this.dead = true; AH.fx.burst(G, this.x, this.y - 4, this.spr, 1); AH.Audio.sfx('break'); }
