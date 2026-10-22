@@ -41,6 +41,7 @@ AH.Player = function (pid, ch, device) {
   this.buffs = {}; this.hitList = new Set(); this.hitCount = 0; this.nextCrit = false;
   this.torch = 100; this.slow = 0; this.poison = 0;
   if (AH.migratePassives) AH.migratePassives(ch);
+  if (AH.fixPlainJewel) { for (const k in ch.equip) AH.fixPlainJewel(ch.equip[k]); for (const it of ch.bag) AH.fixPlainJewel(it); }
   this.recalc();
   this.hp = this.S.hp; this.mp = this.S.mp;
 };
@@ -204,6 +205,7 @@ P.gainXp = function (G, n) {
 P.bagFree = function () { return this.ch.bag.indexOf(null); };
 P.addItem = function (it) {
   const bag = this.ch.bag;
+  AH.fixPlainJewel && AH.fixPlainJewel(it);
   if (it && it.set) { const f = this.ch.setsFound = this.ch.setsFound || {}; const l = f[it.set] = f[it.set] || []; if (l.indexOf(it.base) < 0) l.push(it.base); }
   if (AH.isStackable(it)) {
     for (const b of bag) if (b && AH.sameStack(b, it)) { const max = it.kind === 'rune' ? 9 : AH.CONSUMABLES[it.cons].stack; if (b.stack < max) { const n = Math.min(max - b.stack, it.stack); b.stack += n; it.stack -= n; if (it.stack <= 0) return true; } }

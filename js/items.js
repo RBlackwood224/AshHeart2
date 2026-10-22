@@ -252,7 +252,7 @@ AH.genItem = function (rng, floor, opt) {
     it.slot = b.slot; slotGroup = b.slot;
     if (b.reqStr && tier >= 2) it.req = { stat: 'str', v: 2 + tier * 4 };
   }
-  const nAff = [0, rng.int(1, 2), rng.int(2, 3), 2, 3][rarity];
+  const nAff = [(slotGroup === 'ring' || slotGroup === 'amulet') ? 1 : 0, rng.int(1, 2), rng.int(2, 3), 2, 3][rarity];
   const pool = AH.AFFIXES.filter(a => (a.on === 'any' || a.on.split(' ').indexOf(slotGroup) >= 0) && !(a.k === 'loh' && floor < 8));
   const used = {};
   for (let i = 0; i < nAff && pool.length; i++) {
@@ -276,6 +276,15 @@ AH.genItem = function (rng, floor, opt) {
   AH.nameItem(it, rng);
   if (!opt.noSet && !opt.base && floor >= 8 && (rarity === 3 && rng.chance(0.4) || rarity === 2 && rng.chance(0.08))) return AH.genSetItem(rng, floor);
   return it;
+};
+// older saves: a plain ring or amulet with nothing on it gets its one bonus now
+AH.fixPlainJewel = function (it) {
+  if (!it || it.kind !== 'armor' || (it.rarity || 0) !== 0 || (it.affixes && it.affixes.length)) return;
+  const b = AH.ARMORS[it.base]; if (!b || (b.slot !== 'ring' && b.slot !== 'amulet')) return;
+  const f = it.ilvl || 1, tier = it.tier || 0, rng = AH.mulberry(AH.hashStr(String(it.id) + it.base));
+  const pool = AH.AFFIXES.filter(a => (a.on === 'any' || a.on.split(' ').indexOf(b.slot) >= 0) && !(a.k === 'loh' && f < 8));
+  const a = rng.pick(pool); let v = a.b + a.t * tier + rng() * (a.b * 0.8 + a.t); if (f < 20) v *= 0.45 + 0.55 * f / 20;
+  it.affixes = [{ k: a.k, v: Math.max(1, Math.round(v)) }];
 };
 AH.nameItem = function (it, rng) {
   const baseName = it.kind === 'weapon' ? AH.WEAPONS[it.base].name : AH.ARMORS[it.base].name;
@@ -344,7 +353,7 @@ AH.itemLines = function (it, cls) {
   const L = [];
   const R = AH.RARITY[it.rarity || 0];
   L.push({ t: it.unid ? 'UNKNOWN ' + (it.typeName || it.name) : it.name, c: R.col });
-  if (it.kind === 'weapon' || it.kind === 'armor') L.push({ t: (it.rarity > 0 ? R.name + ' ' : '') + it.typeName, c: '#8d8494' });
+  if ((it.kind === 'weapon' || it.kind === 'armor') && (it.rarity > 0 || it.typeName !== it.name)) L.push({ t: (it.rarity > 0 ? R.name + ' ' : '') + it.typeName, c: '#8d8494' });
   if (it.kind === 'weapon') { const b = AH.WEAPONS[it.base]; L.push({ t: `${it.dmg[0]}-${it.dmg[1]} DAMAGE`, c: '#ffffff' }); L.push({ t: (b.ranged ? 'RANGED' : 'MELEE') + (b.twoHand ? ', TWO-HANDED' : ''), c: '#6f6880' }); }
   if (it.armor) L.push({ t: `${it.armor} ARMOR`, c: '#ffffff' });
   if (it.kind === 'armor' && AH.ARMORS[it.base].block) L.push({ t: `${AH.ARMORS[it.base].block}% BLOCK`, c: '#ffffff' });
