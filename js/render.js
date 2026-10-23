@@ -47,13 +47,22 @@ R.draw = function (G) {
   views.forEach((v, i) => {
     const key = (v.split ? 's' : 'u') + i + views.length;
     const c = this.cams[key];
-    if (c && c.scene === G.scene && c.floor === G.floorNo) { v.camX = AH.lerp(c.x, v.camX, 0.18); v.camY = AH.lerp(c.y, v.camY, 0.18); }
+    // same smoothing at 60, 144 or 240 Hz
+    const k = 1 - Math.pow(0.82, Math.min(3, (G.dt || 1 / 60) * 60));
+    if (c && c.scene === G.scene && c.floor === G.floorNo) { v.camX = AH.lerp(c.x, v.camX, k); v.camY = AH.lerp(c.y, v.camY, k); }
     this.cams[key] = { x: v.camX, y: v.camY, scene: G.scene, floor: G.floorNo };
   });
   this.views = views;
   const sh = G.shakeA ? (Math.random() - 0.5) * G.shakeA * 2 : 0, sv = G.shakeA ? (Math.random() - 0.5) * G.shakeA * 2 : 0;
   for (const v of views) {
-    v.camX = Math.round(v.camX + sh); v.camY = Math.round(v.camY + sv);
+    // pixel-snap the camera relative to the hero it follows, so the hero never wobbles a pixel back and forth
+    const snap = (cam, at, lo, hi) => {
+      if (!at || hi <= lo || cam < lo + 0.5 || cam > hi - 0.5) return Math.round(cam);
+      return AH.clamp(Math.round(at) - Math.round(at - cam), lo, hi);
+    };
+    const mw = G.map.w * AH.T, mh = G.map.h * AH.T;
+    v.camX = snap(v.camX, v.main && v.main.x, 0, mw - v.w) + Math.round(sh);
+    v.camY = snap(v.camY, v.main && v.main.y, 0, mh - v.h) + Math.round(sv);
     this.drawWorld(G, v);
     this.applyLight(G, v);
     this.drawEmissive(G, v);
