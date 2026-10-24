@@ -1,6 +1,15 @@
 'use strict';
 // Boot, main loop, scaling, device handling, saving
 (function () {
+  // all game files must come from the same version: a half-updated browser cache breaks menus silently
+  const parts = { util: AH.px, data: AH.usesRage, input: AH.Input && AH.Input.label, items: AH.CONS_CAP, player: AH.autoTargetOn, ui: AH.UI && AH.UI.optRows };
+  const stale = Object.keys(parts).filter(k => !parts[k]);
+  if (stale.length) {
+    const d = document.createElement('div');
+    d.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99;padding:14px;background:#7a1a12;color:#fff2b0;font:16px sans-serif;text-align:center';
+    d.textContent = 'Some game files are an older version (' + stale.join(', ') + '). Press Ctrl+F5 to reload. / Néhány játékfájl régebbi verzió. Nyomj Ctrl+F5-öt! / Fichiers anciens : appuie sur Ctrl+F5.';
+    document.body.appendChild(d);
+  }
   AH.options = AH.Save.options();
   AH.Input.applyBinds();
   if (!AH.options.lang) { const nl = (navigator.language || 'en').slice(0, 2); AH.options.lang = nl === 'hu' || nl === 'fr' ? nl : 'en'; }
