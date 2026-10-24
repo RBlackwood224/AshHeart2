@@ -21,9 +21,15 @@ AH.CLASSES = {
     look: { head: 'hood', torso: 'robe', legs: 'robe' }, start: { weapon: 'scepter', off: null },
     skills: ['raise', 'curse', 'boneburst'], desc: 'RAISES THE SLAIN TO FIGHT FOR HIM. WEAK ALONE, DEADLY WITH AN ARMY.',
   },
+  barb: {
+    name: 'BARBARIAN', color: '#ff8a3a', stat: 'str', base: { str: 10, dex: 5, int: 2, vit: 8 }, hp: 54, mp: 100, speed: 1.05, rage: true,
+    look: { head: 'wild', torso: 'fur', legs: 'pants' }, start: { weapon: 'axe', off: null },
+    skills: ['leap', 'warcry', 'slam'], desc: 'A WILD WARRIOR FROM THE NORTH. NO MANA, ONLY RAGE: HIT AND GET HIT TO FEED IT.',
+  },
 };
-AH.CLASS_KEYS = ['paladin', 'rogue', 'wizard', 'necro'];
-AH.CLASS_START = { paladin: 'p0', rogue: 'r0', wizard: 'm0', necro: 'n0' };
+AH.CLASS_KEYS = ['paladin', 'rogue', 'wizard', 'necro', 'barb'];
+AH.CLASS_START = { paladin: 'p0', rogue: 'r0', wizard: 'm0', necro: 'n0', barb: 'b0' };
+AH.usesRage = cls => cls === 'barb';
 AH.isCaster = cls => cls === 'wizard' || cls === 'necro';
 
 // skills: mp cost, cooldown (s), icon
@@ -39,9 +45,12 @@ AH.SKILLS = {
   chain: { name: 'CHAIN LIGHTNING', mp: 14, cd: 3, icon: 'bolt', desc: 'LIGHTNING JUMPS BETWEEN FOES.' },
   whirl: { name: 'WHIRLWIND', mp: 14, cd: 8, icon: 'heavy', desc: 'SPIN AND HIT EVERYTHING AROUND.' },
   mend: { name: 'MEND', mp: 18, cd: 20, icon: 'potion', desc: 'HEAL 35% OF YOUR LIFE.' },
-  raise: { name: 'RAISE DEAD', mp: 12, cd: 2, icon: 'skull', desc: 'A NEARBY CORPSE RISES TO FIGHT FOR YOU.' },
+  raise: { name: 'RAISE DEAD', mp: 12, cd: 2, icon: 'skull', desc: 'A CORPSE RISES AND FIGHTS FOR YOU UNTIL IT IS DESTROYED.' },
   curse: { name: 'DECAY', mp: 12, cd: 8, icon: 'curse', desc: 'CURSED FOES ROT, SLOW DOWN AND TAKE MORE DAMAGE.' },
   boneburst: { name: 'CORPSE EXPLOSION', mp: 12, cd: 3, icon: 'boneburst', desc: 'A CORPSE BURSTS INTO SHARDS OF BONE.' },
+  leap: { name: 'LEAP', mp: 25, cd: 6, icon: 'leap', desc: 'JUMP ONTO YOUR FOES AND CRUSH THEM WHERE YOU LAND.' },
+  warcry: { name: 'WAR CRY', mp: 30, cd: 14, icon: 'warcry', desc: '8 SECONDS OF 25% MORE DAMAGE AND ARMOR. NEARBY FOES FLINCH.' },
+  slam: { name: 'GROUND SLAM', mp: 35, cd: 5, icon: 'slam', desc: 'A SHOCKWAVE THAT STUNS AND HURLS BACK THE FOES IN FRONT OF YOU.' },
   spiritwolf: { name: 'SPIRIT WOLF', mp: 20, cd: 30, icon: 'step', desc: 'SUMMON A GHOST WOLF FOR 20 SECONDS.' },
 };
 
@@ -64,6 +73,9 @@ AH.biomeOf = f => AH.BIOMES[Math.min(9, Math.floor((Math.max(1, f) - 1) / 10)) %
 const C = (name, spr, pal, ai, hp, dmg, spd, extra) => Object.assign({ name, spr, pal, ai, hp, dmg, spd }, extra || {});
 AH.CREATURES = {
   stone: [
+    C('CAVE BEETLE', 'beetle', {}, 'chase', 20, 4, 0.9, { xp: 6 }),
+    C('PIT SNAKE', 'snake', {}, 'ambush', 14, 6, 1.3, { xp: 6 }),
+    C('DUST MOTH', 'moth', {}, 'swarm', 8, 3, 1.5, { fly: 1, xp: 4 }),
     C('CAVE RAT', 'rat', {}, 'swarm', 8, 3, 1.5, { xp: 3 }),
     C('BONE WALKER', 'skel', {}, 'chase', 18, 5, 0.75, { undead: 1, xp: 6 }),
     C('PALE SLIME', 'slime', { g: '#c8c0b0', G: '#8a8478', h: '#ffffff', D: '#5a5446' }, 'blob', 16, 4, 0.9, { split: 1, xp: 5 }),
@@ -73,6 +85,9 @@ AH.CREATURES = {
     C('GRAVEL GOLEM', 'golem', {}, 'tank', 50, 10, 0.5, { xp: 16, minF: 6 }),
   ],
   moss: [
+    C('MOSS BEETLE', 'beetle', { s: '#5a8a3a', S: '#2e4a1e' }, 'chase', 40, 9, 0.9, { xp: 12 }),
+    C('BOG ADDER', 'snake', { g: '#4a6a2a', G: '#2a3a18' }, 'spit', 30, 8, 1.1, { proj: '#9ad84a', poison: 1, xp: 12 }),
+    C('SWAMP OGRE', 'ogre', {}, 'tank', 90, 14, 0.55, { xp: 28, minF: 14 }),
     C('MOSS SLIME', 'slime', {}, 'blob', 26, 7, 0.9, { split: 1, xp: 8 }),
     C('BOG SPIDER', 'spider', { K: '#3e6a3a', k: '#1e3a1e', e: '#c8ff4a' }, 'spit', 24, 6, 1.0, { proj: '#9ad84a', poison: 1, xp: 10 }),
     C('MUSHROOM MAN', 'shroom', { r: '#8a6a3a', R: '#5a4424' }, 'spit', 30, 7, 0.7, { proj: '#c8e07a', xp: 10 }),
@@ -82,6 +97,9 @@ AH.CREATURES = {
     C('GRUB WORM', 'worm', { p: '#c8c07a', P: '#8a845a' }, 'ambush', 40, 10, 0.9, { xp: 12 }),
   ],
   crystal: [
+    C('QUARTZ BEETLE', 'beetle', { s: '#9ef0ff', S: '#3fa6c0' }, 'charge', 60, 13, 0.9, { xp: 18 }),
+    C('GLIMMER MOTH', 'moth', { w: '#c8f8ff', W: '#6fd6e8' }, 'swarm', 30, 10, 1.7, { fly: 1, xp: 12 }),
+    C('CRYSTAL ADDER', 'snake', { g: '#6fd6e8', G: '#2a7a96' }, 'ambush', 50, 14, 1.3, { xp: 17 }),
     C('CRYSTAL SLIME', 'slime', { g: '#6fd6e8', G: '#3fa6c0', h: '#ffffff', D: '#2a6a7a' }, 'blob', 44, 10, 1.0, { split: 1, xp: 12 }),
     C('SHARD GOLEM', 'golem', { s: '#4fbcd8', S: '#2a7a96', d: '#1a4a5a', e: '#ffffff' }, 'tank', 110, 18, 0.5, { xp: 30 }),
     C('PRISM EYE', 'eye', { r: '#6fd6e8', v: '#3fa6c0' }, 'spit', 40, 11, 0.6, { fly: 1, proj: '#9ef0ff', xp: 16 }),
@@ -91,6 +109,9 @@ AH.CREATURES = {
     C('LIGHT WISP', 'ghost', { w: '#c8f8ff', W: '#6fd6e8' }, 'ghost', 34, 10, 1.0, { fly: 1, xp: 14 }),
   ],
   fungal: [
+    C('SPORE MOTH', 'moth', { w: '#c87ac8', W: '#8a4a8a' }, 'explode', 34, 24, 1.4, { fly: 1, xp: 16 }),
+    C('TOADSTOOL OGRE', 'ogre', { o: '#a87ac8', O: '#6a4a8a' }, 'tank', 170, 26, 0.5, { xp: 40 }),
+    C('ROT BEETLE', 'beetle', { s: '#8a5a7a', S: '#5a3a4a' }, 'chase', 70, 16, 1.0, { poison: 1, xp: 20 }),
     C('SPORE BOMB', 'shroom', { r: '#c84ac8', R: '#8a2a8a' }, 'explode', 30, 26, 1.3, { xp: 14 }),
     C('FUNGAL GOBLIN', 'goblin', { g: '#a87ac8', G: '#6a4a8a' }, 'chase', 62, 15, 1.15, { xp: 18 }),
     C('ROT WORM', 'worm', { p: '#8a5a7a', P: '#5a3a4a' }, 'ambush', 80, 18, 1.0, { xp: 22 }),
@@ -100,6 +121,9 @@ AH.CREATURES = {
     C('SPORE BAT', 'bat', { p: '#8a4a8a', P: '#5a2a5a' }, 'swarm', 36, 12, 1.7, { fly: 1, xp: 14 }),
   ],
   sunken: [
+    C('SEA SERPENT', 'snake', { g: '#3a8aa8', G: '#1e5a7a' }, 'spit', 90, 22, 1.1, { proj: '#4a8ad8', xp: 28 }),
+    C('BARNACLE BEETLE', 'beetle', { s: '#7a8a7a', S: '#4a5a4a' }, 'tank', 150, 26, 0.6, { xp: 34 }),
+    C('DROWNED OGRE', 'ogre', { o: '#6a9aa8', O: '#3a6a7a' }, 'chase', 240, 36, 0.55, { xp: 56 }),
     C('DROWNED DEAD', 'skel', { b: '#8ab4c8', B: '#5a7a96' }, 'chase', 90, 20, 0.85, { undead: 1, xp: 26 }),
     C('TIDE CRAB', 'crab', { o: '#3a8aa8', O: '#1e5a7a' }, 'charge', 100, 22, 0.9, { xp: 28 }),
     C('EEL WORM', 'worm', { p: '#4a7a9a', P: '#2a4a6a' }, 'ambush', 110, 24, 1.1, { xp: 30 }),
@@ -109,6 +133,9 @@ AH.CREATURES = {
     C('ABYSS EYE', 'eye', { r: '#2a6ad8', w: '#c8d8e8' }, 'spit', 70, 20, 0.6, { fly: 1, proj: '#4a8ad8', xp: 26 }),
   ],
   bone: [
+    C('BONE SERPENT', 'snake', { g: '#e2dcc8', G: '#a8a08c' }, 'ambush', 120, 30, 1.3, { undead: 1, xp: 38 }),
+    C('GRAVE MOTH', 'moth', { w: '#8a8a7a', W: '#4a4a3e', e: '#6fff8a' }, 'swarm', 70, 22, 1.8, { fly: 1, xp: 26 }),
+    C('CORPSE OGRE', 'ogre', { o: '#9a9a7a', O: '#5a5a42' }, 'tank', 300, 40, 0.5, { undead: 1, xp: 66 }),
     C('BONE KNIGHT', 'skel', { r: '#9aa4b8', b: '#f2ecd8' }, 'tank', 200, 32, 0.65, { undead: 1, xp: 44 }),
     C('BONE ARCHER', 'skel', { r: '#6b4a2a' }, 'spit', 110, 26, 0.8, { undead: 1, proj: '#e2dcc8', xp: 34 }),
     C('GRAVE GHOST', 'ghost', {}, 'ghost', 100, 26, 1.0, { fly: 1, undead: 1, xp: 34 }),
@@ -118,6 +145,9 @@ AH.CREATURES = {
     C('CRYPT BAT', 'bat', { p: '#5a5a5a', P: '#2e2e2e' }, 'swarm', 70, 22, 1.8, { fly: 1, xp: 26 }),
   ],
   frozen: [
+    C('FROST BEETLE', 'beetle', { s: '#c8e8ff', S: '#7aa8d8' }, 'charge', 170, 36, 1.0, { frost: 1, xp: 44 }),
+    C('YETI', 'ogre', { o: '#e8f0ff', O: '#a8b8d8', t: '#4a8ad8' }, 'tank', 380, 54, 0.5, { frost: 1, xp: 76 }),
+    C('ICE ADDER', 'snake', { g: '#a8d8f8', G: '#5a8ab8' }, 'spit', 140, 34, 1.1, { proj: '#9ef0ff', frost: 1, xp: 44 }),
     C('FROST WOLF', 'wolf', { d: '#c8d8e8', D: '#7a8aa8', l: '#ffffff', k: '#4a8ad8' }, 'charge', 170, 36, 1.3, { frost: 1, xp: 44 }),
     C('ICE GOLEM', 'golem', { s: '#c8e8ff', S: '#7aa8d8', d: '#3a5a8a', e: '#4a8ad8' }, 'tank', 340, 50, 0.45, { frost: 1, xp: 70 }),
     C('FROZEN DEAD', 'skel', { b: '#c8e8ff', B: '#7aa8d8' }, 'chase', 180, 38, 0.8, { undead: 1, frost: 1, xp: 44 }),
@@ -127,6 +157,9 @@ AH.CREATURES = {
     C('SNOW BAT', 'bat', { p: '#c8d8e8', P: '#7a8aa8' }, 'swarm', 100, 28, 1.8, { fly: 1, xp: 34 }),
   ],
   magma: [
+    C('MAGMA BEETLE', 'beetle', { s: '#ff8a2e', S: '#8a2a10' }, 'chase', 230, 48, 1.0, { fire: 1, xp: 56 }),
+    C('FIRE SERPENT', 'snake', { g: '#ff8a2e', G: '#c84a1a' }, 'spit', 200, 46, 1.1, { proj: '#ffb347', fire: 1, xp: 56 }),
+    C('CINDER MOTH', 'moth', { w: '#ffb347', W: '#c84a1a', e: '#fff2b0' }, 'explode', 150, 70, 1.5, { fly: 1, fire: 1, xp: 50 }),
     C('MAGMA SLIME', 'slime', { g: '#ff8a2e', G: '#c84a1a', h: '#fff2b0', D: '#5a1a0a' }, 'blob', 220, 44, 1.0, { split: 1, fire: 1, xp: 54 }),
     C('FIRE IMP', 'imp', {}, 'spit', 190, 44, 1.2, { fly: 1, proj: '#ffb347', fire: 1, xp: 54 }),
     C('EMBER GOLEM', 'golem', { s: '#5a3a2a', S: '#3a2418', d: '#c84a1a', e: '#ffb347' }, 'tank', 480, 66, 0.45, { fire: 1, xp: 90 }),
@@ -136,6 +169,9 @@ AH.CREATURES = {
     C('FLAME EYE', 'eye', { r: '#ff8a2e', w: '#ffd8a8' }, 'spit', 200, 46, 0.6, { fly: 1, proj: '#ff8a2e', fire: 1, xp: 56 }),
   ],
   shadow: [
+    C('VOID BEETLE', 'beetle', { s: '#4a3e5e', S: '#2a2438', e: '#c8a0ff' }, 'charge', 300, 60, 1.1, { xp: 74 }),
+    C('SHADE SERPENT', 'snake', { g: '#3a2e4a', G: '#1e1828', e: '#c8a0ff' }, 'ambush', 280, 62, 1.4, { xp: 72 }),
+    C('NIGHT MOTH', 'moth', { w: '#5a4a7a', W: '#2a1e44', e: '#c8a0ff' }, 'swarm', 180, 48, 1.9, { fly: 1, xp: 56 }),
     C('VOID GHOST', 'ghost', { w: '#4a3a6a', W: '#2a1e44', e: '#c8a0ff', k: '#c8a0ff' }, 'ghost', 260, 56, 1.1, { fly: 1, xp: 70 }),
     C('SHADOW WOLF', 'wolf', { d: '#2a2438', D: '#16121e', l: '#4a3e5e', k: '#c8a0ff' }, 'charge', 300, 60, 1.4, { xp: 74 }),
     C('VOID EYE', 'eye', { r: '#a05aff', w: '#3a2e4a', v: '#6a3aa8' }, 'spit', 260, 56, 0.7, { fly: 1, proj: '#c8a0ff', xp: 70 }),
@@ -145,6 +181,9 @@ AH.CREATURES = {
     C('HOLLOW GOLEM', 'golem', { s: '#3a2e4a', S: '#24183a', d: '#14081e', e: '#c8a0ff' }, 'tank', 600, 84, 0.45, { xp: 120 }),
   ],
   ashen: [
+    C('ASH BEETLE', 'beetle', { s: '#5a5258', S: '#3a3438', e: '#ff8a2e' }, 'charge', 480, 80, 1.1, { fire: 1, xp: 110 }),
+    C('HELL SERPENT', 'snake', { g: '#e0402a', G: '#8a1a10', e: '#fff2b0' }, 'spit', 420, 76, 1.2, { proj: '#ff5a2e', fire: 1, xp: 100 }),
+    C('ASH OGRE', 'ogre', { o: '#6a6268', O: '#3a3438', e: '#ff8a2e', t: '#ff8a2e' }, 'tank', 760, 104, 0.5, { fire: 1, xp: 150 }),
     C('ASHEN KNIGHT', 'skel', { b: '#5a5258', B: '#3a3438', e: '#ff8a2e', r: '#c84a1a' }, 'tank', 520, 84, 0.7, { undead: 1, fire: 1, xp: 110 }),
     C('EMBER CULTIST', 'cultist', { p: '#5a1a12', P: '#3a0e0a', e: '#ffb347' }, 'summon', 440, 70, 0.8, { minion: 'HELL IMP', fire: 1, xp: 120 }),
     C('ASH WRAITH', 'ghost', { w: '#8a8088', W: '#5a5258', e: '#ff8a2e', k: '#ff8a2e' }, 'ghost', 400, 76, 1.1, { fly: 1, undead: 1, xp: 100 }),
@@ -171,18 +210,18 @@ AH.ELITE_AFFIX = [
 
 // legendary creatures (named, rare, also bounty targets)
 AH.LEGENDS = [
-  { name: 'GRIMTOOTH', title: 'THE PALE HUNGER', spr: 'wolf', pal: { d: '#e8e2d8', D: '#a8a294', l: '#ffffff', k: '#ff3b1f' }, ai: 'charge', minF: 7, abil: ['enrage', 'howl'], drop: 'FANG OF GRIMTOOTH' },
-  { name: 'OLD MOTHER MIRE', title: 'OF THE DEEP BOG', spr: 'slime', pal: { g: '#4a8a3a', G: '#2a5a24', h: '#c8ff8a' }, ai: 'blob', minF: 8, abil: ['split', 'spit3'], drop: 'MIRE HEART' },
-  { name: 'THE GLASS WIDOW', title: 'WEAVER OF SHARDS', spr: 'spider', pal: { K: '#c8f8ff', k: '#6fd6e8', e: '#ff3b1f' }, ai: 'spit', minF: 18, abil: ['summon', 'spit3'], drop: 'WIDOW\'S KISS' },
-  { name: 'SKARN', title: 'THE UNBURIED', spr: 'skel', pal: { b: '#f2ecd8', r: '#c8a060' }, ai: 'tank', minF: 12, abil: ['summon', 'nova'], drop: 'SKARN\'S CROWN' },
-  { name: 'CAP\'N BRINECLAW', title: 'TERROR OF THE TIDE', spr: 'crab', pal: { o: '#d84a3a', O: '#8a2a20' }, ai: 'charge', minF: 30, abil: ['nova', 'enrage'], drop: 'BRINECLAW' },
-  { name: 'THE THOUSAND EYES', title: 'WATCHER BELOW', spr: 'eye', pal: { r: '#ffb347', w: '#fff2d8' }, ai: 'spit', minF: 22, abil: ['spit3', 'blink'], drop: 'ALL-SEEING ORB' },
-  { name: 'THE HOLLOW KING', title: 'WHO WAS NEVER BURIED', spr: 'ghost', pal: { w: '#e8d8a8', W: '#a8945a', e: '#ff3b1f', k: '#ff3b1f' }, ai: 'ghost', minF: 40, abil: ['blink', 'nova'], drop: 'HOLLOW CROWN' },
-  { name: 'GORVAK', title: 'STONEHEART', spr: 'golem', pal: { s: '#8a7a6a', S: '#5a4e42', e: '#ff8a2e' }, ai: 'tank', minF: 15, abil: ['nova', 'enrage'], drop: 'STONEHEART' },
-  { name: 'MOTHER OF SPORES', title: 'THE BLOOMING ROT', spr: 'shroom', pal: { r: '#e07ae0', R: '#8a2a8a', w: '#fff2ff' }, ai: 'summon', minF: 32, abil: ['summon', 'nova'], drop: 'SPOREBLOOM' },
-  { name: 'CINDERJAW', title: 'THE BURROWING FLAME', spr: 'worm', pal: { p: '#ffb347', P: '#c84a1a', m: '#3a0a04' }, ai: 'ambush', minF: 70, abil: ['spit3', 'enrage'], drop: 'CINDERJAW TOOTH' },
-  { name: 'THE LANTERN THIEF', title: 'EATER OF LIGHT', spr: 'imp', pal: { r: '#2a2438', R: '#16121e', y: '#ffe04a' }, ai: 'spit', minF: 10, abil: ['blink', 'steal'], drop: 'STOLEN LANTERN' },
-  { name: 'VESSA', title: 'THE ASH PRIESTESS', spr: 'cultist', pal: { p: '#8a1a12', P: '#4a0e0a', e: '#ffb347' }, ai: 'summon', minF: 80, abil: ['summon', 'nova'], drop: 'VESSA\'S PRAYER' },
+  { name: 'GRIMTOOTH', title: 'THE PALE HUNGER', spr: 'wolf', pal: { d: '#e8e2d8', D: '#a8a294', l: '#ffffff', k: '#ff3b1f' }, ai: 'charge', minF: 7, abil: ['enrage', 'howl'], drop: 'FANG OF GRIMTOOTH', dropBase: 'dagger' },
+  { name: 'OLD MOTHER MIRE', title: 'OF THE DEEP BOG', spr: 'slime', pal: { g: '#4a8a3a', G: '#2a5a24', h: '#c8ff8a' }, ai: 'blob', minF: 8, abil: ['split', 'spit3', 'bog', 'enrage'], drop: 'MIRE HEART', dropBase: 'amulet' },
+  { name: 'THE GLASS WIDOW', title: 'WEAVER OF SHARDS', spr: 'spider', pal: { K: '#c8f8ff', k: '#6fd6e8', e: '#ff3b1f' }, ai: 'spit', minF: 18, abil: ['summon', 'spit3'], drop: 'WIDOW\'S KISS', dropBase: 'ring' },
+  { name: 'SKARN', title: 'THE UNBURIED', spr: 'skel', pal: { b: '#f2ecd8', r: '#c8a060' }, ai: 'tank', minF: 12, abil: ['summon', 'nova', 'rain', 'enrage'], drop: 'SKARN\'S CROWN', dropBase: 'greathelm' },
+  { name: 'CAP\'N BRINECLAW', title: 'TERROR OF THE TIDE', spr: 'crab', pal: { o: '#d84a3a', O: '#8a2a20' }, ai: 'charge', minF: 30, abil: ['nova', 'enrage'], drop: 'BRINECLAW', dropBase: 'gloves' },
+  { name: 'THE THOUSAND EYES', title: 'WATCHER BELOW', spr: 'eye', pal: { r: '#ffb347', w: '#fff2d8' }, ai: 'spit', minF: 22, abil: ['spit3', 'blink'], drop: 'ALL-SEEING ORB', dropBase: 'staff' },
+  { name: 'THE HOLLOW KING', title: 'WHO WAS NEVER BURIED', spr: 'ghost', pal: { w: '#e8d8a8', W: '#a8945a', e: '#ff3b1f', k: '#ff3b1f' }, ai: 'ghost', minF: 40, abil: ['blink', 'nova'], drop: 'HOLLOW CROWN', dropBase: 'helm' },
+  { name: 'GORVAK', title: 'STONEHEART', spr: 'golem', pal: { s: '#8a7a6a', S: '#5a4e42', e: '#ff8a2e' }, ai: 'tank', minF: 15, abil: ['nova', 'enrage'], drop: 'STONEHEART', dropBase: 'amulet' },
+  { name: 'MOTHER OF SPORES', title: 'THE BLOOMING ROT', spr: 'shroom', pal: { r: '#e07ae0', R: '#8a2a8a', w: '#fff2ff' }, ai: 'summon', minF: 32, abil: ['summon', 'nova'], drop: 'SPOREBLOOM', dropBase: 'ring' },
+  { name: 'CINDERJAW', title: 'THE BURROWING FLAME', spr: 'worm', pal: { p: '#ffb347', P: '#c84a1a', m: '#3a0a04' }, ai: 'ambush', minF: 70, abil: ['spit3', 'enrage'], drop: 'CINDERJAW TOOTH', dropBase: 'axe' },
+  { name: 'THE LANTERN THIEF', title: 'EATER OF LIGHT', spr: 'imp', pal: { r: '#2a2438', R: '#16121e', y: '#ffe04a' }, ai: 'spit', minF: 10, abil: ['blink', 'steal'], drop: 'STOLEN LANTERN', dropBase: 'scepter' },
+  { name: 'VESSA', title: 'THE ASH PRIESTESS', spr: 'cultist', pal: { p: '#8a1a12', P: '#4a0e0a', e: '#ffb347' }, ai: 'summon', minF: 80, abil: ['summon', 'nova'], drop: 'VESSA\'S PRAYER', dropBase: 'tomeoff' },
 ];
 // boss per biome (floors 10,20,...,90). 100 = ASHHEART
 AH.BOSSES = ['SKARN', 'OLD MOTHER MIRE', 'THE GLASS WIDOW', 'MOTHER OF SPORES', 'CAP\'N BRINECLAW', 'THE HOLLOW KING', 'GRIMTOOTH', 'CINDERJAW', 'THE THOUSAND EYES'];

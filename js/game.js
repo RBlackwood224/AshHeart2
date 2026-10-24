@@ -138,6 +138,8 @@ GG.enterMine = function (floor, mode) {
   if (this.scene === 'mine') this.buryDead();
   for (const p of this.players) { p.swUsed = false; p.lbUsed = false; p.mTarget = p.mInter = p.mDest = null; p.mPath = null; }
   this.mode = mode || this.mode || 'story';
+  // risen servants follow their master down the stairs
+  const carry = (this.allies || []).filter(a => a.kind === 'minion' && !a.dead && a.t > 0 && a.owner && !a.owner.dead);
   this.scene = 'mine'; this.resetActors();
   this.floorNo = floor;
   const W = this.world; W.visits = (W.visits || 0) + 1;
@@ -160,6 +162,7 @@ GG.enterMine = function (floor, mode) {
   this.mapSeed = seed;
   const sp = this.map.spawn;
   this.players.forEach((p, i) => { p.x = sp.x + i * 10 - 8; p.y = sp.y; this.placeSafe(p); p.dead = false; if (p.hp <= 0) p.hp = p.S.hp * 0.5; });
+  carry.forEach((a, k) => { const an = k * 1.3; a.x = a.owner.x + Math.cos(an) * 14; a.y = a.owner.y + Math.sin(an) * 10; this.placeSafe(a); a.rise = 0.3; this.allies.push(a); });
   this.pets.forEach(pt => { pt.x = pt.owner.x - 8; pt.y = pt.owner.y + 6; pt.warned = new Set(); if (pt.kind !== 'canary' && this.map) this.placeSafe(pt); });
   // record depth / lifts
   for (const p of this.players) {
@@ -242,7 +245,7 @@ GG.findInteract = function (p) {
     if (!m.stairs.locked) cand(m.stairs, 'stairs', m.stairs.x, m.stairs.y + 2, this.mode === 'story' && this.floorNo === 100 ? '' : 'DESCEND', 18);
     cand(m.rope, 'rope', m.rope.x, m.rope.y + 6, m.hasLift ? 'LIFT TO TOWN' : 'CLIMB TO TOWN', 16);
     for (const pr of m.props) {
-      if (pr.type === 'chest' && !pr.open) cand(pr, 'chest', pr.x, pr.y, 'OPEN');
+      if (pr.type === 'chest' && !pr.open) cand(pr, 'chest', pr.x, pr.y, pr.locked && p.ch && p.ch.cls !== 'rogue' && !(p.countCons && p.countCons('lockpick')) ? 'LOCKED' : pr.locked ? 'PICK LOCK' : 'OPEN');
       else if (pr.type === 'tablet') cand(pr, 'tablet', pr.x, pr.y, 'READ');
       else if (pr.type === 'shrine' && !pr.used) cand(pr, 'shrine', pr.x, pr.y, 'PRAY');
       else if (pr.type === 'grave') cand(pr, 'grave', pr.x, pr.y + 2, pr.g.items && p.ch && pr.g.owner === p.ch.created ? 'RECLAIM YOUR GEAR' : 'READ', 18);
@@ -287,6 +290,12 @@ GG.interact = function (p, it) {
   }
 };
 GG.openChest = function (p, c) {
+  if (c.locked && !c.open) {
+    // the rogue picks any lock; everyone else needs a lockpick
+    if (p.ch.cls === 'rogue') this.toast(p, 'YOU PICK THE LOCK', '#f2d36a');
+    else if (p.countCons('lockpick')) { p.takeCons('lockpick'); this.toast(p, 'THE LOCK CLICKS OPEN', '#f2d36a'); }
+    else { this.toast(p, 'LOCKED. YOU NEED A LOCKPICK', '#ff8a8a'); AH.Audio.sfx('error'); return; }
+  }
   if (c.mimic) {
     c.open = true; c.type = 'gone';
     const def = { name: 'MIMIC', spr: 'mimic', pal: {}, ai: 'chase', hp: 60, dmg: 14, spd: 1.2, xp: 30 };
@@ -296,10 +305,10 @@ GG.openChest = function (p, c) {
   }
   c.open = true; AH.Audio.sfx('loot');
   for (const q of this.players) {
-    const mf = q.S.mf + (c.rare ? 120 : 20) + (q.buffs.luck > 0 ? 100 : 0);
+    const mf = q.S.mf + (c.locked ? 220 : c.rare ? 120 : 20) + (q.buffs.luck > 0 ? 100 : 0);
     const early = this.floorNo <= 10;
-    const n = c.rare ? (early ? 1 : 2) : (AH.rand() < (early ? 0.55 : 0.8) ? 1 : 0);
-    for (let k = 0; k < n; k++) this.dropItem(c.x, c.y + 4, AH.genItem(AH.rand, this.floorNo, { mf }), q.pid);
+    const n = c.locked ? 2 : c.rare ? (early ? 1 : 2) : (AH.rand() < (early ? 0.45 : 0.62) ? 1 : 0);
+    for (let k = 0; k < n; k++) this.dropItem(c.x, c.y + 4, AH.genItem(AH.rand, this.floorNo, { mf, rarity: c.locked && k === 0 ? (this.floorNo >= 10 && AH.rand() < 0.35 ? 3 : 2) : undefined }), q.pid);
     this.dropGold(c.x, c.y + 4, (5 + this.floorNo * 2) * (c.rare ? 3 : 1) * (n ? 1 : 1.8) * (1 + q.S.gold / 100), q.pid);
     if (AH.rand() < 0.3) this.dropItem(c.x, c.y + 4, AH.makeCons(AH.rand.pick(['potion', 'torch', 'murky', 'bomb', 'idscroll'])), q.pid);
     if (AH.rand() < 0.12) this.dropItem(c.x, c.y + 4, AH.genRune(AH.rand, this.floorNo), q.pid);
@@ -325,6 +334,7 @@ GG.rescue = function (p, n) {
 
 // ---------- kills, death, nemesis ----------
 GG.onEnemyKilled = function (e, by) {
+  if (by && by.S && by.S.powers && by.S.powers.has('rampage')) { by.rampN = by.buffs.rampage > 0 ? Math.min(5, (by.rampN || 0) + 1) : 1; by.buffs.rampage = 4; }
   const near = this.players.filter(p => !p.dead && AH.dist(p, e) < 260);
   for (const p of (near.length ? near : this.players)) {
     p.gainXp(this, e.xp / Math.max(1, near.length * 0.7));
@@ -391,13 +401,13 @@ GG.reclaimGrave = function (p, g) {
 // the smith lends plain gear to heroes who lost theirs (worth nothing when sold)
 GG.lendGear = function (p) {
   const C = AH.CLASSES[p.ch.cls], f = Math.max(1, Math.floor((p.ch.deepest || 1) * 0.85)), rng = AH.rand;
-  const chest = { paladin: 'plate', rogue: 'leather', wizard: 'robe', necro: 'robe' }[p.ch.cls];
+  const chest = { paladin: 'plate', rogue: 'leather', wizard: 'robe', necro: 'robe', barb: 'fur' }[p.ch.cls];
   const mk = base => { const it = AH.genItem(rng, f, { rarity: 0, base, noSet: true }); it.loaner = 1; it.req = null; return it; };
   if (!p.ch.equip.weapon) p.ch.equip.weapon = mk(C.start.weapon);
   if (C.start.off && !p.ch.equip.off) p.ch.equip.off = mk(C.start.off);
   if (!p.ch.equip.chest) p.ch.equip.chest = mk(chest);
   // a full plain set, so the walk back to the grave is hard but not hopeless
-  const head = { paladin: 'helm', rogue: 'hood', wizard: 'hat', necro: 'hood' }[p.ch.cls];
+  const head = { paladin: 'helm', rogue: 'hood', wizard: 'hat', necro: 'hood', barb: 'hornhelm' }[p.ch.cls];
   if (!p.ch.equip.head) p.ch.equip.head = mk(head);
   if (!p.ch.equip.hands) p.ch.equip.hands = mk('gloves');
   if (!p.ch.equip.feet) p.ch.equip.feet = mk('boots');
@@ -687,9 +697,10 @@ GG.updateTown = function (dt) {
 GG.rumble = function (p, s, ms) { if (p && !p.remote && p.device) AH.Input.rumble(p.device, s, ms); };
 // short tips the first time something happens, worded for the device the player uses
 GG.keyFor = function (p, act) {
-  const d = p.device || 'kb1';
-  const T = { kb1: { atk: 'J / LEFT CLICK', heavy: 'K / RIGHT CLICK', dodge: 'SPACE', pot: 'Q', bag: 'TAB', skill: '1 2 3', move: 'WASD' },
-    kb2: { atk: 'NUM1', heavy: 'NUM4', dodge: 'NUM2', pot: 'NUM0', bag: 'NUM+', skill: 'NUM5 NUM7 NUM8', move: 'ARROWS' },
+  const d = p.device || 'kb1', L = a => AH.Input.label(d, a);
+  const mv = id => L('up') + L('left') + L('down') + L('right');
+  const T = { kb1: { atk: L('a') + ' / ' + AH.tr('LEFT CLICK'), heavy: L('x') + ' / ' + AH.tr('RIGHT CLICK'), dodge: L('dodge'), pot: L('pot'), bag: L('select'), skill: L('y') + ' ' + L('lb') + ' ' + L('rb'), move: mv() },
+    kb2: { atk: L('a'), heavy: L('x'), dodge: L('b'), pot: L('pot'), bag: L('select'), skill: L('y') + ' ' + L('lb') + ' ' + L('rb'), move: mv().length > 6 ? 'ARROWS' : mv() },
     touch: { atk: 'A', heavy: 'X', dodge: 'B', pot: 'HP', bag: 'BAG', skill: 'Y LB RB', move: 'STICK' } };
   return (T[d] || { atk: 'A', heavy: 'X', dodge: 'B', pot: 'D-PAD UP', bag: 'SELECT', skill: 'Y LB RB', move: 'STICK' })[act];
 };

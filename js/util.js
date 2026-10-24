@@ -2,6 +2,9 @@
 // ASHHEART — core helpers
 const AH = window.AH = {};
 AH.W = 320; AH.H = 180;       // world resolution
+// smooth motion on PC: the world canvas has AH.SS pixels per art pixel, so moving things can stand between art pixels
+AH.SS = 1;
+AH.px = v => Math.round(v * AH.SS) / AH.SS;
 AH.UW = 480; AH.UH = 270;     // menu resolution
 AH.T = 16;                    // tile size
 AH.VERSION = '0.1.0';

@@ -254,10 +254,16 @@ E.useAbility = function (G, p, d) {
   const ang = Math.atan2(p.y - this.y, p.x - this.x);
   if (a === 'nova') { G.telegraph(this.x, this.y, 46, 0.7, () => { if (!this.dead) G.explosion(this.x, this.y, 46, this.dmg * 1.3, 'enemy', true); }); }
   else if (a === 'spit3') { for (let k = -2; k <= 2; k++) G.enemyShoot(this, ang + k * 0.22, this.def.proj || '#ffb347'); }
-  else if (a === 'summon') { if (this.summons < 10) { const save = this.def.minion; if (!save) { this.def = Object.assign({}, this.def, { minion: AH.biomeCreaturesFor(G.floorNo)[0].name }); } this.summonMinions(G, 3); } }
+  else if (a === 'summon') { if (this.summons < (G.floorNo <= 20 ? 6 : 10)) { const save = this.def.minion; if (!save) { this.def = Object.assign({}, this.def, { minion: AH.biomeCreaturesFor(G.floorNo)[0].name }); } this.summonMinions(G, G.floorNo <= 20 ? 2 : 3); } }
   else if (a === 'blink') this.blinkTo(G, p);
   else if (a === 'howl') { G.banner(this.name + ' HOWLS!', '#ff6a5a'); for (const e of G.enemies) if (AH.dist(e, this) < 150) e.aggro = true; this.spd *= 1.05; }
   else if (a === 'split') { this.summonMinions(G, 2); }
+  else if (a === 'rain') { // rocks fall where the hero stands, and around
+    for (let k = 0; k < (this.enraged ? 5 : 3); k++) { const tx = p.x + (k ? AH.rand.range(-36, 36) : 0), ty = p.y + (k ? AH.rand.range(-28, 28) : 0); G.telegraph(tx, ty, 16, 0.9 + k * 0.15, () => { G.explosion(tx, ty, 16, this.dmg * 0.9, 'enemy', true); G.shake && G.shake(2); }); }
+  }
+  else if (a === 'bog') { // pools of choking bog water around the hero
+    for (let k = 0; k < (this.enraged ? 4 : 3); k++) G.addZone({ kind: 'gas', x: p.x + AH.rand.range(-40, 40), y: p.y + AH.rand.range(-30, 30), r: 20, t: 5, dps: this.dmg * 0.35 });
+  }
   else if (a === 'steal') { for (const pl of G.players) if (AH.dist(pl, this) < 90) { pl.torch = Math.max(0, pl.torch - 30); G.toast(pl, 'YOUR TORCH FLICKERS!', '#ffb347'); } }
   else if (a === 'enrage' && !this.enraged && this.hp < this.maxHp * 0.6) { this.enraged = true; this.spd *= 1.3; }
   if (this.boss && this.heartPhase) this.heartAttack(G, p, ang);
@@ -272,12 +278,12 @@ E.draw = function (ctx, G) {
   if (this.dead) return;
   if (this.hidden) {
     if (this.canaryMark > 0) { this.canaryMark -= G.dt || 0.016; if (Math.floor(G.time * 4) % 2) AH.text(ctx, this.x, this.y - 12, '!', '#f8d83c', { align: 'center' }); }
-    if (Math.floor(G.time * 3 + this.bob) % 4 === 0) { ctx.fillStyle = '#5a4e3a'; ctx.fillRect(Math.round(this.x - 3), Math.round(this.y - 1), 6, 1); ctx.fillRect(Math.round(this.x - 1), Math.round(this.y - 2), 2, 1); }
+    if (Math.floor(G.time * 3 + this.bob) % 4 === 0) { ctx.fillStyle = '#5a4e3a'; ctx.fillRect(AH.px(this.x - 3), AH.px(this.y - 1), 6, 1); ctx.fillRect(AH.px(this.x - 1), AH.px(this.y - 2), 2, 1); }
     return;
   }
   let s = this.spr; const sc = this.scale;
   // bats flap their wings
-  if (this.def.spr === 'bat') { if (!this.spr2) this.spr2 = AH.creatureSprite(Object.assign({}, this.def, { spr: 'bat2' })); if (Math.floor(G.time * 11 + this.bob * 3) % 2) s = this.spr2; }
+  if (this.def.spr === 'bat' || this.def.spr === 'moth') { if (!this.spr2) this.spr2 = AH.creatureSprite(Object.assign({}, this.def, { spr: this.def.spr + '2' })); if (Math.floor(G.time * (this.def.spr === 'moth' ? 8 : 11) + this.bob * 3) % 2) s = this.spr2; }
   this._s = s;
   const fy = this.fly ? Math.sin(G.time * 5 + this.bob) * 2 - 6 : 0;
   const moving = this._px !== undefined && Math.hypot(this.x - this._px, this.y - this._py) > 0.02;
@@ -286,10 +292,10 @@ E.draw = function (ctx, G) {
   let w = s.w * sc, h = s.h * sc, lx = 0;
   if (this.state === 'wind') { const sq = Math.min(2, Math.round(sc * 1.5)); h -= sq; w += sq; lx = -this.face; }
   if (this.lungeT > 0) { this.lungeT -= G.dt || 0.016; lx = this.face * Math.round(3 * sc * Math.min(1, this.lungeT / 0.08)); }
-  const x = Math.round(this.x - w / 2) + lx, y = Math.round(this.y - h + 2 + fy) + hop;
+  const x = AH.px(this.x - w / 2) + lx, y = AH.px(this.y - h + 2 + fy) + hop;
   this._dx = x; this._dy = y;
   // shadow
-  ctx.fillStyle = 'rgba(6,4,10,0.5)'; ctx.fillRect(Math.round(this.x - w / 3), Math.round(this.y), Math.round(w / 1.5), 2);
+  ctx.fillStyle = 'rgba(6,4,10,0.5)'; ctx.fillRect(AH.px(this.x - w / 3), AH.px(this.y), Math.round(w / 1.5), 2);
   // glowing outline so big threats read in the dark
   if (this.boss || this.legend || this.nemesis) {
     const oc = this.boss ? '#ff5a3a' : this.nemesis ? '#e04a6a' : '#ffa040';
@@ -312,7 +318,7 @@ E.draw = function (ctx, G) {
   }
   this._tr = tr;
   if (tr) {
-    ctx.save(); ctx.translate(Math.round(this.x + lx), Math.round(this.y + 2 + fy - tr.lift)); ctx.rotate(tr.rot); ctx.scale(tr.sx, tr.sy);
+    ctx.save(); ctx.translate(AH.px(this.x + lx), AH.px(this.y + 2 + fy - tr.lift)); ctx.rotate(tr.rot); ctx.scale(tr.sx, tr.sy);
     if (flash) AH.drawFlash(ctx, s, -w / 2, -h, this.face < 0, sc); else ctx.drawImage(img, -w / 2, -h, w, h);
     ctx.restore();
   } else if (flash) AH.drawFlash(ctx, s, x, y, this.face < 0, sc);
@@ -330,9 +336,9 @@ E.drawEm = function (ctx, G) {
   if (this.elite || this.legend || this.nemesis || this.boss) {
     const col = this.boss ? '#ff6a5a' : this.legend ? '#ff9a3e' : this.nemesis ? '#e05a5a' : '#f2d36a';
     const w = Math.max(16, this.spr.w * this.scale);
-    AH.bar(ctx, Math.round(this.x - w / 2), this._dy - 4, Math.round(w), 1, this.hp / this.maxHp, col, '#2a1416');
+    AH.bar(ctx, AH.px(this.x - w / 2), this._dy - 4, Math.round(w), 1, this.hp / this.maxHp, col, '#2a1416');
   } else if (this.hp < this.maxHp) {
-    AH.bar(ctx, Math.round(this.x - 6), this._dy - 3, 12, 1, this.hp / this.maxHp, '#d43c3c', '#2a1416');
+    AH.bar(ctx, AH.px(this.x - 6), this._dy - 3, 12, 1, this.hp / this.maxHp, '#d43c3c', '#2a1416');
   }
 };
 

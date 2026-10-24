@@ -19,6 +19,7 @@ GP.dmgOpt = function (p, roll, extra) { return Object.assign({ crit: roll.crit, 
 GP.applyHitEffects = function (p, e, roll, dealt) {
   if (dealt <= 0) return;
   const S = p.S;
+  if (p.addRage) p.addRage(roll.crit ? 6 : 4);
   if (S.loh) p.heal(null, S.loh * S.lohMult * Math.min(1, p.atkTime() / 0.45)); // fast weapons heal less per hit
   if (roll.crit) { AH.Audio.sfx('crit'); this.shake(1); if (S.powers.has('chaincrit')) this.chainLightning(p, e, p.rollDamage(0.6, { noCrit: true }).dmg, 3); }
   else AH.Audio.sfx('hit');
@@ -39,7 +40,8 @@ GP.meleeSwing = function (p, mult, range, arc, heavy) {
     let m = mult;
     if (p.S.powers.has('triple') && p.hitCount % 4 === 0) m *= 2;
     const roll = p.rollDamage(m);
-    const dealt = e.hurt(this, roll.dmg, p, this.dmgOpt(p, roll, { knock: heavy ? 140 : 50, stun: p.wbase().undead && heavy ? 0.6 : 0 }));
+    const wb = p.wbase();
+    const dealt = e.hurt(this, roll.dmg, p, this.dmgOpt(p, roll, { knock: heavy ? (wb.stun ? 190 : 140) : 50, stun: (wb.undead && heavy ? 0.6 : 0) || (wb.stun && Math.random() * 100 < wb.stun * (heavy ? 2.5 : 1) ? 0.7 : 0) }));
     this.applyHitEffects(p, e, roll, dealt); hits++;
   }
   // ore veins and secret walls
@@ -162,6 +164,18 @@ GP.explosion = function (x, y, r, dmg, side, telegraphed, owner) {
   else for (const e of this.enemies) if (!e.dead && !e.hidden && AH.dist(e, { x, y }) < r + e.r) { const d = e.hurt(this, dmg, owner, { knock: 80, color: '#ffb347' }); }
 };
 GP.telegraph = function (x, y, r, t, cb) { this.fx.push({ k: 'tele', x, y, r, life: t, max: t, cb }); AH.Audio.sfx('warn'); };
+// the barbarian comes down from a leap: everything under him is crushed and staggered
+GP.leapLand = function (p) {
+  const rm = p.leapRm || 1;
+  this.shake(5); AH.Audio.sfx('heavy');
+  this.fx.push({ k: 'ring', x: p.x, y: p.y - 4, col: '#e8c890', r0: 4, r1: 40, life: 0.3, max: 0.3, em: 1 });
+  AH.fx.puff(this, p.x - 8, p.y, '#8a7a6a'); AH.fx.puff(this, p.x + 8, p.y, '#8a7a6a');
+  for (const e of this.enemies) if (!e.dead && !e.hidden && AH.dist(e, p) < 40 + e.r) {
+    const roll = p.rollDamage(1.6 * rm);
+    const dealt = e.hurt(this, roll.dmg, p, this.dmgOpt(p, roll, { stun: e.isBig() ? 0.2 : 0.8, knock: 120 }));
+    this.applyHitEffects(p, e, roll, dealt);
+  }
+};
 GP.nova = function (p, x, y, r, dmg, kind) {
   AH.Audio.sfx(kind === 'frost' ? 'frost' : 'holy');
   this.fx.push({ k: 'ring', x, y: y - 6, col: kind === 'frost' ? '#9ef0ff' : '#fff2b0', r0: 4, r1: r, life: 0.35, max: 0.35, em: 1 });
@@ -220,6 +234,38 @@ GP.castSkill = function (p, id, rm) {
     case 'whirl': p.whirl = 1.2; p.whirlTick = 0; AH.Audio.sfx('heavy'); break;
     case 'mend': p.heal(this, p.S.hp * 0.35 * rm); AH.Audio.sfx('holy'); AH.fx.ring(this, p.x, p.y - 8, '#8ae08e', 22); break;
     case 'spiritwolf': this.summonAlly(p, 20 * rm); break;
+    case 'leap': {
+      // onto the nearest foe in front, or as far as the aim allows
+      const e = this.nearestEnemy(p, 130);
+      let tx, ty;
+      if (e) { const a = Math.atan2(e.y - p.y, e.x - p.x); tx = e.x - Math.cos(a) * 8; ty = e.y - Math.sin(a) * 6; }
+      else { tx = p.x + Math.cos(p.aim) * 80; ty = p.y + Math.sin(p.aim) * 80; }
+      const dur = 0.36;
+      p.state = 'leap'; p.st = dur; p.leapDur = dur; p.inv = Math.max(p.inv, dur + 0.1);
+      p.leapVx = (tx - p.x) / dur; p.leapVy = (ty - p.y) / dur; p.face = tx > p.x ? 1 : -1; p.aim = Math.atan2(ty - p.y, tx - p.x);
+      p.leapRm = rm; AH.Audio.sfx('dodge'); AH.fx.puff(this, p.x, p.y - 2, '#8a7a6a');
+      break;
+    }
+    case 'warcry': {
+      p.buffs.warcry = 8; this.shake(3); AH.Audio.sfx('warn');
+      this.fx.push({ k: 'ring', x: p.x, y: p.y - 8, col: '#ff8a3a', r0: 6, r1: 80, life: 0.4, max: 0.4, em: 1 });
+      for (const q of this.players) if (q !== p && !q.dead && AH.dist(q, p) < 90) q.buffs.warcry = 8; // the whole band roars
+      for (const e of this.enemies) if (!e.dead && !e.hidden && AH.dist(e, p) < 80) e.hurt(this, 1, p, { stun: e.isBig() ? 0 : 1.2, knock: 90, color: '#ff8a3a' });
+      AH.fx.num(this, p.x, p.y - 26, AH.tr('WAR CRY!'), '#ff8a3a');
+      break;
+    }
+    case 'slam': {
+      const fx = p.x + Math.cos(p.aim) * 18, fy = p.y + Math.sin(p.aim) * 14;
+      this.shake(4); AH.Audio.sfx('heavy');
+      this.fx.push({ k: 'ring', x: fx, y: fy - 4, col: '#e8c890', r0: 4, r1: 46, life: 0.35, max: 0.35, em: 1 });
+      AH.fx.puff(this, fx, fy, '#8a7a6a'); AH.fx.puff(this, fx - 10, fy + 4, '#8a7a6a'); AH.fx.puff(this, fx + 10, fy + 4, '#8a7a6a');
+      for (const e of this.enemies) if (!e.dead && !e.hidden && AH.dist(e, { x: fx, y: fy }) < 46 + e.r) {
+        const roll = p.rollDamage(1.9 * rm);
+        const dealt = e.hurt(this, roll.dmg, p, this.dmgOpt(p, roll, { stun: e.isBig() ? 0.3 : 1.4, knock: 160 }));
+        this.applyHitEffects(p, e, roll, dealt);
+      }
+      break;
+    }
     case 'raise': {
       const c = this.nearestCorpse(p, 120, true);
       if (!c) { this.toast(p, 'NO CORPSE NEARBY', '#a39bb0'); return false; }
@@ -236,7 +282,7 @@ GP.castSkill = function (p, id, rm) {
       let best = null, bs = -1;
       for (const c of this.corpses) { if (c.used || AH.dist(c, p) > 140) continue; let n = 0; for (const e of this.enemies) if (!e.dead && AH.dist(e, c) < 44) n++; if (n > bs) { bs = n; best = c; } }
       let mult = 1;
-      if (!best) { best = this.allies.filter(a => a.kind === 'minion' && a.owner === p && !a.dead).sort((a, b) => a.t - b.t)[0]; mult = 1.5; if (best) { best.dead = true; } }
+      if (!best) { best = this.allies.filter(a => a.kind === 'minion' && a.owner === p && !a.dead).sort((a, b) => (a.born || 0) - (b.born || 0))[0]; mult = 1.5; if (best) { best.dead = true; } }
       if (!best) { this.toast(p, 'NO CORPSE NEARBY', '#a39bb0'); return false; }
       const dmg = (p.spellPower(8) * rm + Math.min(best.maxHp || 0, p.S.hp * 2) * 0.12) * mult;
       this.boneBurst(p, best.x, best.y, dmg);
@@ -305,11 +351,11 @@ GP.boneBurst = function (p, x, y, dmg) {
 };
 GP.raiseMinion = function (p, c, rm) {
   const mine = this.allies.filter(a => a.kind === 'minion' && a.owner === p && !a.dead);
-  if (mine.length >= p.S.maxMinions) { const old = mine.sort((a, b) => a.t - b.t)[0]; old.dead = true; AH.fx.puff(this, old.x, old.y - 6, '#8a8478'); }
+  if (mine.length >= p.S.maxMinions) { const old = mine.sort((a, b) => (a.born || 0) - (b.born || 0))[0]; old.dead = true; AH.fx.puff(this, old.x, old.y - 6, '#8a8478'); }
   const S = p.S, army = S.keys.has('army') ? 0.75 : 1;
-  const hp = Math.round(S.hp * 0.38 * (1 + S.minionHp / 100) * army * rm);
+  const hp = Math.round(S.hp * 0.34 * (1 + S.minionHp / 100) * army * rm);
   const spr = AH.raisedSprite(c.spr), m = {
-    kind: 'minion', id: AH.uid(), owner: p, x: c.x, y: c.y, t: 22, atk: 0.4, face: c.face, spr, sc: 1, r: 4, hp, maxHp: hp, buffs: {}, flash: 0, rise: 0.5,
+    kind: 'minion', id: AH.uid(), owner: p, x: c.x, y: c.y, t: Infinity, born: this.time, atk: 0.4, face: c.face, spr, sc: 1, r: 4, hp, maxHp: hp, buffs: {}, flash: 0, rise: 0.5,
     fly: !!(c.def && c.def.fly), def: c.def,
     hurt(G, dmg, src) {
       if (this.dead) return 0;
@@ -329,6 +375,8 @@ GP.updateMinion = function (a, dt) {
   a.t -= dt; a.atk -= dt; if (a.flash > 0) a.flash -= dt; if (a.rise > 0) { a.rise -= dt; return; }
   if (a.owner.dead || this.scene !== 'mine') a.t = Math.min(a.t, 0.01);
   if (a.t <= 0) { AH.fx.dust(this, a.x, a.y, '#8a8478', 8); return; }
+  // no time limit: a servant stands until it is destroyed. Out of a fight it slowly mends (1.5% a second).
+  if (a.hp < a.maxHp && !this.enemies.some(e => !e.dead && !e.hidden && AH.dist(e, a) < 90)) a.hp = Math.min(a.maxHp, a.hp + a.maxHp * 0.015 * dt);
   // stay near the master; fight what is near him. Each keeps the habits it had in life:
   // spitters shoot from a distance, slimes hop, spore bombs run in and burst
   const ai = (a.def && a.def.ai) || 'chase', ranged = ai === 'spit' || ai === 'summon';
@@ -381,7 +429,7 @@ GP.rollLoot = function (x, y, src, p) {
   let goldN = (1 + f * 0.45) * (1 + p.S.gold / 100) * rng.range(0.6, 1.4);
   if (rng() < (legendary ? 1 : elite ? 0.9 : 0.45)) this.dropGold(x, y, goldN * (legendary ? 12 : elite ? 4 : 1), p.pid);
   const early = f <= 10;
-  let itemChance = legendary ? 1 : elite ? (early ? 0.4 : 0.65) : (early ? 0.05 : 0.09);
+  let itemChance = legendary ? 1 : elite ? (early ? 0.3 : 0.5) : (early ? 0.035 : 0.06);
   if (src && src.minion) itemChance *= 0.3;
   const n = legendary ? (early ? 2 : 3) : elite ? 1 + (rng() < 0.3 ? 1 : 0) : 1;
   for (let k = 0; k < n; k++) if (rng() < itemChance) {
@@ -393,6 +441,7 @@ GP.rollLoot = function (x, y, src, p) {
   if (r < 0.035) this.dropItem(x, y, AH.makeCons('potion'), p.pid);
   else if (r < 0.08) this.dropItem(x, y, AH.makeCons(AH.isCaster(p.ch.cls) ? 'mana' : 'torch'), p.pid);
   else if (r < 0.095) this.dropItem(x, y, AH.makeCons('murky'), p.pid);
+  else if (r < 0.105 && f >= 3) this.dropItem(x, y, AH.makeCons('lockpick'), p.pid);
   else if (r < 0.105 + (elite ? 0.1 : 0)) this.dropItem(x, y, AH.genRune(rng, f), p.pid);
   else if (r < 0.11 + (legendary ? 0.5 : 0)) { const sk = rng.pick(Object.keys(AH.SKILLS)); this.dropItem(x, y, AH.makeTome(sk), p.pid); }
 };
@@ -426,8 +475,10 @@ GP.pickup = function (p, d) {
   }
   if (p.remote) { d.taken = true; this.netGive(p, d.item); return; }
   const it = d.item;
-  if (!p.addItem(it)) { if (!d.fullMsg) { this.toast(p, 'BAG IS FULL', '#ff8a8a'); d.fullMsg = true; } return; }
+  p.capHit = null; p.capRest = null;
+  if (!p.addItem(it)) { if (!d.fullMsg) { this.toast(p, p.capHit ? AH.capMsg(p.capHit) : 'BAG IS FULL', '#ff8a8a'); d.fullMsg = true; } return; }
   d.taken = true;
+  if (p.capRest) { this.dropItem(d.x, d.y, p.capRest, p.pid); p.capRest = null; }
   AH.Audio.sfx(it.rarity >= 3 ? 'legend' : it.rarity >= 1 ? 'loot' : it.kind === 'cons' && AH.ORE_COLORS[it.cons] || it.cons === 'gem' ? 'ore' : 'pickup');
   const name = it.unid ? 'UNKNOWN ' + it.typeName : it.name + (it.stack > 1 ? ' X' + it.stack : '');
   this.toast(p, name, AH.RARITY[it.rarity || 0].col);

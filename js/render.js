@@ -39,6 +39,7 @@ R.computeViews = function (G) {
 
 R.draw = function (G) {
   const ctx = this.ctx;
+  ctx.setTransform(AH.SS, 0, 0, AH.SS, 0, 0);
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, RW, RH);
   if (!G.map || G.scene === 'title') return;
   const views = this.computeViews(G);
@@ -57,8 +58,8 @@ R.draw = function (G) {
   for (const v of views) {
     // pixel-snap the camera relative to the hero it follows, so the hero never wobbles a pixel back and forth
     const snap = (cam, at, lo, hi) => {
-      if (!at || hi <= lo || cam < lo + 0.5 || cam > hi - 0.5) return Math.round(cam);
-      return AH.clamp(Math.round(at) - Math.round(at - cam), lo, hi);
+      if (!at || hi <= lo || cam < lo + 0.5 || cam > hi - 0.5) return AH.px(cam);
+      return AH.clamp(AH.px(at) - AH.px(at - cam), lo, hi);
     };
     const mw = G.map.w * AH.T, mh = G.map.h * AH.T;
     v.camX = snap(v.camX, v.main && v.main.x, 0, mw - v.w) + Math.round(sh);
@@ -120,12 +121,12 @@ R.drawWorld = function (G, v) {
     if (!this.inView(v, d.x, d.y)) continue;
     const mine = d.owner < 0 || v.players.some(p => p.pid === d.owner) || (G.players.length === 1);
     if (!mine && G.net) continue;
-    const y = Math.round(d.y - d.z - 2 + Math.sin(d.t * 3) * 1);
+    const y = AH.px(d.y - d.z - 2 + Math.sin(d.t * 3) * 1);
     if (d.gold) { AH.drawSpr(ctx, AH.SPR.coin, d.x - 3, y - 3); continue; }
     const ic = AH.itemIcon(d.item);
-    if (d.item.rarity >= 2 && !d.z) { ctx.fillStyle = AH.RARITY[d.item.rarity].border; for (let k = 0; k < 18; k += 2) ctx.fillRect(Math.round(d.x), y - 8 - k, 1, 1); }
-    AH.drawSpr(ctx, ic, Math.round(d.x - ic.w / 2), y - ic.h + 2);
-    if (G.players.length > 1 && d.owner >= 0) { ctx.fillStyle = AH.PLAYER_COLORS[d.owner]; ctx.fillRect(Math.round(d.x) - 1, y + 2, 3, 1); }
+    if (d.item.rarity >= 2 && !d.z) { ctx.fillStyle = AH.RARITY[d.item.rarity].border; for (let k = 0; k < 18; k += 2) ctx.fillRect(AH.px(d.x), y - 8 - k, 1, 1); }
+    AH.drawSpr(ctx, ic, AH.px(d.x - ic.w / 2), y - ic.h + 2);
+    if (G.players.length > 1 && d.owner >= 0) { ctx.fillStyle = AH.PLAYER_COLORS[d.owner]; ctx.fillRect(AH.px(d.x) - 1, y + 2, 3, 1); }
   }
   // dying creatures: white flash, then they sink and crumble into ash
   for (const f of G.fx) if (f.k === 'corpse' && this.inView(v, f.x, f.y, 40)) {
@@ -163,12 +164,12 @@ R.drawWorld = function (G, v) {
     // same motion as the living creature: hop while walking, bob while flying, lunge on a hit
     const moving = a._px !== undefined && Math.hypot(a.x - a._px, a.y - a._py) > 0.02; a._px = a.x; a._py = a.y;
     const lx = a.lunge > 0 ? a.face * 2 : 0, bob = !a.fly && moving && Math.floor(G.time * 8 + a.id) % 2 ? -1 : 0, fy = a.fly ? Math.round(Math.sin(G.time * 5 + a.id) * 2 - 6) : 0;
-    const x = Math.round(a.x - s.w / 2) + lx, y = Math.round(a.y - s.h + 2) + bob + fy;
+    const x = AH.px(a.x - s.w / 2) + lx, y = AH.px(a.y - s.h + 2) + bob + fy;
     a._dx = x; a._dy = y; a._s = s;
-    ctx.fillStyle = 'rgba(6,4,10,0.5)'; ctx.fillRect(Math.round(a.x - s.w / 3), Math.round(a.y), Math.round(s.w / 1.5), 2);
+    ctx.fillStyle = 'rgba(6,4,10,0.5)'; ctx.fillRect(AH.px(a.x - s.w / 3), AH.px(a.y), Math.round(s.w / 1.5), 2);
     if (a.rise > 0) { const k = 1 - a.rise / 0.5, hh = Math.max(1, Math.round(s.h * k)); ctx.drawImage(a.face < 0 ? s.cf : s.c, 0, 0, s.w, hh, x, y + s.h - hh, s.w, hh); return; }
     if (a.flash > 0) AH.drawFlash(ctx, s, x, y, a.face < 0); else AH.drawSpr(ctx, s, x, y, a.face < 0);
-    if (a.hp < a.maxHp) AH.bar(ctx, Math.round(a.x) - 5, y - 3, 10, 1, a.hp / a.maxHp, '#8ae08e', '#142014');
+    if (a.hp < a.maxHp) AH.bar(ctx, AH.px(a.x) - 5, y - 3, 10, 1, a.hp / a.maxHp, '#8ae08e', '#142014');
   } });
   for (const n of G.npcs) if (this.inView(v, n.x, n.y)) list.push({ y: n.y, d: () => { const bob = (!n.fixed && n.wa !== null && Math.floor(G.time * 4) % 2) ? -1 : 0; AH.drawSpr(ctx, n.spr, n.x - n.spr.w / 2, n.y - n.spr.h + 2 + bob, n.face < 0); if (n.kind === 'lost' && Math.floor(G.time * 2) % 2) AH.text(ctx, n.x, n.y - 24, '!', '#f2c94c', { align: 'center' });
     if (n.say && n.sayUntil > G.time) this.bubbles.push(n); } });
@@ -180,20 +181,21 @@ R.drawWorld = function (G, v) {
   this.bubbles = [];
   list.sort((a, b) => a.y - b.y);
   for (const it of list) it.d();
+  if (G.scene === 'mine') for (const p of (v.players || [])) if (!p.remote && p.drawTargetMark) p.drawTargetMark(ctx, G);
   // speech bubbles over villagers
   for (const n of this.bubbles) {
     const lines = AH.wrap(n.say, 120).slice(0, 4), w = Math.max(...lines.map(l => AH.textW(l))) + 8, h = lines.length * 8 + 5;
-    const bx = Math.round(n.x - w / 2), by = Math.round(n.y - 36 - h);
+    const bx = AH.px(n.x - w / 2), by = AH.px(n.y - 36 - h);
     ctx.fillStyle = AH.OUT; ctx.fillRect(bx - 1, by - 1, w + 2, h + 2); ctx.fillStyle = '#f2e8d4'; ctx.fillRect(bx, by, w, h);
-    ctx.fillStyle = '#f2e8d4'; ctx.fillRect(Math.round(n.x) - 1, by + h, 3, 2); ctx.fillRect(Math.round(n.x), by + h + 2, 1, 1);
+    ctx.fillStyle = '#f2e8d4'; ctx.fillRect(AH.px(n.x) - 1, by + h, 3, 2); ctx.fillRect(AH.px(n.x), by + h + 2, 1, 1);
     lines.forEach((l, i) => AH.text(ctx, bx + 4, by + 3 + i * 8, l, '#2a2028', { shadow: null }));
   }
   // projectiles (dark parts)
   for (const pr of G.projs) {
     if (!this.inView(v, pr.x, pr.y)) continue;
-    if (pr.k === 'arrow') { ctx.fillStyle = '#6b4a2a'; const dx = Math.cos(pr.a), dy = Math.sin(pr.a); for (let k = 0; k < 6; k++) ctx.fillRect(Math.round(pr.x - dx * k), Math.round(pr.y - dy * k), 1, 1); ctx.fillStyle = '#e9e2d0'; ctx.fillRect(Math.round(pr.x), Math.round(pr.y), 1, 1); }
-    else if (pr.k === 'knife') { ctx.fillStyle = '#dfe6f0'; ctx.fillRect(Math.round(pr.x), Math.round(pr.y), 2, 2); }
-    else if (pr.k === 'bomb') { ctx.fillStyle = AH.OUT; ctx.fillRect(Math.round(pr.x) - 3, Math.round(pr.y) - 3, 6, 6); ctx.fillStyle = '#2a2430'; ctx.fillRect(Math.round(pr.x) - 2, Math.round(pr.y) - 2, 4, 4); ctx.fillStyle = Math.floor(G.time * 10) % 2 ? '#ffd36a' : '#ff3b1f'; ctx.fillRect(Math.round(pr.x) + 1, Math.round(pr.y) - 4, 1, 1); }
+    if (pr.k === 'arrow') { ctx.fillStyle = '#6b4a2a'; const dx = Math.cos(pr.a), dy = Math.sin(pr.a); for (let k = 0; k < 6; k++) ctx.fillRect(AH.px(pr.x - dx * k), AH.px(pr.y - dy * k), 1, 1); ctx.fillStyle = '#e9e2d0'; ctx.fillRect(AH.px(pr.x), AH.px(pr.y), 1, 1); }
+    else if (pr.k === 'knife') { ctx.fillStyle = '#dfe6f0'; ctx.fillRect(AH.px(pr.x), AH.px(pr.y), 2, 2); }
+    else if (pr.k === 'bomb') { ctx.fillStyle = AH.OUT; ctx.fillRect(AH.px(pr.x) - 3, AH.px(pr.y) - 3, 6, 6); ctx.fillStyle = '#2a2430'; ctx.fillRect(AH.px(pr.x) - 2, AH.px(pr.y) - 2, 4, 4); ctx.fillStyle = Math.floor(G.time * 10) % 2 ? '#ffd36a' : '#ff3b1f'; ctx.fillRect(AH.px(pr.x) + 1, AH.px(pr.y) - 4, 1, 1); }
   }
   // smoke puffs
   for (const f of G.fx) if (f.k === 'smoke') {
@@ -214,7 +216,13 @@ R.drawMineProps = function (G, v) {
   for (const p of m.props) {
     if (!this.inView(v, p.x, p.y) || (hid && (p.secret || AH.secretNear(m, p.x, p.y + 8)))) continue;
     switch (p.type) {
-      case 'chest': AH.drawSpr(ctx, p.open ? AH.SPR.chestOpen : AH.SPR.chest, p.x - 8, p.y - 9); break;
+      case 'chest': AH.drawSpr(ctx, p.open ? AH.SPR.chestOpen : AH.SPR.chest, p.x - 8, p.y - 9);
+        if (p.locked && !p.open) { // iron bands and a padlock
+          ctx.fillStyle = '#6a6a7a'; ctx.fillRect(p.x - 7, p.y - 6, 1, 6); ctx.fillRect(p.x + 4, p.y - 6, 1, 6);
+          ctx.fillStyle = AH.OUT; ctx.fillRect(p.x - 3, p.y - 5, 5, 5); ctx.fillStyle = '#b8b8c8'; ctx.fillRect(p.x - 2, p.y - 4, 3, 3); ctx.fillStyle = AH.OUT; ctx.fillRect(p.x - 1, p.y - 3, 1, 1);
+          ctx.fillStyle = '#8a8a9a'; ctx.fillRect(p.x - 2, p.y - 7, 1, 2); ctx.fillRect(p.x, p.y - 7, 1, 2); ctx.fillRect(p.x - 1, p.y - 8, 1, 1);
+        }
+        break;
       case 'tablet': AH.drawSpr(ctx, AH.SPR.tablet, p.x - 6, p.y - 8); break;
       case 'shrine': AH.drawSpr(ctx, AH.SPR.shrine, p.x - 6, p.y - 11); if (p.used) { ctx.fillStyle = '#3a3442'; ctx.fillRect(p.x - 2, p.y - 11, 5, 3); } break;
       case 'dig': if (!p.dug) { if (G.pets.some(pt => pt.kind === 'dog' && pt.active) || Math.floor(G.time * 2 + p.x) % 7 === 0) AH.drawSpr(ctx, AH.SPR.digspot, p.x - 4, p.y - 3); } else { ctx.fillStyle = '#1a1620'; ctx.fillRect(p.x - 3, p.y - 1, 6, 2); } break;
@@ -273,7 +281,7 @@ R.ambientOf = function (G) {
   }
   if (G.floorNo <= 5) return 0.82;
   if (G.event === 'dark') return 0.015;
-  return G.map.biome.ambient;
+  return G.map.biome.ambient * 0.78; // deeper floors: darker, the torch matters
 };
 R.collectLights = function (G, v) {
   const L = [];
@@ -282,7 +290,7 @@ R.collectLights = function (G, v) {
   for (const p of G.players) {
     if (p.remote && G.isHost === false) { /* still light */ }
     const torchK = G.scene === 'mine' && G.floorNo >= 6 ? (0.35 + 0.65 * Math.min(1, p.torch / 40)) : 1;
-    const r = (G.scene === 'town' ? 70 : 112) * torchK * (1 + p.S.light / 100) * (p.dead ? 0.4 : 1);
+    const r = (G.scene === 'town' ? 70 : G.floorNo >= 6 ? 92 : 112) * torchK * (1 + p.S.light / 100) * (p.dead ? 0.4 : 1);
     add(p.x, p.y - 8, r, 1.0, warm);
   }
   for (const l of G.map.lights) { if (G.scene === 'mine' && AH.secretNear(G.map, l.x, l.y + 8)) continue; const f = l.flicker ? 0.9 + Math.sin(G.time * 13 + l.x) * 0.06 + Math.sin(G.time * 7.3 + l.y) * 0.05 : 1; add(l.x, l.y, l.r * f, l.i, l.tint, l.r); }
@@ -332,13 +340,13 @@ R.applyLight = function (G, v) {
       }
     }
   }
-  const img = ctx.getImageData(v.x, v.y, W, H), px = img.data;
+  const SS = AH.SS, WS = W * SS;
+  const img = ctx.getImageData(v.x * SS, v.y * SS, WS, H * SS), px = img.data;
   const steps = 6;
   const dk0 = 6, dk1 = 5, dk2 = 12;
   for (let y = 0; y < H; y++) {
-    const by = ((y + v.y) & 3) * 4;
     for (let x = 0; x < W; x++) {
-      const o = y * W + x, p4 = o * 4;
+      const o = y * W + x;
       const s = Ls[o];
       let tot = s > 1 ? 1 : s;
       let b = Math.round(tot * steps);
@@ -346,23 +354,30 @@ R.applyLight = function (G, v) {
       const inv = s > 0.0001 ? 1 / s : 0;
       let tr = LR[o] * inv, tg = LG[o] * inv, tb = LB[o] * inv;
       if (s > 1.2) { const k = Math.min(1, (s - 1.2) * 0.5); tr += (1 - tr) * k * 0.3; tg += (1 - tg) * k * 0.3; tb += (1 - tb) * k * 0.3; }
-      let r = px[p4] * tr, g = px[p4 + 1] * tg, bb = px[p4 + 2] * tb;
-      if (r > 255) r = 255; if (g > 255) g = 255; if (bb > 255) bb = 255;
-      px[p4] = dk0 + (r - dk0) * f; px[p4 + 1] = dk1 + (g - dk1) * f; px[p4 + 2] = dk2 + (bb - dk2) * f;
+      const a0 = dk0 * (1 - f), a1 = dk1 * (1 - f), a2 = dk2 * (1 - f);
+      for (let yy = 0; yy < SS; yy++) {
+        let p4 = ((y * SS + yy) * WS + x * SS) * 4;
+        for (let xx = 0; xx < SS; xx++, p4 += 4) {
+          let r = px[p4] * tr, g = px[p4 + 1] * tg, bb = px[p4 + 2] * tb;
+          if (r > 255) r = 255; if (g > 255) g = 255; if (bb > 255) bb = 255;
+          px[p4] = a0 + r * f; px[p4 + 1] = a1 + g * f; px[p4 + 2] = a2 + bb * f;
+        }
+      }
     }
   }
-  ctx.putImageData(img, v.x, v.y);
+  ctx.putImageData(img, v.x * SS, v.y * SS);
 };
 
 // "Spectacular lights": normals from the pixel art, walls that cut the light, actors that cast shadows, smooth falloff
 R.applyLightFancy = function (G, v, amb) {
   const ctx = this.ctx, W = v.w, H = v.h, n = W * H;
   const tint = G.scene === 'town' ? [0.82, 0.88, 1.08] : G.map.biome.tint;
-  const img = ctx.getImageData(v.x, v.y, W, H), px = img.data;
+  const SS = AH.SS, WS = W * SS;
+  const img = ctx.getImageData(v.x * SS, v.y * SS, WS, H * SS), px = img.data;
   if (!this.fz || this.fz.n !== n) this.fz = { n, hgt: new Float32Array(n), NX: new Float32Array(n), NY: new Float32Array(n), NZ: new Float32Array(n), R: new Float32Array(n), G: new Float32Array(n), B: new Float32Array(n), sh: new Map(), mapRef: null };
   const F = this.fz, hgt = F.hgt, NX = F.NX, NY = F.NY, NZ = F.NZ, LR = F.R, LG = F.G, LB = F.B;
   if (F.mapRef !== G.map) { F.mapRef = G.map; F.sh.clear(); }
-  for (let i = 0; i < n; i++) { const p4 = i * 4; hgt[i] = (px[p4] * 0.3 + px[p4 + 1] * 0.55 + px[p4 + 2] * 0.15) * (1 / 255); }
+  for (let i = 0; i < n; i++) { const p4 = SS === 1 ? i * 4 : (((i / W | 0) * SS) * WS + (i % W) * SS) * 4; hgt[i] = (px[p4] * 0.3 + px[p4 + 1] * 0.55 + px[p4 + 2] * 0.15) * (1 / 255); }
   for (let i = 0; i < n; i++) {
     const nx = -(hgt[i < n - 1 ? i + 1 : i] - hgt[i > 0 ? i - 1 : i]) * 2.2, ny = -(hgt[i < n - W ? i + W : i] - hgt[i >= W ? i - W : i]) * 2.2;
     const nl = 1 / Math.sqrt(nx * nx + ny * ny + 1); NX[i] = nx * nl; NY[i] = ny * nl; NZ[i] = nl;
@@ -421,13 +436,18 @@ R.applyLightFancy = function (G, v, amb) {
     }
   }
   for (let i = 0; i < n; i++) {
-    const p4 = i * 4;
     let a = LR[i], b = LG[i], c = LB[i]; if (a > 1.7) a = 1.7; if (b > 1.7) b = 1.7; if (c > 1.7) c = 1.7;
     a = ((a * 8 + 0.5) | 0) / 8; b = ((b * 8 + 0.5) | 0) / 8; c = ((c * 8 + 0.5) | 0) / 8;
-    const r = px[p4] * a, g = px[p4 + 1] * b, bb = px[p4 + 2] * c;
-    px[p4] = r > 255 ? 255 : r; px[p4 + 1] = g > 255 ? 255 : g; px[p4 + 2] = bb > 255 ? 255 : bb;
+    const y = i / W | 0, x = i - y * W;
+    for (let yy = 0; yy < SS; yy++) {
+      let p4 = ((y * SS + yy) * WS + x * SS) * 4;
+      for (let xx = 0; xx < SS; xx++, p4 += 4) {
+        const r = px[p4] * a, g = px[p4 + 1] * b, bb = px[p4 + 2] * c;
+        px[p4] = r > 255 ? 255 : r; px[p4 + 1] = g > 255 ? 255 : g; px[p4 + 2] = bb > 255 ? 255 : bb;
+      }
+    }
   }
-  ctx.putImageData(img, v.x, v.y);
+  ctx.putImageData(img, v.x * SS, v.y * SS);
 };
 // glow on the final screen: bright pixels bleed light (cheap: tiny canvases scaled up smoothly)
 R.bloom = function (sctx, world, view) {
@@ -449,8 +469,8 @@ R.bloom = function (sctx, world, view) {
 // a servant's current frame: bats keep flapping their wings after death too
 AH.minionFrame = function (a, G) {
   const base = a.def ? a.def.spr : a.base;
-  if (base === 'bat') {
-    if (!a.spr2) a.spr2 = AH.raisedSprite(AH.creatureSprite({ spr: 'bat2', pal: (a.def && a.def.pal) || a.pal || {} }));
+  if (base === 'bat' || base === 'moth') {
+    if (!a.spr2) a.spr2 = AH.raisedSprite(AH.creatureSprite({ spr: base + '2', pal: (a.def && a.def.pal) || a.pal || {} }));
     if (Math.floor(G.time * 11 + a.id * 3) % 2) return a.spr2;
   }
   return a.spr;
@@ -497,8 +517,8 @@ R.drawEmissive = function (G, v) {
     if (!this.inView(v, pr.x, pr.y)) continue;
     if (pr.k === 'magic' || pr.k === 'spit' || pr.k === 'fire' || pr.k === 'wave') {
       const r = pr.k === 'fire' ? 3 : pr.heavy ? 3 : 2;
-      ctx.fillStyle = pr.col; ctx.fillRect(Math.round(pr.x) - r, Math.round(pr.y) - r + 1, r * 2, r * 2 - 2); ctx.fillRect(Math.round(pr.x) - r + 1, Math.round(pr.y) - r, r * 2 - 2, r * 2);
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(pr.x) - 1, Math.round(pr.y) - 1, 2, 2);
+      ctx.fillStyle = pr.col; ctx.fillRect(AH.px(pr.x) - r, AH.px(pr.y) - r + 1, r * 2, r * 2 - 2); ctx.fillRect(AH.px(pr.x) - r + 1, AH.px(pr.y) - r, r * 2 - 2, r * 2);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(AH.px(pr.x) - 1, AH.px(pr.y) - 1, 2, 2);
       if (Math.random() < 0.5) G.fx.push({ k: 'px', x: pr.x, y: pr.y, vx: 0, vy: 0, col: pr.col, life: 0.15, em: 1 });
     }
   }
@@ -574,13 +594,14 @@ R.playerPanel = function (G, p, x, y, compact) {
     AH.text(ctx, x + 31, y + 3, p.ch.name.slice(0, 7), '#f2e3b3');
     AH.text(ctx, x + w - 4, y + 3, 'LV' + p.ch.level, '#8d8494', { align: 'right' });
     AH.bar(ctx, x + 31, y + 13, w - 35, 4, p.hp / p.S.hp, '#d43c3c', '#3a1416', '#ff8a8a');
-    AH.bar(ctx, x + 31, y + 20, w - 35, 3, p.mp / p.S.mp, '#4a7bd1', '#141a2a', '#9ec0ff');
+    const rg = AH.usesRage(p.ch.cls);
+    AH.bar(ctx, x + 31, y + 20, w - 35, 3, p.mp / p.S.mp, rg ? '#d8642a' : '#4a7bd1', rg ? '#2a1610' : '#141a2a', rg ? '#ffb07a' : '#9ec0ff');
     AH.bar(ctx, x + 31, y + 26, w - 35, 1, p.ch.xp / AH.xpNeed(p.ch.level), '#e8c25a', '#2a2214');
   } else {
     AH.text(ctx, x + 4, y + 3, p.ch.name.slice(0, 7), p.color);
     AH.text(ctx, x + w - 4, y + 3, '' + p.ch.level, '#8d8494', { align: 'right' });
     AH.bar(ctx, x + 4, y + 13, w - 8, 3, p.hp / p.S.hp, '#d43c3c', '#3a1416', '#ff8a8a');
-    AH.bar(ctx, x + 4, y + 18, w - 8, 1, p.mp / p.S.mp, '#4a7bd1', '#141a2a');
+    AH.bar(ctx, x + 4, y + 18, w - 8, 1, p.mp / p.S.mp, AH.usesRage(p.ch.cls) ? '#d8642a' : '#4a7bd1', '#141a2a');
   }
   if (p.dead) AH.text(ctx, x + w / 2, y + h / 2 - 3, 'DOWN', '#ff6a5a', { align: 'center' });
   return h;
@@ -625,9 +646,12 @@ R.drawViewHud = function (G, v, views) {
     const locals = v.players;
     if (locals.length === 1 && !G.net) {
       const p = locals[0];
+      // the corner panel turns see-through when something worth seeing is under it (a cracked wall, a chest, a foe)
+      ctx.save(); ctx.globalAlpha = this.hudFade(G, v, 'tl', 0, 0, 112, 56);
       this.playerPanel(G, p, v.x + 2, v.y + 2, false);
       if (G.scene === 'mine' && G.floorNo >= 6) this.torchGauge(G, p, v.x + 2, v.y + 34);
       this.petPanel(G, p, v.x + 2, v.y + (G.scene === 'mine' && G.floorNo >= 6 ? 44 : 34));
+      ctx.restore();
       this.hotbar(G, p);
     } else {
       let y = v.y + 2;
@@ -640,9 +664,25 @@ R.drawViewHud = function (G, v, views) {
       if (G.scene === 'mine' && G.floorNo >= 6) for (const p of locals) { this.torchGauge(G, p, v.x + 2, y); y += 8; }
       if (G.net && locals.length === 1) this.hotbar(G, locals[0]);
     }
-    if (G.scene === 'mine' && views.length === 1) this.minimap(G, v);
+    if (G.scene === 'mine' && views.length === 1) { ctx.save(); ctx.globalAlpha = this.hudFade(G, v, 'tr', v.w - 64, 0, 64, 48); this.minimap(G, v); ctx.restore(); }
     this.drawToasts(G, v, null);
   }
+};
+R.hudFade = function (G, v, key, rx, ry, rw, rh) {
+  const m = G.map, T = AH.T, pts = [];
+  const inR = (x, y) => { const sx = x - v.camX, sy = y - v.camY; return sx > rx - 4 && sx < rx + rw + 4 && sy > ry - 4 && sy < ry + rh + 10; };
+  let hit = false;
+  for (const p of G.players) if (inR(p.x, p.y)) hit = true;
+  if (!hit) for (const e of G.enemies) if (!e.dead && !e.hidden && inR(e.x, e.y)) { hit = true; break; }
+  if (!hit && G.scene === 'mine') {
+    if (m.secret && !m.secret.found && inR(m.secret.wall[0] * T + 8, m.secret.wall[1] * T + 8)) hit = true;
+    if (!hit && m.stairs && inR(m.stairs.x, m.stairs.y)) hit = true;
+    if (!hit) for (const pr of m.props) if ((pr.type === 'chest' && !pr.open) || pr.type === 'grave' || pr.type === 'qitem') if (inR(pr.x, pr.y)) { hit = true; break; }
+    if (!hit) for (const d of G.drops) if (inR(d.x, d.y)) { hit = true; break; }
+  }
+  this.hudA = this.hudA || {};
+  const a = this.hudA[key] === undefined ? 1 : this.hudA[key], target = hit ? 0.3 : 1;
+  return (this.hudA[key] = a + (target - a) * Math.min(1, (G.dt || 0.016) * 8));
 };
 R.torchGauge = function (G, p, x, y) {
   const ctx = this.ctx;
@@ -744,8 +784,10 @@ R.drawOreRock = function (ctx, G, vn) {
 R.hotbar = function (G, p) {
   const ctx = this.ctx;
   // key names for the device this hero uses
-  const KL = p.device === 'kb1' ? { a: 'J', x: 'K', b: 'SPC', y: '1', lb: '2', rb: '3', pot: 'Q', mana: 'E' }
-    : p.device === 'kb2' ? { a: 'N1', x: 'N4', b: 'N2', y: 'N5', lb: 'N7', rb: 'N8', pot: 'N0', mana: 'N.' }
+  const L = a => AH.Input.label(p.device, a, true);
+  const KL = p.device === 'kb1' || p.device === 'kb2'
+    ? { a: L('a'), x: L('x'), b: p.device === 'kb1' ? L('dodge') : L('b'), y: L('y'), lb: L('lb'), rb: L('rb'), pot: L('pot'), mana: L('mana') }
+    : p.device && p.device.startsWith('gp') ? { a: L('a'), x: L('x'), b: L('b'), y: L('y'), lb: L('lb'), rb: L('rb'), pot: '^', mana: '_' }
     : { a: 'A', x: 'X', b: 'B', y: 'Y', lb: 'LB', rb: 'RB', pot: '^', mana: '_' };
   const items = [
     { k: KL.a, ic: AH.itemIcon(p.weapon() || { kind: 'cons', icon: 'dodge' }) },

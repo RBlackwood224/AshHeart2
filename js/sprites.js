@@ -10,11 +10,14 @@ AH.HEADS = {
   hat: [".......q......", "......qU......", ".....qUuu.....", "....qUUuuu....", "..qqUUUuuuuq..", "...qfffffF....", "...qfefeFF...."],
   crown: ["...g.g.g......", "...ggggggg....", "...grgggrg....", "...hffffh.....", "...fefeFf.....", "...fFffFf.....", "....ffff......"],
   bare: ["..............", "....hhhh......", "...hhhhhh.....", "...hffffh.....", "...fefeFf.....", "...fFffFf.....", "....ffff......"],
+  wild: ["....hh.h......", "...hhhhhh.....", "..hhhhhhhh....", "..hhffffhh....", "..hfefeFfh....", "...xffffx.....", "....xxxx......"],
+  horned: ["..o......o....", "..oo.WWW.oo...", "...oWWWWwo....", "...WWwwwwk....", "...WfefeFk....", "...xffffFk....", "....xxxx......"],
   beard: [".......q......", "......qU......", ".....qUuu.....", "....qUUuuu....", "..qqUUUuuuuq..", "...qfefeFF....", "...xxxxxxX...."],
 };
 AH.TORSOS = {
   plate: ["...aammmmn....", "..aattcttnn...", "..fatcccTnf...", "...attctTn....", "...mTttTTn....", "...ngggggn....", "...mtttTTn...."],
   leather: ["...aammmmn....", "..aammmmmnn...", "..fammmmmnf...", "...ammmmmn....", "...mmmmmmn....", "...ngggggn....", "...mmmmmmn...."],
+  fur: ["..AAAmmmAA....", ".AAffffffFA...", "..ffffffFFf...", "...fffffFF....", "...ffffFFF....", "...ngggggn....", "...mmmmmmn...."],
   robe: ["...xaaaaXn....", "..aaxxxXaan...", "..faaxXaaaf...", "...aaagaan....", "...maagaan....", "...ngggggn....", "...maagaan...."],
 };
 AH.LEGS = {
@@ -35,6 +38,7 @@ AH.HELD = {
   greatsword: { g: [".s.", "sSS", "sSS", "sSS", "sSS", "sSS", "sSS", "sSS", "sSS", "gGGg", ".bb.", ".bb.", ".BB."], ax: 1, ay: 10 },
   axe: { g: ["ss..", "sSSb", "sSSb", "ss.b", "...b", "...b", "...b", "...b", "...B"], ax: 3, ay: 6 },
   mace: { g: [".k.", "kKk", "KkK", ".k.", ".b.", ".b.", ".b.", ".b.", ".B."], ax: 1, ay: 6 },
+  maul: { g: ["kKKKk", "kKKKk", "kKKKk", "..b..", "..b..", "..b..", "..b..", "..b..", "..b..", "..B.."], ax: 2, ay: 7 },
   dagger: { g: [".s", "sS", "sS", "sS", "gg", ".b"], ax: 1, ay: 5 },
   bow: { g: ["bb..", "w.b.", "w..b", "w..b", "w..b", "w..b", "w..b", "w.b.", "bb.."], ax: 3, ay: 4 },
   staff: { g: [".c.", "cCc", ".c.", ".b.", ".b.", ".b.", ".b.", ".b.", ".b.", ".b.", ".B."], ax: 1, ay: 7 },
@@ -86,6 +90,7 @@ AH.composeHumanoid = function (look, frame) {
 // ---- class base palettes ----
 AH.CLASS_PAL = {
   paladin: { p: '#d4453c', P: '#8c2a30', W: '#dcd8e4', w: '#a19cb2', k: '#625c74', K: '#4a4458', v: '#120e16', a: '#c4c0cf', m: '#8f8aa0', n: '#5d586e', t: '#b0343c', T: '#742430', c: '#f2e3b3', g: '#e8c25a', l: '#4a4256', L: '#302a3c', b: '#5a3c26', B: '#3a261a', f: '#e0b088', F: '#b07c5a', e: '#120e16', h: '#6a3a20', H: '#4a2814', x: '#e2dccc', X: '#a8a294', q: '#3a3242', U: '#5a5062', u: '#7a708a', r: '#d4453c' },
+  barb: { p: '#c8382a', P: '#8a2018', W: '#9aa4b8', w: '#6a7288', k: '#4a5068', K: '#2e3248', v: '#120e16', h: '#c8642a', H: '#8a4018', f: '#d89a6a', F: '#a06a44', e: '#120e16', a: '#8a6440', m: '#5a4030', n: '#3a2818', t: '#5a4030', T: '#3a2818', c: '#c9a24a', g: '#8a5a2a', l: '#4a3a30', L: '#2e241e', b: '#3a2a1e', B: '#241a12', x: '#b8582a', X: '#8a3a1a', o: '#e8dcc0', A: '#c8b49a', q: '#2a2430', U: '#4a3a30', u: '#6a5a4a', r: '#d4453c' },
   rogue: { p: '#467a50', P: '#2a4a32', W: '#6f8a72', w: '#4a6a50', k: '#2a3a2c', K: '#1c2a1e', v: '#120e16', h: '#467a50', H: '#2a4a32', f: '#d0a070', F: '#8a6040', e: '#120e16', a: '#8a6440', m: '#6b4a2e', n: '#4a3020', t: '#3a4a3a', T: '#24302a', c: '#c9a24a', g: '#c9a24a', l: '#3a3448', L: '#24202e', b: '#4a3424', B: '#2e2018', x: '#e2dccc', X: '#a8a294', q: '#2a4a32', U: '#467a50', u: '#5e9a68', r: '#d4453c' },
   necro: { p: '#3a3440', P: '#221e28', W: '#5a5262', w: '#3a3440', k: '#1a1620', K: '#100e14', v: '#120e16', h: '#2e2a34', H: '#1a1720', f: '#c8c4b4', F: '#8a867a', e: '#8aff7a', a: '#3c3644', m: '#2a2530', n: '#17141c', t: '#6ac85a', T: '#3a7a34', c: '#d8d0c0', g: '#9a907c', l: '#26222c', L: '#16131a', b: '#3a2e2a', B: '#241c1a', x: '#6ac85a', X: '#3a7a34', q: '#2a2530', U: '#3a3440', u: '#5a5262', r: '#8aff7a' },
   wizard: { p: '#5868c8', P: '#3d4fa8', W: '#8a96d8', w: '#5c6ed0', k: '#26327a', K: '#1a2258', v: '#120e16', q: '#26327a', U: '#3d4fa8', u: '#5c6ed0', f: '#e0b088', F: '#b07c5a', e: '#120e16', x: '#e2dccc', X: '#a8a294', a: '#4a5ab8', m: '#34408f', n: '#222a66', t: '#e8c25a', T: '#a8823a', c: '#f2e3b3', g: '#e8c25a', l: '#2e2838', L: '#1c1824', b: '#6b4a2a', B: '#4a3020', h: '#c8c0b0', H: '#8a8478', r: '#d4453c' },
@@ -115,6 +120,13 @@ G.rat = AH.sprite([".....pR...", "..rrrrrkR.", ".rrrrrrrrp", "p.R..R.R..", "pp..
 G.mimic = AH.sprite([".BBBBBBBBBBBB.", "BbtbtbtbtbtbbB", "BkkkkkkkkkkkkB", "BktttttttttkkB", "GggggggggggggG", "BbbbbbGGbbbbbB", "BbbbbbgYbbbbbB", "BBBBBBBBBBBBBB"], { B: '#4e3420', b: '#8a6038', t: '#f2e3b3', k: '#3a0e12', G: '#a8823a', g: '#e8c25a', Y: '#fff2a8' });
 // ASHHEART, the heart that woke: a horned demon lord of molten iron with the burning heart in its chest
 G.heart = AH.sprite(["...hh......................hh...", "..hHh......................hHh..", ".hHh........................hHh.", ".hHh........................hHh.", ".hHHh.....oooooooooooo.....hHHh.", "..hHHhh.oddddddddddddddo.hhHHh..", "...hHHHhoddrrrrrrrrrrddohHHHh...", "....hhHHodrrRRRRRRRRrrdoHHhh....", "......odddooorrRRrrooodddo......", "......odrreeeoRRRRoeeerrdo......", "......odrrreeeRrrReeerrrdo......", ".......odrrrRRrrrrRRrrrdo.......", ".......oddkokkokkokkokddo.......", "........odffffffffffffdo........", "........oddkokkookkokddo........", ".....oooooddddddddddddooooo.....", "..ooMMMMoodrrrrrrrrrrdooMMMMoo..", ".oMMMMMMmodrRRRRRRRRrdomMMMMMMo.", "oMMHMMMmmdrRRfRRRRfRRrdmmMMMHMMo", "oMmMmmmodrrRRRfyyfRRRrrdommmMmMo", ".omm.odrrRRfRyyyyyyRfRRrrdo.mmo.", ".od..odrrRRRRyyyyyyRRRRrrdo..do.", ".odd.odrrrRfRRyyyyRRfRrrrdo.ddo.", "odrro.odrrRRRRRyyRRRRRrrdo.orrdo", "okkko.oddrrrrRRRRRRrrrrddo.okkko", ".k.k..oddmmmmmmmmmmmmmmddo..k.k.", "......oddrrdo......odrrddo......", "......odrrrdo......odrrrdo......", ".....oddrrrdo......odrrrddo.....", ".....odrrRrdo......odrRrrdo.....", "....oMMMMMMMo......oMMMMMMMo....", "...oMMHMMMMMo......oMMMMMHMMo...", "...ooooooooooo....ooooooooooo..."], { h: '#e8dcc2', H: '#8a7c68', o: '#140605', d: '#44120c', r: '#842214', R: '#b83420', e: '#ffe04a', f: '#ff7a24', y: '#fff0a0', k: '#f2e8d4', M: '#5e5868', m: '#38323f' }, { emissive: 'efy' });
+
+// new kin of the deep: beetles, serpents, moths and ogres
+G.beetle = AH.sprite(["..k......k..", "...k....k...", "..sSeSSeSs..", ".sSsSSSSsSs.", ".sSSSsSSSSs.", ".sSsSSSSsSs.", "..sSSSSSSs..", ".k.k....k.k."], { s: '#4a6a8a', S: '#2a3a5a', k: '#1a1620', e: '#ff3b1f' }, { emissive: 'e' });
+G.snake = AH.sprite(["........ggg.", ".......gGegg", "...gg..gggk.", "..gGGg..gg..", ".gg..gg.gg..", "gg....gggG..", "G......GG..."], { g: '#6a9a3a', G: '#3a5a24', e: '#ff3b1f', k: '#c8384a' }, { emissive: 'e' });
+G.moth = AH.sprite(["w.........w", "ww.wW.Ww.ww", "wWw.wWw.wWw", ".wWwwewwWw.", "..ww.W.ww..", ".w..W.W..w."], { w: '#c8b48a', W: '#8a7a5a', e: '#ff3b1f' }, { emissive: 'e' });
+G.moth2 = AH.sprite([".....W.....", "...wwWww...", ".wWwwWwwWw.", "wWWwwewwWWw", ".www.W.www.", "....W.W...."], { w: '#c8b48a', W: '#8a7a5a', e: '#ff3b1f' }, { emissive: 'e' });
+G.ogre = AH.sprite(["....oooooo....", "...oOOOOOOo...", "...oeOOOeOo...", "...oOOOOOOo...", "....oOttOo....", "..oooooooooo..", ".oOOOOOOOOOOo.", "oOOoOOOOOOoOOo", "oOo.OOllOO.oOo", "oo..OOOOOO..oo", "....OObbOO....", "....OO..OO....", "....OO..OO....", "...ooo..ooo..."], { o: '#8a9a5a', O: '#5a6a3a', e: '#ff3b1f', t: '#f2e3d3', l: '#6b4a2e', b: '#6b4a2e' }, { emissive: 'e' });
 
 // ---- companions ----
 G.dog = AH.sprite(["........DD...", ".......Dlld..", "D......dlkdn.", "dD...cclddD..", ".dllllldD....", ".dddddddD....", ".dD.d.dD.....", ".DD.D.DD....."], { d: '#9a6436', D: '#6a4024', l: '#c48c56', k: '#120e16', n: '#2a1a10', c: '#c23b3b' });
@@ -169,6 +181,12 @@ AH.ICON_GRIDS = {
   mace: ["....mKm.....", "...mKmKm....", "...KmmmK....", "....mKm.....", ".....b......", ".....b......", ".....b......", ".....b......", ".....B......", "....BB......"],
   bow: ["..wbb.....", "..w.Gb....", "..w..b....", "..w...b...", "..w...b...", "..w...b...", "..w...b...", "..w..b....", "..w.Gb....", "..wbb....."],
   scepter: [".....ww.....", "....wwww....", "....wewe....", "....wwww....", ".....kk.....", ".....gg.....", ".....m......", ".....m......", ".....m......", ".....K......"],
+  maul: ["...mKKKKm...", "...KmmmmK...", "...KmmmmK...", "...mKKKKm...", ".....b......", ".....b......", ".....b......", ".....b......", ".....b......", ".....B......", "....BB......"],
+  hornhelm: [".w........w.", "ww.WWWW..ww.", ".wWWWWaaaw..", "..WWWWaaam..", "..Wvvvvvvm..", "..aWa..aam..", "..aaaaaamm..", "..amamamam..", "...aaaamm..."],
+  fur: ["..ww....ww..", ".wwwbbbbwww.", ".wwbbbbbbww.", ".bbbbbbbbbb.", "..bbbbbbbb..", "..BbggggbB..", "..Bbbbbbbb..", "..BBbbbbBB..", "...BBBBBB..."],
+  leap: ["........yy..", ".......y..y.", "......y.....", ".....y......", "....y.......", "..ss........", ".sSSs.......", "sSSSSs......", "wwwwwwwwwww."],
+  warcry: ["...rrrr.....", "..rRRRRr..y.", ".rRwwwwRr.y.", ".rRwkkwRry..", ".rRwkkwRr...", ".rRwwwwRr.y.", "..rRRRRr..y.", "...rrrr....."],
+  slam: [".....kk.....", "....kKKk....", "....kKKk....", ".....bb.....", ".....bb.....", "y...wbbw...y", ".y.wwwwww.y.", "wwwwwwwwwwww"],
   skull: ["...wwwwww...", "..wwwwwwww..", ".wwwwwwwwww.", ".wkkwwwwkkw.", ".wkekwwkekw.", ".wwwwkkwwww.", "..wwwwwwww..", "...wkwkwk...", "...wwwwww..."],
   curse: ["....PPPP....", "..PPpppPPP..", ".PpppeeppPP.", "PpppekkeppPP", "PppekhhkeppP", "PppekhhkeppP", "PpppekkeppPP", ".PpppeeppPP.", "..PPpppPPP..", "....PPPP...."],
   boneburst: ["w....w....w.", ".w...w...w..", "..w.eee.w...", "...ehhhe....", "wweehwwhewww", "...ehhhe....", "..w.eee.w...", ".w...w...w..", "w....w....w."],
@@ -194,6 +212,7 @@ AH.ICON_GRIDS = {
   ore: ["............", "....KKK.....", "...KkkgK....", "..KkGgkKK...", "..KkkkkgK...", "..KkgkkkK...", "...KKKKKK..."],
   gem: ["....cc......", "...cCCc.....", "..cCwwCc....", "..cCCCCc....", "...cCCc.....", "....cc......"],
   bomb: [".......y....", "......b.....", ".....b......", "...kkkk.....", "..kKKkkk....", "..kKkkkk....", "..kkkkkk....", "...kkkk....."],
+  lockpick: ["..........s.", ".........s..", "........s...", ".......s....", "..bb..s.....", ".bkkbs......", ".bkkb.......", "..bb........"],
   key: ["...ggg......", "..g...g.....", "..g...g.....", "...ggg......", "....g.......", "....gg......", "....g.......", "....gg......"],
   scroll: ["..wwwwwww...", ".wWwwwwwwW..", "..wkkkkkw...", "..wwwwwww...", "..wkkkkw....", "..wwwwwww...", ".wWwwwwwwW.."],
   heavy: ["........yy..", "......yyE...", ".....yE.....", "....yE......", "...yE....s..", "..yE....sS..", "..yE...sS...", "..yE..sS....", "...y.sS.....", "....GG......", "...b..G....."],

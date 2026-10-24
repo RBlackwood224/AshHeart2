@@ -42,12 +42,12 @@ AH.recolor = function (s, map) {
 
 AH.drawSpr = function (ctx, s, x, y, flip, scale) {
   scale = scale || 1;
-  ctx.drawImage(flip ? s.cf : s.c, Math.round(x), Math.round(y), s.w * scale, s.h * scale);
+  ctx.drawImage(flip ? s.cf : s.c, AH.px(x), AH.px(y), s.w * scale, s.h * scale);
 };
 AH.drawSprEm = function (ctx, s, x, y, flip, scale) {
   const e = flip ? s.emf : s.em; if (!e) return;
   scale = scale || 1;
-  ctx.drawImage(e, Math.round(x), Math.round(y), s.w * scale, s.h * scale);
+  ctx.drawImage(e, AH.px(x), AH.px(y), s.w * scale, s.h * scale);
 };
 // draw a white silhouette flash version
 AH.flashCache = new WeakMap();
@@ -72,7 +72,7 @@ AH.drawTint = function (ctx, s, x, y, flip, scale, col) {
     f = m[key] = { c: mk(s.c), cf: mk(s.cf) };
   }
   scale = scale || 1;
-  ctx.drawImage(flip ? f.cf : f.c, Math.round(x), Math.round(y), s.w * scale, s.h * scale);
+  ctx.drawImage(flip ? f.cf : f.c, AH.px(x), AH.px(y), s.w * scale, s.h * scale);
 };
 AH.drawFlash = function (ctx, s, x, y, flip, scale) {
   let f = AH.flashCache.get(s);
@@ -81,7 +81,7 @@ AH.drawFlash = function (ctx, s, x, y, flip, scale) {
     f = { c: mk(s.c), cf: mk(s.cf) }; AH.flashCache.set(s, f);
   }
   scale = scale || 1;
-  ctx.drawImage(flip ? f.cf : f.c, Math.round(x), Math.round(y), s.w * scale, s.h * scale);
+  ctx.drawImage(flip ? f.cf : f.c, AH.px(x), AH.px(y), s.w * scale, s.h * scale);
 };
 // 90° rotated copy (pixel perfect)
 AH.rotSpr = function (s, quarter) {

@@ -44,9 +44,10 @@ U.hint = function (ctx, s) {
 U.btnName = function (G, m, b) {
   // name the buttons of whatever the player is actually using right now
   const d = (m && m.dev) || (AH.Input.lastDevice && AH.Input.lastDevice()) || '';
-  const kb1 = { a: 'ENTER', b: 'ESC', x: 'K', y: '1', lb: '2', rb: '3', start: 'ESC', select: 'TAB' };
-  const kb2 = { a: 'NUM1', b: 'NUM2', x: 'NUM4', y: 'NUM5', lb: 'NUM7', rb: 'NUM8', start: 'NUMENTER', select: 'NUM+' };
-  if (d === 'kb1') return kb1[b]; if (d === 'kb2') return kb2[b];
+  const L = a => AH.Input.label(d, a);
+  if (d === 'kb1') return b === 'a' ? 'ENTER' : b === 'b' ? 'ESC' : L(b);
+  if (d === 'kb2') return L(b);
+  if (d.startsWith('gp')) return L(b);
   return { a: 'A', b: 'B', x: 'X', y: 'Y', lb: 'LB', rb: 'RB', start: 'START', select: 'SELECT' }[b];
 };
 U.nav = function (G, m, dt) {
@@ -391,7 +392,7 @@ U.update.create = function (G, m, dt) {
     if (n.p.b || n.p.start) { m.step = 1; m.kbTyping = false; AH.Audio.sfx('back'); }
   }
 };
-U.CARD_W = 106; U.CARD_X = i => 14 + i * 114;
+U.CARD_W = 86; U.CARD_X = i => 10 + i * 93;
 U.draw.create = function (G, ctx, m) {
   U.bg(ctx, false);
   const clsKeys = AH.CLASS_KEYS;
@@ -439,28 +440,81 @@ U.draw.create = function (G, ctx, m) {
 U.update.options = function (G, m, dt) {
   const o = AH.options;
   const n = U.nav(G, m, dt);
-  const rows = 7;
+  const rows = U.optRows().length;
   const ms = U.mouseList(G, m);
-  if (ms && ms.pick) { if (m.sel === 1 || m.sel === 2) n.dx = (m.sel === 1 ? o.music : o.sfx) >= 1 ? -10 : 1; else n.p.a = true; }
+  let id = U.optRows()[m.sel] && U.optRows()[m.sel].id;
+  if (ms && ms.pick) { if (id === 'music' || id === 'sfx') n.dx = (id === 'music' ? o.music : o.sfx) >= 1 ? -10 : 1; else n.p.a = true; }
   if (ms && ms.back) n.p.b = true;
-  if (n.dy) { m.sel = (m.sel + n.dy + rows) % rows; AH.Audio.sfx('move'); }
-  if (m.sel === 0 && (n.dx || n.p.a)) {
+  if (n.dy) { m.sel = (m.sel + n.dy + rows) % rows; AH.Audio.sfx('move'); id = null; }
+  if (id === 'lang' && (n.dx || n.p.a)) {
     const ids = AH.LANGS.map(l => l.id); const i = ids.indexOf(o.lang || 'en');
     o.lang = ids[(i + (n.dx || 1) + ids.length) % ids.length]; AH.setLang(o.lang); if (G.townMap) AH.renderTown(G.townMap); AH.Save.setOptions(o); AH.Audio.sfx('move');
   }
-  if (m.sel === 1 && n.dx) o.music = AH.clamp(Math.round((o.music + n.dx * 0.1) * 10) / 10, 0, 1);
-  if (m.sel === 2 && n.dx) o.sfx = AH.clamp(Math.round((o.sfx + n.dx * 0.1) * 10) / 10, 0, 1);
-  if (m.sel === 3 && (n.dx || n.p.a)) o.shake = !o.shake;
-  if (m.sel === 4 && (n.dx || n.p.a)) { o.fancy = !AH.fancyOn(); AH.Save.setOptions(o); AH.Audio.sfx('move'); }
-  if (m.sel === 5 && n.p.a) AH.toggleFullscreen();
-  if (m.sel === 6 && n.p.a || n.p.b || n.p.start) { AH.Save.setOptions(o); G.closeMenu(); }
+  if (id === 'music' && n.dx) o.music = AH.clamp(Math.round((o.music + n.dx * 0.1) * 10) / 10, 0, 1);
+  if (id === 'sfx' && n.dx) o.sfx = AH.clamp(Math.round((o.sfx + n.dx * 0.1) * 10) / 10, 0, 1);
+  if (id === 'shake' && (n.dx || n.p.a)) o.shake = !o.shake;
+  if (id === 'fancy' && (n.dx || n.p.a)) { o.fancy = !AH.fancyOn(); AH.Save.setOptions(o); AH.Audio.sfx('move'); }
+  if (id === 'smooth' && (n.dx || n.p.a)) { o.smooth = !AH.smoothOn(); AH.Save.setOptions(o); AH.Audio.sfx('move'); }
+  if (id === 'autoaim' && (n.dx || n.p.a)) { o.autoaim = !AH.autoTargetOn(); AH.Save.setOptions(o); AH.Audio.sfx('move'); }
+  if (id === 'fs' && n.p.a) AH.toggleFullscreen();
+  if (id === 'binds' && n.p.a) { G.openMenu('binds', m.p, { dev: m.dev }); return; }
+  if (id === 'back' && n.p.a || n.p.b || n.p.start) { AH.Save.setOptions(o); G.closeMenu(); }
   AH.Audio.setVol(o.music, o.sfx);
 };
 U.draw.options = function (G, ctx, m) {
   U.bg(ctx); U.title(ctx, 'OPTIONS', 30);
   const o = AH.options, bar = v => '#'.repeat(Math.round(v * 10)) + '-'.repeat(10 - Math.round(v * 10)) + ' ' + Math.round(v * 100) + '%';
   const ln = (AH.LANGS.find(l => l.id === (o.lang || 'en')) || AH.LANGS[0]).name;
-  U.list(ctx, [{ label: 'LANGUAGE', right: '< ' + ln + ' >' }, { label: 'MUSIC', right: bar(o.music) }, { label: 'SOUND', right: bar(o.sfx) }, { label: 'SCREEN SHAKE', right: o.shake ? 'ON' : 'OFF' }, { label: 'SPECTACULAR LIGHTS', right: AH.fancyOn() ? 'ON' : 'OFF' }, { label: 'FULLSCREEN' }, { label: 'BACK' }], m.sel, 120, 70, 240, { lh: 18 });
+  const val = { binds: '>', lang: '< ' + ln + ' >', music: bar(o.music), sfx: bar(o.sfx), shake: o.shake ? 'ON' : 'OFF', fancy: AH.fancyOn() ? 'ON' : 'OFF', smooth: AH.smoothOn() ? 'ON' : 'OFF', autoaim: AH.autoTargetOn() ? 'ON' : 'OFF' };
+  const rows = U.optRows();
+  U.list(ctx, rows.map(r => ({ label: r.label, right: val[r.id] })), m.sel, 120, 62, 240, { lh: rows.length > 8 ? 16 : 18 });
+};
+U.optRows = () => [{ id: 'lang', label: 'LANGUAGE' }, { id: 'music', label: 'MUSIC' }, { id: 'sfx', label: 'SOUND' }, { id: 'shake', label: 'SCREEN SHAKE' },
+  { id: 'fancy', label: 'SPECTACULAR LIGHTS' }, { id: 'smooth', label: 'SMOOTH MOTION' }, { id: 'autoaim', label: 'AUTO-TARGET' }, { id: 'binds', label: 'CONTROLS' }, { id: 'fs', label: 'FULLSCREEN' }, { id: 'back', label: 'BACK' }];
+// ---------- controls: every keyboard and controller has its own layout ----------
+U.BIND_ACTS = {
+  kb: [['up', 'MOVE UP'], ['down', 'MOVE DOWN'], ['left', 'MOVE LEFT'], ['right', 'MOVE RIGHT'], ['a', 'ATTACK / USE'], ['x', 'HEAVY ATTACK'], ['dodge', 'DODGE ROLL'],
+    ['y', 'SKILL 1'], ['lb', 'SKILL 2'], ['rb', 'SKILL 3'], ['pot', 'HEALING POTION'], ['mana', 'MANA POTION'], ['select', 'INVENTORY'], ['start', 'MENU']],
+  gp: [['a', 'ATTACK / USE'], ['x', 'HEAVY ATTACK'], ['b', 'DODGE ROLL'], ['y', 'SKILL 1'], ['lb', 'SKILL 2'], ['rb', 'SKILL 3'], ['pot', 'HEALING POTION'], ['mana', 'MANA POTION'], ['select', 'INVENTORY'], ['start', 'MENU']],
+};
+U.bindDevs = () => { const ds = ['kb1', 'kb2']; const pads = navigator.getGamepads ? navigator.getGamepads() : []; for (let i = 0; i < pads.length; i++) if (pads[i]) ds.push('gp' + i); return ds; };
+U.bindActs = id => id.startsWith('gp') ? U.BIND_ACTS.gp : U.BIND_ACTS.kb.map(a => id === 'kb2' && a[0] === 'dodge' ? ['b', a[1]] : a);
+U.bindDevName = id => id === 'kb1' ? AH.tr('KEYBOARD') + ' 1' : id === 'kb2' ? AH.tr('KEYBOARD') + ' 2' : AH.tr('CONTROLLER') + ' ' + (+id.slice(2) + 1);
+U.update.binds = function (G, m, dt) {
+  const I = AH.Input;
+  m.devs = U.bindDevs(); if (m.di === undefined) { m.di = Math.max(0, m.devs.indexOf(I.lastDevice && I.lastDevice())); m.sel = 0; }
+  if (m.di >= m.devs.length) m.di = 0;
+  const id = m.devs[m.di], acts = U.bindActs(id), rows = acts.length + 3;
+  if (m.wait) {
+    m.wt = (m.wt || 0) + dt;
+    if (!I.capturing()) { m.wait = false; m.cool = 0.25; }
+    else if ((id.startsWith('gp') && I.keys.Escape) || m.wt > 8) { I.cancelCapture(); m.wait = false; m.cool = 0.25; }
+    return;
+  }
+  if (m.cool > 0) { m.cool -= dt; U.nav(G, m, dt); return; }
+  const ms = U.mouseList(G, m);
+  const n = U.nav(G, m, dt);
+  if (ms && ms.pick) n.p.a = true; if (ms && ms.back) n.p.b = true;
+  if (n.dy) { m.sel = (m.sel + n.dy + rows) % rows; AH.Audio.sfx('move'); return; }
+  if (m.sel === 0 && (n.dx || n.p.a)) { m.di = (m.di + (n.dx || 1) + m.devs.length) % m.devs.length; AH.Audio.sfx('move'); return; }
+  if (n.p.b || n.p.start || (m.sel === rows - 1 && n.p.a)) { G.closeMenu(); return; }
+  if (m.sel === rows - 2 && n.p.a) { I.resetBinds(id); AH.Audio.sfx('levelup'); return; }
+  if (n.p.a && m.sel >= 1 && m.sel <= acts.length) {
+    const act = acts[m.sel - 1][0];
+    m.wait = true; m.wt = 0; AH.Audio.sfx('move');
+    if (id.startsWith('gp')) I.startCapture('pad', id, btn => { I.setPad(id, act, btn); AH.Audio.sfx('equip'); });
+    else I.startCapture('key', id, code => { if (code !== 'Escape' || act === 'start') { I.setKey(id, act, code); AH.Audio.sfx('equip'); } });
+  }
+};
+U.draw.binds = function (G, ctx, m) {
+  U.bg(ctx); U.title(ctx, 'CONTROLS', 12);
+  const devs = m.devs || U.bindDevs(), id = devs[m.di || 0] || 'kb1', acts = U.bindActs(id);
+  const blink = Math.floor(G.time * 4) % 2;
+  const items = [{ label: 'DEVICE', right: '< ' + U.bindDevName(id) + ' >', rcol: '#f2e3b3' }]
+    .concat(acts.map(([a, lab], i) => ({ label: lab, right: m.wait && m.sel === i + 1 ? (blink ? (id.startsWith('gp') ? 'PRESS A BUTTON...' : 'PRESS A KEY...') : '') : AH.Input.label(id, a), rcol: m.wait && m.sel === i + 1 ? '#ffb347' : '#e9e2d0' })))
+    .concat([{ label: 'RESET TO DEFAULT' }, { label: 'BACK' }]);
+  U.list(ctx, items, m.sel || 0, 110, 34, 260, { lh: 12 });
+  U.hint(ctx, m.wait ? 'ESC CANCEL' : (U.btnName(G, m, 'a') + ' CHANGE   ' + U.btnName(G, m, 'b') + ' BACK'));
 };
 U.update.help = function (G, m, dt) { const n = U.nav(G, m, dt); if (n.p.a || n.p.b || n.p.start) G.closeMenu(); };
 U.draw.help = function (G, ctx, m) {
@@ -535,6 +589,7 @@ U.invMouse = function (G, m, n) {
       if (j >= 0) { if (j !== from) { const t = ch2.bag[j]; ch2.bag[j] = ch2.bag[from]; ch2.bag[from] = t; m.i = j; AH.Audio.sfx('move'); } return false; }
       const overDoll = inR(4, 20, 150, 160);
       m.area = 'bag'; m.i = from;
+      if (inR(U.TRASH.x - 2, U.TRASH.y - 2, U.TRASH.s + 4, U.TRASH.s + 4)) { n.p.x = true; return false; } // the bin: drop it beside you
       if (overDoll) n.p.a = true; else n.p.x = true;
       return false;
     }
@@ -685,6 +740,16 @@ U.drawPaperdoll = function (G, ctx, m, x0, y0, interactive) {
     if (it && it.cursed && it.identified) { ctx.fillStyle = '#e05a5a'; ctx.fillRect(x + 18, y + 2, 2, 2); }
   }
 };
+// the bin in the corner of the bag panel: drag an item onto it and it lands on the ground beside you
+U.TRASH = { x: 334, y: 242, s: 20 };
+U.drawTrash = function (ctx, x, y, s, hot, armed) {
+  AH.slot(ctx, x, y, s, hot ? '#e05a5a' : armed ? '#9a5a5a' : '#3a3242', hot ? '#2a1416' : '#141018');
+  const c = hot ? '#ff8a8a' : armed ? '#c8a0a0' : '#8d8494', cx = x + s / 2;
+  ctx.fillStyle = c;
+  ctx.fillRect(cx - 5, y + 5, 10, 1); ctx.fillRect(cx - 2, y + 4, 4, 1);                  // lid and handle
+  ctx.fillRect(cx - 4, y + 7, 1, 8); ctx.fillRect(cx + 3, y + 7, 1, 8); ctx.fillRect(cx - 4, y + 15, 8, 1); // can
+  ctx.fillRect(cx - 2, y + 8, 1, 6); ctx.fillRect(cx, y + 8, 1, 6);                      // ribs
+};
 U.drawInvTab = function (G, ctx, m) {
   const p = m.p, ch = p.ch;
   U.drawPaperdoll(G, ctx, m, 4, 20, true);
@@ -692,7 +757,7 @@ U.drawInvTab = function (G, ctx, m) {
   AH.frame(ctx, 4, 184, 150, 82);
   const S = p.S, w = p.wbase(), wi = p.weapon();
   const avg = wi ? Math.round((wi.dmg[0] + wi.dmg[1]) / 2 * (1 + p.mainStat() * 0.03) * (1 + S.dmg / 100) + S.fire + S.frost) : 3;
-  const rows = [['LIFE', Math.round(p.hp) + '/' + S.hp], ['MANA', Math.round(p.mp) + '/' + S.mp], ['DAMAGE', '' + avg], ['ARMOR', '' + S.armor], ['CRIT', Math.round(S.crit) + '%'], ['SPEED', (1 / p.atkTime()).toFixed(1) + '/S']];
+  const rows = [['LIFE', Math.round(p.hp) + '/' + S.hp], [AH.usesRage(ch.cls) ? 'RAGE' : 'MANA', Math.round(p.mp) + '/' + S.mp], ['DAMAGE', '' + avg], ['ARMOR', '' + S.armor], ['CRIT', Math.round(S.crit) + '%'], ['SPEED', (1 / p.atkTime()).toFixed(1) + '/S']];
   rows.forEach(([a, b], i) => { AH.text(ctx, 10, 190 + i * 12, a, '#6f6880'); AH.text(ctx, 148, 190 + i * 12, b, '#e9e2d0', { align: 'right' }); });
   // bag
   AH.frame(ctx, 158, 20, 200, 160);
@@ -731,11 +796,15 @@ U.drawInvTab = function (G, ctx, m) {
     AH.text(ctx, 164, 238, b('y') + ' SORT   ' + b('b') + ' CLOSE', '#6a6274');
   }
   AH.text(ctx, 164, 248, 'PTS: ' + ch.pts + ' STAT  ' + ch.ppts + ' PASSIVE', ch.pts || ch.ppts ? '#f2c94c' : '#6a6274');
+  if (AH.Mouse && AH.Mouse.active && !AH.isTouch) {
+    const hot = m.dragging && m.dragPos && m.dragPos.x >= U.TRASH.x - 2 && m.dragPos.x < U.TRASH.x + U.TRASH.s + 2 && m.dragPos.y >= U.TRASH.y - 2 && m.dragPos.y < U.TRASH.y + U.TRASH.s + 2;
+    U.drawTrash(ctx, U.TRASH.x, U.TRASH.y, U.TRASH.s, hot, m.dragging);
+  }
   if (m.dragging && m.dragPos && ch.bag[m.press ? m.press.i : -1]) {
     const di = ch.bag[m.press.i], ic = AH.itemIcon(di);
     const out = !(m.dragPos.x >= 158 && m.dragPos.x < 358 && m.dragPos.y >= 20 && m.dragPos.y < 180) && !(m.dragPos.x >= 4 && m.dragPos.x < 154 && m.dragPos.y >= 20 && m.dragPos.y < 180);
     AH.slot(ctx, m.dragPos.x - 11, m.dragPos.y - 11, 22, out ? '#e05a5a' : '#c9a24a', '#17131d'); AH.iconIn(ctx, ic, m.dragPos.x - 11, m.dragPos.y - 11, 22);
-    if (out) AH.text(ctx, m.dragPos.x, m.dragPos.y + 14, 'DROP', '#ff8a8a', { align: 'center' });
+    if (out) AH.text(ctx, m.dragPos.x, m.dragPos.y > 236 ? m.dragPos.y - 22 : m.dragPos.y + 14, 'DROP', '#ff8a8a', { align: 'center' });
   }
   // tooltip
   const it = U.invItem(m);
@@ -755,7 +824,7 @@ U.drawCharTab = function (G, ctx, m) {
     AH.text(ctx, 308, y, '' + Math.round(S[k]) + (ch.pts ? ' +' : ''), '#ffffff', { align: 'right' });
     AH.text(ctx, 168, y + 9, d, '#6f6880', { maxW: 142 });
   });
-  const rows = [['LIFE', S.hp], ['MANA', S.mp], ['ARMOR', S.armor], ['CRIT CHANCE', Math.round(S.crit) + '%'], ['ATTACK SPEED', '+' + Math.round(S.ias) + '%'], ['MOVE SPEED', '+' + Math.round(S.move) + '%'], ['BLOCK', Math.round(S.block) + '%'], ['MAGIC FIND', '+' + Math.round(S.mf) + '%'], ['GOLD FIND', '+' + Math.round(S.gold) + '%'], ['XP', ch.xp + '/' + AH.xpNeed(ch.level)]];
+  const rows = [['LIFE', S.hp], [AH.usesRage(p.ch.cls) ? 'RAGE' : 'MANA', S.mp], ['ARMOR', S.armor], ['CRIT CHANCE', Math.round(S.crit) + '%'], ['ATTACK SPEED', '+' + Math.round(S.ias) + '%'], ['MOVE SPEED', '+' + Math.round(S.move) + '%'], ['BLOCK', Math.round(S.block) + '%'], ['MAGIC FIND', '+' + Math.round(S.mf) + '%'], ['GOLD FIND', '+' + Math.round(S.gold) + '%'], ['XP', ch.xp + '/' + AH.xpNeed(ch.level)]];
   rows.forEach(([a, b], i) => { const vw = AH.textW('' + b); AH.text(ctx, 168, 146 + i * 10, a, '#6f6880', { maxW: 136 - vw }); AH.text(ctx, 308, 146 + i * 10, '' + b, '#e9e2d0', { align: 'right' }); });
   AH.frame(ctx, 322, 20, 154, 246);
   AH.text(ctx, 328, 26, 'POWERS', '#f2e3b3');
@@ -846,8 +915,8 @@ U.drawSkillTab = function (G, ctx, m) {
     AH.text(ctx, 36, y, sk.name + ' ' + 'I'.repeat(Math.min(5, ch.skills[id])) + (ch.skills[id] > 5 ? '+' : ''), on ? '#ffb347' : '#cfc6b4');
     AH.wrap(sk.desc, 222).slice(0, 2).forEach((l, k) => AH.text(ctx, 36, y + 9 + k * 8, l, '#6f6880'));
     const sl = ch.slots.indexOf(id);
-    if (sl >= 0) AH.text(ctx, 296, y, (m.dev === 'kb1' ? ['1', '2', '3'] : m.dev === 'kb2' ? ['N5', 'N7', 'N8'] : ['Y', 'LB', 'RB'])[sl], '#8ae08e', { align: 'right' });
-    AH.text(ctx, 296, y + 9, sk.mp + ' MP', '#4a7bd1', { align: 'right' });
+    if (sl >= 0) AH.text(ctx, 296, y, AH.Input.label(m.dev || m.p.device || 'kb1', ['y', 'lb', 'rb'][sl], true), '#8ae08e', { align: 'right' });
+    AH.text(ctx, 296, y + 9, m.p.manaCost(sk.mp) + (AH.usesRage(ch.cls) ? ' ' + AH.tr('RAGE') : ' MP'), AH.usesRage(ch.cls) ? '#d8642a' : '#4a7bd1', { align: 'right' });
   });
   AH.frame(ctx, 308, 20, 168, 246);
   AH.text(ctx, 314, 26, 'SKILL SLOTS', '#f2e3b3');
@@ -962,7 +1031,7 @@ U.ensureStock = function (G, p) {
   for (let i = 0; i < 10; i++) { const it = AH.genItem(rng, f, { mf: 30 }); if (it.rarity >= 3) it.rarity = 2, AH.nameItem(it, rng); st.push(it); }
   W.stock = st; W.stockDay = W.day; return st;
 };
-U.SHOP_CONS = ['potion', 'mana', 'torch', 'bomb', 'idscroll'];
+U.SHOP_CONS = ['potion', 'mana', 'torch', 'bomb', 'idscroll', 'lockpick'];
 U.init.smith = function (G, m) { m.mode = 'menu'; m.sel = 0; };
 U.init.store = function (G, m) { m.mode = 'menu'; m.sel = 0; };
 U.init.inn = function (G, m) { m.sel = 0; };
@@ -1018,7 +1087,7 @@ U.update.smith = U.update.store = function (G, m, dt) {
   } else if (m.mode === 'cons') {
     const c = AH.CONSUMABLES[row.k]; const price = Math.round(c.price * mul);
     if (ch.gold < price) { G.toast(p, 'NOT ENOUGH GOLD', '#ff8a8a'); AH.Audio.sfx('error'); return; }
-    if (!p.addItem(AH.makeCons(row.k, 1))) { G.toast(p, 'BAG IS FULL', '#ff8a8a'); return; }
+    p.capHit = null; if (!p.addItem(AH.makeCons(row.k, 1))) { G.toast(p, p.capHit ? AH.capMsg(p.capHit) : 'BAG IS FULL', '#ff8a8a'); return; }
     ch.gold -= price; AH.Audio.sfx('coin');
   } else if (m.mode === 'sell') {
     const v = AH.itemValue(row.item);

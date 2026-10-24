@@ -277,7 +277,8 @@ AH.genFloor = function (seed, floor, event) {
   for (let k = 0; k < nChest; k++) {
     const r = rng.pick(rooms); if (r === start) continue;
     const p = m.randomFloorIn(r, rng);
-    m.props.push({ type: 'chest', x: p.x, y: p.y, mimic: floor >= 18 && rng() < 0.15 });
+    const mimic = floor >= 18 && rng() < 0.15;
+    m.props.push({ type: 'chest', x: p.x, y: p.y, mimic, locked: !mimic && floor >= 3 && rng() < 0.22 ? 1 : 0 });
   }
   if (!isBoss && rng() < 0.15) { const p = m.randomFloorIn(rng.pick(rooms), rng); m.props.push({ type: 'tablet', x: p.x, y: p.y, lore: rng.int(0, AH.LORE.length - 1) }); }
   if (event === 'vault') {

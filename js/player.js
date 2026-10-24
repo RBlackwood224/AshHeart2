@@ -21,9 +21,9 @@ AH.newCharacter = function (cls, name, pet, hardcore) {
   ch.skills[C.skills[0]] = 1;
   const w = AH.genItem(rng, 1, { rarity: 0, base: C.start.weapon }); ch.equip.weapon = w;
   if (C.start.off) ch.equip.off = AH.genItem(rng, 1, { rarity: 0, base: C.start.off });
-  const head = { paladin: 'helm', rogue: 'hood', wizard: 'hat', necro: 'hood' }[cls];
-  ch.equip.head = AH.genItem(rng, 1, { rarity: 0, base: head });
-  ch.equip.chest = AH.genItem(rng, 1, { rarity: 0, base: { paladin: 'plate', rogue: 'leather', wizard: 'robe', necro: 'robe' }[cls] });
+  const head = { paladin: 'helm', rogue: 'hood', wizard: 'hat', necro: 'hood', barb: null }[cls];
+  if (head) ch.equip.head = AH.genItem(rng, 1, { rarity: 0, base: head });
+  ch.equip.chest = AH.genItem(rng, 1, { rarity: 0, base: { paladin: 'plate', rogue: 'leather', wizard: 'robe', necro: 'robe', barb: 'fur' }[cls] });
   ch.equip.chest.req = null;
   ch.bag[0] = AH.makeCons('potion', 3);
   ch.bag[1] = AH.makeCons('torch', 3);
@@ -76,12 +76,14 @@ P.recalc = function () {
   if (ch.cls === 'paladin') { S.armorPct += 20; S.res += 5; } // holy plate: the sturdiest hero
   if (ch.cls === 'wizard') S.spell += 25 + Math.min(80, Math.round(ch.level * 1.25)); // arcane training grows with every level
   if (ch.cls === 'necro') { S.spell += 10; S.minion += 10; S.res += 5; } // the grave answers him
+  if (ch.cls === 'barb') { S.dmg += 10; S.res += 5; S.hpPct += 5; S.hp = Math.round(S.hp * 1.05); } // thick hide, heavy hands
+  if (C.rage) S.mp = 100; // rage, not mana: a fixed pool that fills in battle
   S.maxMinions = 2 + S.minions + (S.keys.has('army') ? 2 : 0);
   S.speed = C.speed * (1 + S.move / 100);
   if (ch.pet === 'canary') S.light += 20; // the canary's bright feathers
   S.light = Math.max(-50, S.light);
   if (S.keys.has('thousand')) { S.ias += 35; S.dmg -= 15; }
-  S.mprTotal = S.noMpr ? 0 : (0.8 + S.int * 0.06 + S.mpr + (this.wbase().mpr ? 1 : 0));
+  S.mprTotal = S.noMpr || C.rage ? 0 : (0.8 + S.int * 0.06 + S.mpr + (this.wbase().mpr ? 1 : 0));
   this.S = S;
   if (this.hp > S.hp) this.hp = S.hp; if (this.mp > S.mp) this.mp = S.mp;
   this.buildLook();
@@ -101,6 +103,7 @@ P.buildLook = function () {
     else if (b.look === 'leather') { const lc = ['#8a6440', '#7a5a3a', '#5a4a3a', '#6a5a5a', '#4a6a64', '#5a3a32'][chest.tier]; pal.a = AH.shade(lc, 1.2); pal.m = lc; pal.n = AH.shade(lc, 0.65); }
     else { const rc = chest.rarity ? rarCol(chest.rarity) : (ch.cls === 'necro' ? AH.CLASS_PAL.necro.m : AH.CLASS_PAL.wizard.m); pal.a = AH.shade(rc, 1.25); pal.m = rc; pal.n = AH.shade(rc, 0.6); look.legs = 'robe'; pal.x = '#e8c25a'; pal.X = '#a8823a'; }
   } else { look.torso = 'leather'; pal.a = '#b8a888'; pal.m = '#9a8a6a'; pal.n = '#6a5a4a'; }
+  if (chest && AH.ARMORS[chest.base].look === 'fur') { const fc = ['#c8b49a', '#b8a48a', '#a8a8b0', '#d8d8e0', '#8ab0b0', '#c87a5a'][chest.tier]; pal.A = chest.rarity ? AH.shade(rarCol(chest.rarity), 1.2) : fc; pal.m = '#5a4030'; pal.n = '#3a2818'; if (ch.cls !== 'barb') { pal.f = '#d0a070'; pal.F = '#8a6040'; } }
   if (ch.cls === 'wizard' && chest && AH.ARMORS[chest.base].look === 'robe') look.legs = 'robe';
   if (ch.cls === 'necro' && look.torso === 'robe') { pal.x = '#5a8a4a'; pal.X = '#3a5a34'; pal.g = AH.shade(pal.m, 1.35); }
   // head
@@ -109,11 +112,11 @@ P.buildLook = function () {
     const b = AH.ARMORS[head.base]; look.head = b.look;
     if (b.look === 'hat' && ch.cls === 'wizard') look.head = 'beard';
     const mat = AH.MATERIALS[head.tier].metal;
-    if (b.look === 'helm' || b.look === 'greathelm') { pal.W = mat[0]; pal.w = mat[1]; pal.k = mat[2]; pal.K = AH.shade(mat[2], 0.7); if (head.rarity) { pal.p = rarCol(head.rarity); pal.P = AH.shade(pal.p, 0.6); } }
+    if (b.look === 'helm' || b.look === 'greathelm' || b.look === 'horned') { pal.W = mat[0]; pal.w = mat[1]; pal.k = mat[2]; pal.K = AH.shade(mat[2], 0.7); if (head.rarity) { pal.p = rarCol(head.rarity); pal.P = AH.shade(pal.p, 0.6); } }
     if (b.look === 'hood') { const hc = head.rarity ? rarCol(head.rarity) : AH.CLASS_PAL[ch.cls === 'necro' ? 'necro' : 'rogue'].h; pal.h = hc; pal.H = AH.shade(hc, 0.6); }
     if (b.look === 'hat') { const hc = head.rarity ? rarCol(head.rarity) : AH.CLASS_PAL.wizard.U; pal.U = hc; pal.u = AH.shade(hc, 1.3); pal.q = AH.shade(hc, 0.6); }
     if (head.rarity === 4) look.head = 'crown';
-  } else { look.head = 'bare'; pal.h = ch.cls === 'wizard' ? '#c8c0b0' : ch.cls === 'rogue' ? '#3a2a1a' : ch.cls === 'necro' ? '#d8d4cc' : '#6a3a20'; }
+  } else if (ch.cls === 'barb') { look.head = 'wild'; } else { look.head = 'bare'; pal.h = ch.cls === 'wizard' ? '#c8c0b0' : ch.cls === 'rogue' ? '#3a2a1a' : ch.cls === 'necro' ? '#d8d4cc' : '#6a3a20'; }
   if (ch.cls === 'necro') look.emissive = 'e'; // eyes that glow in the dark
   // held
   const w = eq.weapon;
@@ -153,6 +156,8 @@ P.rollDamage = function (mult, opt) {
   d *= 1 + this.S.dmg / 100;
   d *= mult || 1;
   if (this.buffs.fury > 0) d *= 1.3;
+  if (this.buffs.warcry > 0) d *= 1.25;
+  if (this.S.keys.has('berserk')) d *= 1 + 0.5 * (1 - Math.max(0, this.hp) / Math.max(1, this.S.hp));
   if (this.S.powers.has('emberheart') && this.hp < this.S.hp * 0.5) d *= 1.4;
   if (this.S.powers.has('lastlight') && this.hp < this.S.hp * 0.3) d *= 1.4;
   const fire = this.S.fire * (1 + this.S.firePct / 100) * (mult || 1);
@@ -171,10 +176,15 @@ P.spellPower = function (base) {
   if (this.S.powers.has('lastlight') && this.hp < this.S.hp * 0.3) m *= 1.4;
   return m;
 };
-P.manaCost = function (c) { return Math.round(c * (this.S.keys.has('ashstorm') ? 1.4 : 1)); };
+P.manaCost = function (c) {
+  if (AH.usesRage(this.ch.cls)) return c; // rage is a fixed pool: costs stay the same
+  return Math.round(c * (this.S.keys.has('ashstorm') ? 1.4 : 1) * (1 + Math.min(1.0, (this.ch.level - 1) * 0.025)));
+};
+// rage: hitting and being hit feed it, it fades when the fighting stops
+P.addRage = function (n) { if (!AH.usesRage(this.ch.cls)) return; this.mp = Math.min(this.S.mp, this.mp + n); this.rageIdle = 0; };
 // a servant's hit: grows with spell power and servant damage
 P.minionPower = function () { return this.spellPower(4) * 0.85 * (1 + this.S.minion / 100) * (this.S.keys.has('army') ? 0.75 : 1); };
-P.atkTime = function () { return this.wbase().spd / (1 + this.S.ias / 100); };
+P.atkTime = function () { const b = this.wbase(); return b.spd / (1 + (this.S.ias + (this.buffs.rampage > 0 ? (this.rampN || 0) * 6 : 0) + (b.twoHand && this.S.keys.has('titangrip') ? 15 : 0)) / 100); };
 
 P.gainXp = function (G, n) {
   if (this.remote && G.isHost) { G.netEvent('xp', this, n); return; }
@@ -208,6 +218,11 @@ P.addItem = function (it) {
   const bag = this.ch.bag;
   AH.fixPlainJewel && AH.fixPlainJewel(it);
   if (it && it.set) { const f = this.ch.setsFound = this.ch.setsFound || {}; const l = f[it.set] = f[it.set] || []; if (l.indexOf(it.base) < 0) l.push(it.base); }
+  if (it && it.kind === 'cons' && AH.CONS_CAP[it.cons]) {
+    const room = AH.CONS_CAP[it.cons] - this.countCons(it.cons);
+    if (room <= 0) { this.capHit = it.cons; return false; }
+    if (it.stack > room) { const rest = Object.assign({}, it, { id: AH.uid(), stack: it.stack - room }); it.stack = room; this.capRest = rest; }
+  }
   if (AH.isStackable(it)) {
     for (const b of bag) if (b && AH.sameStack(b, it)) { const max = it.kind === 'rune' ? 9 : AH.CONSUMABLES[it.cons].stack; if (b.stack < max) { const n = Math.min(max - b.stack, it.stack); b.stack += n; it.stack -= n; if (it.stack <= 0) return true; } }
   }
@@ -323,8 +338,10 @@ P.hurt = function (G, dmg, src, raw) {
     d *= 1 - Math.min(60, this.S.res) / 100;
     if (this.buffs.aegis > 0) d *= 0.5;
     if (this.buffs.alert > 0) d *= 0.85;
+    if (this.buffs.warcry > 0) d *= 0.85;
   }
   d = Math.max(1, Math.round(d));
+  this.addRage(4 + d / Math.max(1, this.S.hp) * 40);
   this.hp -= d; this.flash = 0.12; this.inv = raw ? 0 : 0.45;
   if (this.hp <= 0 && this.ch.hardcore && !this.lbUsed && (!this.S.powers.has('secondwind') || this.swUsed)) { this.lbUsed = true; this.hp = 1; this.inv = 2; G.toast(this, 'LAST BREATH! ONE MORE MISTAKE ON THIS FLOOR IS DEATH', '#ff6a5a'); AH.fx.ring(G, this.x, this.y - 8, '#ff6a5a', 30); AH.Audio.sfx('warn'); }
   if (this.hp <= 0 && this.S.powers.has('secondwind') && !this.swUsed) { this.swUsed = true; this.hp = Math.round(this.S.hp * 0.3); this.inv = 1.5; G.toast(this, 'SECOND WIND!', '#f2c94c'); AH.fx.ring(G, this.x, this.y - 8, '#f2c94c', 30); }
@@ -341,16 +358,19 @@ P.hurt = function (G, dmg, src, raw) {
 P.update = function (G, dt, pad) {
   const S = this.S;
   for (const k in this.cd) if (this.cd[k] > 0) this.cd[k] -= dt;
+  if (this.atT > 0) { this.atT -= dt; if (this.atT <= 0) this.atTarget = null; }
   for (const k in this.skillCd) if (this.skillCd[k] > 0) this.skillCd[k] -= dt;
   for (const k in this.buffs) if (this.buffs[k] > 0) this.buffs[k] -= dt;
   if (this.inv > 0) this.inv -= dt;
   if (this.flash > 0) this.flash -= dt;
   if (this.slow > 0) this.slow -= dt;
+  if (this.S.keys.has('unstoppable')) this.slow = 0;
   if (this.dead) { this.updateDead(G, dt, pad); return; }
   // regen
   if (!S.noMpr) this.mp = Math.min(S.mp, this.mp + S.mprTotal * dt);
+  if (AH.usesRage(this.ch.cls)) { this.rageIdle = (this.rageIdle || 0) + dt; if (this.rageIdle > 2.5) this.mp = Math.max(0, this.mp - 7 * dt); }
   if (S.powers.has('mend')) this.hp = Math.min(S.hp, this.hp + S.hp * 0.01 * dt);
-  if (G.scene === 'town') { this.hp = Math.min(S.hp, this.hp + S.hp * 0.08 * dt); this.mp = Math.min(S.mp, this.mp + S.mp * 0.1 * dt); }
+  if (G.scene === 'town') { this.hp = Math.min(S.hp, this.hp + S.hp * 0.08 * dt); if (!AH.usesRage(this.ch.cls)) this.mp = Math.min(S.mp, this.mp + S.mp * 0.1 * dt); }
   // torch burns in the mine from floor 6
   if (G.scene === 'mine' && G.floorNo >= 6) {
     const burn = (G.map && G.map.biome.id === 'sunken' ? 1.6 : 1) * (G.event === 'flooded' ? 1.3 : 1);
@@ -420,15 +440,17 @@ P.update = function (G, dt, pad) {
   if (this.mAimLock > 0) this.mAimLock -= dt;
   if (mouseAtk) { ax = 0; ay = 0; mag = 0; }
   this.st -= dt;
-  const busy = this.state === 'attack' || this.state === 'heavy' || this.state === 'dodge' || this.state === 'cast';
+  const busy = this.state === 'attack' || this.state === 'heavy' || this.state === 'dodge' || this.state === 'cast' || this.state === 'leap';
   if (this.state !== 'idle' && this.state !== 'walk' && this.st <= 0) {
     if (this.state === 'heavyWind') this.doHeavy(G);
+    else if (this.state === 'leap') { this.state = 'idle'; G.leapLand(this); }
     else this.state = 'idle';
   }
   let speed = 72 * S.speed * spdMul;
   if (this.state === 'dodge') speed = 72 * 2.7 * S.speed;
   else if (this.state === 'attack' || this.state === 'heavy' || this.state === 'heavyWind') speed *= 0.35;
   if (this.state === 'dodge') { this.vx = Math.cos(this.dodgeA) * speed; this.vy = Math.sin(this.dodgeA) * speed; }
+  else if (this.state === 'leap') { this.vx = this.leapVx; this.vy = this.leapVy; }
   else if (mag > 0.2) { const n = Math.min(1, mag); this.vx = Math.cos(this.aim) * speed * n; this.vy = Math.sin(this.aim) * speed * n; }
   else { this.vx = 0; this.vy = 0; }
   if (tile === AH.TILE.ICE && this.state !== 'dodge') { this.ivx = AH.lerp(this.ivx || 0, this.vx, dt * 3); this.ivy = AH.lerp(this.ivy || 0, this.vy, dt * 3); this.vx = this.ivx; this.vy = this.ivy; } else { this.ivx = this.vx; this.ivy = this.vy; }
@@ -449,7 +471,7 @@ P.update = function (G, dt, pad) {
   // a dodge goes where you are steering; with nothing held it follows the cursor (mouse) or the way you face
   const steerX = pad.ax, steerY = pad.ay, steering = Math.hypot(steerX, steerY) > 0.3;
   this.dodgeDir = steering ? Math.atan2(steerY, steerX) : null;
-  if (this.mCursor && AH.Mouse && AH.Mouse.player(G) === this && (pad.pressed('x') || pad.pressed('y') || pad.pressed('lb') || pad.pressed('rb') || (!steering && (pad.pressed('b') || pad.pressed('dodge'))))) {
+  if (this.mCursor && AH.Mouse && AH.Mouse.player(G) === this && this.mouseAiming(G) && (pad.pressed('x') || pad.pressed('y') || pad.pressed('lb') || pad.pressed('rb') || (!steering && (pad.pressed('b') || pad.pressed('dodge'))))) {
     const c = this.mCursor; this.aim = Math.atan2(c.y - (this.y - 6), c.x - this.x); this.face = c.x >= this.x ? 1 : -1; this.mAimLock = 0.3; this.dodgeAimMouse = true;
   }
   if (pad.pressed('x')) this.tryHeavy(G);
@@ -467,15 +489,51 @@ P.updateDead = function (G, dt, pad) {
   if (ally) { this.reviveT += dt; if (this.reviveT > 2.5) { if (G.scene === 'mine' && this.graveRec && G.map) G.map.props.push({ type: 'grave', x: this.x, y: this.y + 2, g: this.graveRec }); this.graveRec = null; this.dead = false; this.hp = this.S.hp * 0.35; this.reviveT = 0; this.inv = 2; G.toast(this, 'REVIVED BY ' + ally.ch.name, '#8ae08e'); AH.Audio.sfx('holy'); } }
   else this.reviveT = Math.max(0, this.reviveT - dt);
 };
-P.autoAim = function (G, r) {
-  if ((this.lastMag || 0) > 0.2 || !G.nearestEnemy || this.mAimLock > 0) return;
-  const e = G.nearestEnemy(this, r);
-  if (e) { this.aim = Math.atan2(e.y - 4 - (this.y - 6), e.x - this.x); this.face = e.x >= this.x ? 1 : -1; }
+// is this hero aiming with the mouse right now? (moved it in the last few seconds)
+P.mouseAiming = function (G) {
+  return this.device === 'kb1' && !AH.isTouch && AH.Mouse && AH.Mouse.active && AH.Mouse.lastMove && performance.now() - AH.Mouse.lastMove < 4000;
+};
+AH.autoTargetOn = () => !AH.options || AH.options.autoaim !== false;
+// auto-target for keyboard and controller: the foe in the direction you face or steer (a 60 degree cone),
+// else the nearest one; it sticks to the foe you are fighting. Mining is left alone: with a rock right in
+// front and no foe within reach, the swing goes where you face.
+P.autoAim = function (G, r, melee) {
+  if (!G.nearestEnemy) return;
+  if (this.mouseAiming(G) || !AH.autoTargetOn()) {
+    // the mouse aims (or auto-target is off): only the old gentle help when standing still
+    if ((this.lastMag || 0) > 0.2 || this.mAimLock > 0 || this.mouseAiming(G)) return;
+    const e = G.nearestEnemy(this, Math.min(r, 50)); if (e) { this.aim = Math.atan2(e.y - 4 - (this.y - 6), e.x - this.x); this.face = e.x >= this.x ? 1 : -1; }
+    return;
+  }
+  const ox = this.x, oy = this.y - 6, base = this.aim;
+  const angTo = e => Math.atan2(e.y - 4 - oy, e.x - ox);
+  const diff = a => { let d = a - base; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return Math.abs(d); };
+  const ok = e => e && !e.dead && !e.hidden && AH.dist(e, this) < r + (e.r || 4) && (!G.map || !G.map.los || G.map.los(ox, oy, e.x, e.y - 4));
+  const foes = G.enemies.filter(ok);
+  // a rock or cracked wall right ahead and no foe within reach: keep mining
+  if (melee && G.map && G.scene === 'mine') {
+    const reach = this.wbase().range + 6;
+    const near = foes.some(e => AH.dist(e, this) < reach + (e.r || 4));
+    const rock = (G.map.veins || []).some(v => v.hp > 0 && AH.dist(v, this) < 26 && diff(Math.atan2(v.y - 8 - oy, v.x - ox)) < 1.0);
+    const s = G.map.secret, wall = s && !s.found && Math.hypot(s.wall[0] * AH.T + 8 - ox, s.wall[1] * AH.T + 8 - oy) < 28;
+    if (!near && (rock || wall)) return;
+  }
+  if (!foes.length) return;
+  let t = null;
+  // stay on the foe you are already fighting, unless you steer clearly away from it
+  if (this.atTarget && foes.indexOf(this.atTarget) >= 0 && ((this.lastMag || 0) < 0.2 || diff(angTo(this.atTarget)) < 1.6)) t = this.atTarget;
+  if (!t) {
+    const cone = foes.filter(e => diff(angTo(e)) < Math.PI / 3);
+    const pool = cone.length ? cone : foes;
+    t = pool.sort((a, b) => AH.dist(a, this) * (1 + diff(angTo(a))) - AH.dist(b, this) * (1 + diff(angTo(b))))[0];
+  }
+  this.atTarget = t; this.atT = 2;
+  this.aim = angTo(t); this.face = t.x >= this.x ? 1 : -1; this.mAimLock = 0.18;
 };
 P.tryAttack = function (G, auto) {
   if (G.scene === 'town') return;
   if (this.cd.atk > 0 || this.state === 'dodge' || this.state === 'heavyWind' || this.state === 'heavy') return;
-  this.autoAim(G, this.wbase().ranged ? 150 : 50);
+  this.autoAim(G, this.wbase().ranged ? 170 : this.wbase().range + 26, !this.wbase().ranged);
   const b = this.wbase(), t = this.atkTime();
   this.cd.atk = t; this.state = 'attack'; this.st = Math.min(0.2, t * 0.6); this.stMax = this.st; this.atkT = 0; this.swingDir = -(this.swingDir || 1);
   this.hitList.clear();
@@ -490,12 +548,13 @@ P.tryAttack = function (G, auto) {
 P.tryHeavy = function (G) {
   if (G.scene === 'town') return;
   if (this.cd.atk > 0 || this.state === 'dodge' || this.state === 'heavyWind') return;
-  this.autoAim(G, this.wbase().ranged ? 150 : 60);
+  this.autoAim(G, this.wbase().ranged ? 170 : this.wbase().range + 32, !this.wbase().ranged);
   this.state = 'heavyWind'; this.st = 0.22; this.stMax = 0.22; this.cd.atk = this.atkTime() * 2.1;
   AH.fx.spark(G, this.x + this.face * 6, this.y - 12, '#ffb347', 4);
 };
 P.doHeavy = function (G) {
   const b = this.wbase();
+  if (!this.mouseAiming(G) && AH.autoTargetOn() && this.atTarget && !this.atTarget.dead) this.autoAim(G, b.ranged ? 170 : b.range + 32, !b.ranged); // the foe may have moved during the wind-up
   this.state = 'heavy'; this.st = 0.2; this.stMax = 0.2; this.hitList.clear(); this.hitCount++;
   let mult = 2.2; if (this.S.keys.has('emberheart')) { mult *= 1.6; this.hurt(G, this.S.hp * 0.03, null, true); }
   if (b.ranged) G.shoot(this, b.ranged, mult, true);
@@ -517,6 +576,7 @@ P.trySkill = function (G, slot) {
   const id = this.ch.slots[slot]; if (!id) return;
   const sk = AH.SKILLS[id], rank = this.ch.skills[id] || 1;
   if ((this.skillCd[id] || 0) > 0) return;
+  if (!this.mouseAiming(G) && AH.autoTargetOn()) this.autoAim(G, 170);
   const cost = this.manaCost(sk.mp);
   const native = AH.CLASSES[this.ch.cls].skills.indexOf(id) >= 0;
   if (this.S.keys.has('bloodmagic')) {
@@ -528,7 +588,7 @@ P.trySkill = function (G, slot) {
     this.hp -= hpCost; AH.fx.num(G, this.x, this.y - 22, '-' + Math.round(hpCost), '#c83a4a');
     return;
   }
-  if (this.mp < cost) { G.toast(this, 'NOT ENOUGH MANA', '#9ec0ff'); AH.Audio.sfx('error'); return; }
+  if (this.mp < cost) { G.toast(this, AH.usesRage(this.ch.cls) ? 'NOT ENOUGH RAGE' : 'NOT ENOUGH MANA', AH.usesRage(this.ch.cls) ? '#ffb07a' : '#9ec0ff'); AH.Audio.sfx('error'); return; }
   this.mp -= cost * (native ? 1 : 1.3);
   this.skillCd[id] = sk.cd * (1 - Math.min(50, this.S.cdr) / 100);
   const rm = 1 + (rank - 1) * 0.22;
@@ -536,18 +596,25 @@ P.trySkill = function (G, slot) {
 };
 
 // ---------- draw ----------
+P.drawTargetMark = function (ctx, G) {
+  const t = this.atTarget;
+  if (!t || t.dead || t.hidden || !(this.atT > 0) || this.mouseAiming(G) || !AH.autoTargetOn()) return;
+  const s = t.spr, h = s ? s.h * (t.scale || 1) : 14, x = AH.px(t.x), y = AH.px(t.y - h - 3 + Math.sin(G.time * 6) * 1);
+  ctx.fillStyle = AH.OUT; ctx.fillRect(x - 3, y - 1, 7, 3); ctx.fillRect(x - 2, y + 2, 5, 1); ctx.fillRect(x - 1, y + 3, 3, 1);
+  ctx.fillStyle = this.color || '#ffb347'; ctx.fillRect(x - 2, y, 5, 1); ctx.fillRect(x - 1, y + 1, 3, 1); ctx.fillRect(x, y + 2, 1, 1);
+};
 P.draw = function (ctx, G) {
   if (this.dead) {
     // a puff of smoke, then a fresh grave where the hero fell
     if (!this.deadAt) this.deadAt = G.time;
     const k = AH.clamp((G.time - this.deadAt) / 0.35, 0, 1), s = this.sprAtk;
-    if (k < 1) { ctx.save(); ctx.translate(Math.round(this.x), Math.round(this.y + 2)); ctx.rotate(-this.face * k * Math.PI / 2); AH.drawSpr(ctx, s, -s.w / 2, -s.h + 1, this.face < 0); ctx.restore(); }
+    if (k < 1) { ctx.save(); ctx.translate(AH.px(this.x), AH.px(this.y + 2)); ctx.rotate(-this.face * k * Math.PI / 2); AH.drawSpr(ctx, s, -s.w / 2, -s.h + 1, this.face < 0); ctx.restore(); }
     else AH.drawGrave(ctx, this.x, this.y + 2, true);
     if (this.reviveT > 0) AH.bar(ctx, this.x - 10, this.y - 26, 20, 2, this.reviveT / 2.5, '#8ae08e', '#142014');
     return;
   }
   this.deadAt = 0;
-  const blink = this.inv > 0 && this.state !== 'dodge' && (Math.floor(G.time * 20) % 2 === 0);
+  const blink = this.inv > 0 && this.state !== 'dodge' && this.state !== 'leap' && (Math.floor(G.time * 20) % 2 === 0);
   if (blink) return;
   const melee = this.wSpr && !this.wbase().ranged;
   const swinging = (this.state === 'attack' || this.state === 'heavy' || this.state === 'heavyWind') && melee;
@@ -558,9 +625,10 @@ P.draw = function (ctx, G) {
   let lx = 0, ly = 0;
   if (this.state === 'attack' || this.state === 'heavy') lx = Math.round(Math.sin(prog * Math.PI) * (this.state === 'heavy' ? 3 : 2)) * this.face;
   if (this.state === 'heavyWind') { lx = -this.face; ly = 1; }
-  const x = Math.round(this.x - s.w / 2) + lx, y = Math.round(this.y - s.h + 3 + bob) + ly;
+  const lift = this.state === 'leap' ? Math.sin(Math.PI * (1 - Math.max(0, this.st) / (this.leapDur || 0.36))) * 14 : 0;
+  const x = AH.px(this.x - s.w / 2) + lx, y = AH.px(this.y - s.h + 3 + bob - lift) + ly;
   if (this.state === 'dodge') {
-    ctx.save(); ctx.translate(Math.round(this.x), Math.round(this.y - s.h / 2 + 3)); ctx.rotate(this.face * prog * Math.PI * 2);
+    ctx.save(); ctx.translate(AH.px(this.x), AH.px(this.y - s.h / 2 + 3)); ctx.rotate(this.face * prog * Math.PI * 2);
     AH.drawSpr(ctx, s, -s.w / 2, -s.h / 2, this.face < 0); ctx.restore();
   } else if (this.flash > 0) AH.drawFlash(ctx, s, x, y, this.face < 0);
   else AH.drawSpr(ctx, s, x, y, this.face < 0);
@@ -571,7 +639,7 @@ P.draw = function (ctx, G) {
     if (this.state === 'heavyWind') a = -0.9 - prog * 0.5;
     else if (this.state === 'heavy') a = -1.4 + prog * 3.6;
     else { const from = this.swingDir > 0 ? -0.6 : 2.4, to = this.swingDir > 0 ? 2.4 : -0.2; a = from + (to - from) * Math.pow(prog, 0.7); }
-    const hx = Math.round(this.x) + lx + this.face * 4, hy = y + 13;
+    const hx = AH.px(this.x) + lx + this.face * 4, hy = y + 13;
     ctx.save(); ctx.translate(hx, hy); ctx.scale(this.face, 1); ctx.rotate(a);
     AH.drawSpr(ctx, ws, -(it.ax + 1), -(it.ay + 1));
     ctx.restore();

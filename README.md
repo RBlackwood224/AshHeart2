@@ -23,7 +23,11 @@ Online co-op needs the page to be served over https (GitHub Pages works).
 | Menu / back | Esc | NumEnter | Start |
 | In menus | Arrows + Enter, Esc to go back | | D-pad + A, B |
 
-**Mouse (PC, Diablo style):** left click the ground to walk (hold to steer), left click a monster to walk up and attack it (hold to keep attacking), left click a chest, door, stairs or person to use it, right click for a heavy attack toward the cursor, left click an ore or crystal rock to mine it, drag an item out of the backpack to drop it, drag it onto another slot to move it, Shift + left click attacks in place. Skill keys aim at the cursor. Menus can be clicked too.
+**Auto-target (keyboard and controller):** attacks and skills turn to the foe in the direction you face or steer, else the nearest one, and stay on the foe you are fighting. A rock or cracked wall right in front is mined, not skipped. Moving the mouse hands aiming back to the mouse; Options → Auto-target turns it off.
+
+**Your own controls:** Options → Controls. Every keyboard and every controller keeps its own layout; Reset to default brings the one above back.
+
+**Mouse (PC, Diablo style):** left click the ground to walk (hold to steer), left click a monster to walk up and attack it (hold to keep attacking), left click a chest, door, stairs or person to use it, right click for a heavy attack toward the cursor, left click an ore or crystal rock to mine it, drag an item out of the backpack (or onto the bin) to drop it, drag it onto another slot to move it, Shift + left click attacks in place. Skill keys aim at the cursor. Menus can be clicked too.
 
 Phones and tablets get touch controls automatically (play in landscape).
 
@@ -32,23 +36,27 @@ English, Français and Magyar — switch under Options → Language (the first s
 
 ## Highlights
 - 100 floors in 10 biomes, a boss every 10 floors, ASHHEART on floor 100, then endless depths and a daily time attack.
-- 26 item sets (2/3/4/5-piece bonuses and unique set powers), legendary and mythic items, runes and runewords.
+- 30 item sets (2/3/4/5-piece bonuses and unique set powers), legendary and mythic items, runes and runewords.
 - Four story quest chains from the people of Dunmere, with unique rewards.
 - Mining: coal, copper, iron, silver, gold and mithril rocks (deeper floors hold better ore) plus crystal rocks. Any weapon breaks them. The smith needs the right ore for each tier; coal feeds your torch.
 - 15 achievements under the RECORDS tab. Ore upgrades and reforges gear at the smith, crystals add sockets.
 - Gravestones: where a hero falls, a grave stays on that floor. Read it to see who died there, to what, and with which stats.
-- Four classes: Paladin, Rogue, Wizard and Necromancer. The Necromancer raises fallen monsters as servants, curses foes and makes corpses explode; the slain now stay on the floor for a while.
-- A passive tree of about 190 points with three branches and a keystone per class, plus shared outer paths. Levels come slower the deeper you go.
+- Five classes: Paladin, Rogue, Wizard, Necromancer and Barbarian. The Necromancer raises fallen monsters as servants, curses foes and makes corpses explode; the slain stay on the floor for a while. Servants have no time limit: they stand until destroyed, mend slowly out of combat and follow you down the stairs; Raise Dead ranks, servant-life gear and passives make them tougher. The Barbarian has rage instead of mana — hitting and getting hit fill it, it fades out of combat — and leaps, roars and slams the ground. He has his own gear (maul, horned helm, fur armor) and two sets.
+- A passive tree of about 310 points with three long branches and a keystone per class, plus shared outer paths. Levels come slower the deeper you go.
+- More than 90 kinds of creatures, among them beetles, serpents, moths and ogres in every world.
+- Locked chests hold better loot: buy or find a lockpick (the Rogue needs none). You carry at most 6 healing and 4 mana potions; spells cost more mana as you level.
 - Nemesis system, legendary beasts, floor events, bounties, a town that remembers what you did.
 
 ## Graphics
+Options → Smooth motion (computers, on by default): the camera and moving things step a third of a pixel, so walking and scrolling stay smooth on 60 Hz screens while the pixel art stays sharp. A slow machine steps it down by itself.
+
 Options → Spectacular lights: normal-mapped pixel lighting, walls and monsters cast shadows, glow and vignette. On by default on computers, off on phones (it costs more power). Toggle it any time.
 
 ## Permadeath
 One life only: if your hero falls for good, the save is gone. Once per floor a killing blow leaves you at 1 life (Last Breath) — a second mistake on the same floor is the end.
 
 ## Co-op
-- **Local:** up to 3 players. Title → Local co-op: every controller (or keyboard) presses A / Enter to pick a hero, then A again to start. You can also join mid-game: Title → Local co-op: every controller (or keyboard) presses A / Enter to pick a hero, then A again to start. You can also join mid-game: Press START on another controller (or NumEnter for the second keyboard player) to join with your own hero. Together you share one screen; wander apart and it splits, with arrows pointing at your friends.
+- **Local:** up to 3 players. Title → Local co-op: every controller (or keyboard) presses A / Enter to pick a hero, then A again to start. You can also join mid-game: press START on another controller (or NumEnter for the second keyboard player) to join with your own hero. Together you share one screen; wander apart and it splits, with arrows pointing at your friends.
 - **Online:** Title → Online co-op → Host a game opens a lobby with the 5-letter room code. Friends choose Join a game and type the code; they wait in the lobby until the host starts. Nobody can join a game that has already started. The host runs the game; everyone keeps their own loot and their own save.
 
 ## Music

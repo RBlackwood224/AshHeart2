@@ -171,6 +171,10 @@
     } else if (kind === 'wizard') {
       poly(x, [[X - 2, B - 30], [X + 12, B - 30], [X + 7, B - 34], [X + 3 + wv(4), B - 46], [X + 4, B - 34]]); // pointed hat
       x.fillRect(X + 10, B - 22, 2, 3); line(x, X + 12, B - 40, X + 12, B, 2); // staff
+    } else if (kind === 'barb') {
+      x.fillRect(X - 1, B - 33, 12, 3); line(x, X, B - 32, X - 4, B - 37, 1); line(x, X + 10, B - 32, X + 14, B - 37, 1); // horned helm
+      x.fillRect(X - 3, B - 26, 16, 4); // broad shoulders, fur
+      line(x, X + 11, B - 22, X + 15 + wv(2), B - 44, 2); poly(x, [[X + 12, B - 46], [X + 21, B - 44], [X + 19, B - 37], [X + 14, B - 39]]); // great axe raised
     } else if (kind === 'necro') {
       poly(x, [[X, B - 33], [X + 9, B - 33], [X + 10, B - 25], [X - 1, B - 25]]); x.fillRect(X + 3, B - 35, 4, 2); // deep cowl
       poly(x, [[X - 1, B - 13], [X + 11, B - 13], [X + 13, B], [X - 3, B]]); // long robe
@@ -198,12 +202,12 @@
     x.clearRect(0, 0, HW, HH);
     const base = X => TA.cliffTop(X) ;
     const OY = 206 - HH + 8; // canvas placed so its bottom sits just under the cliff line
-    const figs = [['rogue', 'rat', 14, 0], ['paladin', 'dog', 50, 1.7], ['wizard', 'canary', 86, 3.1], ['necro', 'bones', 118, 4.4]];
+    const figs = [['rogue', 'rat', 4, 0], ['paladin', 'dog', 36, 1.7], ['wizard', 'canary', 73, 3.1], ['necro', 'bones', 104, 4.4], ['barb', null, 130, 5.6]];
     for (const [k, pk, X, ph] of figs) {
       figure(x, X, base(X + 5) - OY + 1, k, t, ph);
       if (pk === 'canary') pet(x, X + 4, base(X) - OY, pk, t);
       else if (pk === 'bones') pet(x, X - 9, base(X - 6) - OY + 1, pk, t);
-      else pet(x, X + 20, base(X + 24) - OY + 1, pk, t);
+      else if (pk) pet(x, X + 20, base(X + 24) - OY + 1, pk, t);
     }
     // rim light from the mountain (to the right)
     const img = x.getImageData(0, 0, HW, HH), d = img.data;

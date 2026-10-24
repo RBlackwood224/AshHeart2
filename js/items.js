@@ -24,6 +24,7 @@ AH.WEAPONS = {
   greatsword: { name: 'GREATSWORD', dmg: [13, 21], spd: 0.72, range: 24, arc: 2.5, stat: 'str', icon: 'greatsword', held: 'greatsword', twoHand: 1 },
   axe: { name: 'AXE', dmg: [9, 15], spd: 0.58, range: 19, arc: 1.5, stat: 'str', icon: 'axe', held: 'axe' },
   mace: { name: 'MACE', dmg: [8, 12], spd: 0.5, range: 17, arc: 1.5, stat: 'str', icon: 'mace', held: 'mace', undead: 1.5 },
+  maul: { name: 'MAUL', dmg: [16, 25], spd: 0.8, range: 22, arc: 2.4, stat: 'str', icon: 'maul', held: 'maul', twoHand: 1, stun: 20 },
   dagger: { name: 'DAGGER', dmg: [5, 9], spd: 0.3, range: 15, arc: 1.1, stat: 'dex', icon: 'dagger', held: 'dagger', crit: 10 },
   bow: { name: 'BOW', dmg: [7, 12], spd: 0.5, range: 0, ranged: 'arrow', stat: 'dex', icon: 'bow', held: 'bow', twoHand: 1 },
   staff: { name: 'STAFF', dmg: [4, 7], spd: 0.55, range: 0, ranged: 'magic', stat: 'int', icon: 'staff', held: 'staff', twoHand: 1, mpr: 1 },
@@ -34,9 +35,11 @@ AH.ARMORS = {
   greathelm: { slot: 'head', name: 'GREAT HELM', armor: 5, icon: 'helm', look: 'greathelm', reqStr: 1 },
   hood: { slot: 'head', name: 'HOOD', armor: 1, icon: 'hood', look: 'hood', bonus: { dex: 1 } },
   hat: { slot: 'head', name: 'WIZARD HAT', armor: 1, icon: 'hat', look: 'hat', bonus: { int: 1 } },
+  hornhelm: { slot: 'head', name: 'HORNED HELM', armor: 3, icon: 'hornhelm', look: 'horned', bonus: { str: 2 } },
   plate: { slot: 'chest', name: 'PLATE ARMOR', armor: 9, icon: 'chest', look: 'plate', reqStr: 1 },
   leather: { slot: 'chest', name: 'LEATHER ARMOR', armor: 5, icon: 'leather', look: 'leather' },
   robe: { slot: 'chest', name: 'ROBE', armor: 2, icon: 'robe', look: 'robe', bonus: { mp: 8 } },
+  fur: { slot: 'chest', name: 'FUR ARMOR', armor: 4, icon: 'fur', look: 'fur', bonus: { vit: 2 } },
   gloves: { slot: 'hands', name: 'GLOVES', armor: 2, icon: 'glove' },
   boots: { slot: 'feet', name: 'BOOTS', armor: 2, icon: 'boot', bonus: { move: 3 } },
   cloak: { slot: 'cloak', name: 'CLOAK', armor: 1, icon: 'cloak' },
@@ -50,7 +53,7 @@ AH.SLOT_LABEL = { weapon: 'MAIN HAND', off: 'OFF HAND', head: 'HEAD', chest: 'CH
 
 // affixes: k, label fn, allowed slot groups, base value, per-tier growth
 AH.AFFIXES = [
-  { k: 'str', lab: v => `+${v} STRENGTH`, on: 'any', b: 2, t: 2, fit: 'paladin' },
+  { k: 'str', lab: v => `+${v} STRENGTH`, on: 'any', b: 2, t: 2, fit: 'paladin barb' },
   { k: 'dex', lab: v => `+${v} DEXTERITY`, on: 'any', b: 2, t: 2, fit: 'rogue' },
   { k: 'int', lab: v => `+${v} INTELLECT`, on: 'any', b: 2, t: 2, fit: 'wizard necro' },
   { k: 'vit', lab: v => `+${v} VITALITY`, on: 'any', b: 2, t: 2 },
@@ -74,6 +77,7 @@ AH.AFFIXES = [
   { k: 'cdr', lab: v => `-${v}% SKILL COOLDOWN`, on: 'amulet head off', b: 5, t: 1.2 },
   { k: 'res', lab: v => `-${v}% DAMAGE TAKEN`, on: 'chest off cloak amulet', b: 2, t: 0.8 },
   { k: 'minion', lab: v => `+${v}% SERVANT DAMAGE`, on: 'weapon off amulet head', b: 6, t: 3, fit: 'necro' },
+  { k: 'minionHp', lab: v => `+${v}% SERVANT LIFE`, on: 'off amulet chest cloak', b: 8, t: 4, fit: 'necro' },
 ];
 AH.fits = (def, cls) => !!(def && def.fit && cls && def.fit.split(' ').indexOf(cls) >= 0);
 AH.SLOT_GROUP = { weapon: 'weapon', off: 'off', head: 'head', chest: 'chest', hands: 'hands', feet: 'feet', cloak: 'cloak', ring: 'ring', amulet: 'amulet' };
@@ -109,6 +113,7 @@ AH.SET_POWERS = {
   executioner: 'DEAL 50% MORE TO FOES BELOW 30% LIFE.',
   pestilence: 'CURSED FOES SPREAD THE CURSE WHEN THEY DIE.',
   souleater: 'KILLS HEAL 3% OF YOUR LIFE.',
+  rampage: 'EVERY KILL: +6% ATTACK SPEED FOR 4 SECONDS, UP TO 5 TIMES.',
 };
 AH.SET_POWER_LAB = id => AH.SET_POWERS[id] || (AH.LEGEND_POWERS.find(p => p.id === id) || {}).lab || id;
 // item sets: wear more pieces for stronger bonuses
@@ -123,6 +128,8 @@ AH.SETS = [
   { id: 'frostm', name: 'FROSTMANTLE', cls: 'wizard', minF: 18, pieces: ['robe', 'hat', 'boots', 'cloak'], b: { 2: { frost: 10, spell: 10 }, 3: { cdr: 15, int: 8 }, 4: { power: 'frostdodge', freeze: 15, res: 8, spell: 15 } } },
   { id: 'storm', name: 'STORMSAGE', cls: 'wizard', minF: 34, pieces: ['staff', 'ring', 'amulet', 'hat'], b: { 2: { mp: 25, spell: 20, vit: 8 }, 3: { mpr: 2, spell: 30 }, 4: { power: 'stormstrike', crit: 8, int: 12 } } },
   { id: 'graveward', name: 'GRAVEWARD', cls: 'necro', minF: 6, pieces: ['scepter', 'robe', 'hood', 'tomeoff'], b: { 2: { minion: 15, hp: 25 }, 3: { minions: 1 }, 4: { power: 'pestilence', curse: 20 } } },
+  { id: 'warlord', name: 'WARLORD', cls: 'barb', minF: 6, pieces: ['axe', 'hornhelm', 'fur', 'boots'], b: { 2: { str: 8, hp: 25 }, 3: { ias: 10, armor: 20 }, 4: { power: 'rampage', dmg: 15 } } },
+  { id: 'bloodrage', name: 'BLOOD RAGE', cls: 'barb', minF: 22, pieces: ['maul', 'gloves', 'amulet', 'cloak'], b: { 2: { loh: 4, vit: 6 }, 3: { critDmg: 25, dmg: 10 }, 4: { power: 'bleed', hpPct: 15 } } },
   { id: 'bonethrone', name: 'BONE THRONE', cls: 'necro', minF: 22, pieces: ['scepter', 'amulet', 'ring', 'cloak'], b: { 2: { minionHp: 30, vit: 6 }, 3: { spell: 10, minion: 10 }, 4: { power: 'souleater', minionHp: 20 } } },
   { id: 'miner', name: "MINER'S PRIDE", minF: 3, pieces: ['helm', 'gloves', 'boots', 'leather'], b: { 2: { light: 25 }, 3: { gold: 35 }, 4: { power: 'goldheal', mf: 20 } } },
   { id: 'beast', name: 'BEASTMASTER', minF: 9, pieces: ['cloak', 'gloves', 'amulet'], b: { 2: { pet: 35 }, 3: { power: 'petfury', vit: 6 } } },
@@ -176,8 +183,8 @@ AH.LEGEND_NAMES = {
   gloves: ['IRONGRIP', 'FINGERS OF FLAME'], boots: ['WINDSTRIDE', 'GRAVEWALKERS'], cloak: ['MANTLE OF ASH', 'THE LONG NIGHT'],
   shield: ['THE GATE', 'LAST STAND'], tomeoff: ['BOOK OF ENDINGS', 'THE BLACK PAGE'], ring: ['BAND OF THE MINER', 'THE EMBER LOOP', 'CIRCLE OF GRIEF'], amulet: ['HEART OF DUNMERE', 'THE CANARY\'S EYE'],
 };
-AH.PREFIX = { str: 'MIGHTY', dex: 'NIMBLE', int: 'WISE', vit: 'STURDY', dmg: 'CRUEL', ias: 'SWIFT', crit: 'KEEN', loh: 'THIRSTY', hp: 'HALE', mp: 'MYSTIC', armor: 'IRONCLAD', fire: 'FIERY', frost: 'FROZEN', move: 'FLEET', light: 'BRIGHT', gold: 'GREEDY', mf: 'LUCKY', thorns: 'SPIKED', potion: 'HERBAL', mpr: 'FLOWING', spell: 'ARCANE', cdr: 'TIMELESS', res: 'WARDED', minion: 'GRAVEBOUND' };
-AH.SUFFIX = { str: 'OF THE BEAR', dex: 'OF THE FOX', int: 'OF THE OWL', vit: 'OF THE OX', dmg: 'OF SLAUGHTER', ias: 'OF HASTE', crit: 'OF PRECISION', loh: 'OF THE LEECH', hp: 'OF LIFE', mp: 'OF THE MIND', armor: 'OF THE WALL', fire: 'OF EMBERS', frost: 'OF WINTER', move: 'OF THE WIND', light: 'OF THE LANTERN', gold: 'OF FORTUNE', mf: 'OF LUCK', thorns: 'OF THORNS', potion: 'OF REMEDY', mpr: 'OF FLOW', spell: 'OF SORCERY', cdr: 'OF AGES', res: 'OF WARDING', minion: 'OF THE CRYPT' };
+AH.PREFIX = { str: 'MIGHTY', dex: 'NIMBLE', int: 'WISE', vit: 'STURDY', dmg: 'CRUEL', ias: 'SWIFT', crit: 'KEEN', loh: 'THIRSTY', hp: 'HALE', mp: 'MYSTIC', armor: 'IRONCLAD', fire: 'FIERY', frost: 'FROZEN', move: 'FLEET', light: 'BRIGHT', gold: 'GREEDY', mf: 'LUCKY', thorns: 'SPIKED', potion: 'HERBAL', mpr: 'FLOWING', spell: 'ARCANE', cdr: 'TIMELESS', res: 'WARDED', minion: 'GRAVEBOUND', minionHp: 'BONEKNIT' };
+AH.SUFFIX = { str: 'OF THE BEAR', dex: 'OF THE FOX', int: 'OF THE OWL', vit: 'OF THE OX', dmg: 'OF SLAUGHTER', ias: 'OF HASTE', crit: 'OF PRECISION', loh: 'OF THE LEECH', hp: 'OF LIFE', mp: 'OF THE MIND', armor: 'OF THE WALL', fire: 'OF EMBERS', frost: 'OF WINTER', move: 'OF THE WIND', light: 'OF THE LANTERN', gold: 'OF FORTUNE', mf: 'OF LUCK', thorns: 'OF THORNS', potion: 'OF REMEDY', mpr: 'OF FLOW', spell: 'OF SORCERY', cdr: 'OF AGES', res: 'OF WARDING', minion: 'OF THE CRYPT', minionHp: 'OF THE OSSUARY' };
 AH.RARE_A = ['DOOM', 'GRIM', 'ASH', 'BLOOD', 'STORM', 'GLOOM', 'BONE', 'DREAD', 'RUNE', 'SOUL', 'DUSK', 'EMBER', 'WRAITH', 'IRON', 'HOLLOW'];
 AH.RARE_B = { weapon: ['FANG', 'BITE', 'SONG', 'EDGE', 'CALL', 'BANE', 'REAVER'], armor: ['GUARD', 'SHELL', 'MANTLE', 'HIDE', 'WARD', 'AEGIS'], jewel: ['LOOP', 'EYE', 'TEAR', 'SEAL', 'KNOT', 'STAR'] };
 
@@ -301,7 +308,8 @@ AH.nameItem = function (it, rng) {
 };
 AH.genMythic = function (rng, floor, legendDef) {
   const bases = Object.keys(AH.WEAPONS).concat(['plate', 'ring', 'amulet', 'cloak', 'helm']);
-  const it = AH.genItem(rng, floor + 6, { rarity: 3, base: rng.pick(bases) });
+  // the item is what its name says: a crown is a helm, a fang is a dagger
+  const it = AH.genItem(rng, floor + 6, { rarity: 3, base: legendDef.dropBase || rng.pick(bases) });
   it.rarity = 4; it.name = legendDef.drop; it.affixes.forEach(a => a.v = Math.round(a.v * 1.3));
   it.affixes.push({ k: rng.pick(['dmg', 'hp', 'crit', 'res']), v: 10 + AH.tierOf(floor) * 4 });
   it.sockets = Math.max(it.sockets, 2); delete it.bargain; delete it.unid; delete it.cursed;
@@ -312,6 +320,9 @@ AH.genRune = function (rng, floor) {
   const r = rng.pick(keys);
   return { id: AH.uid(), kind: 'rune', rune: r, name: r + ' RUNE', rarity: 1, stack: 1 };
 };
+// the potion belt: how many of each potion a hero can carry
+AH.CONS_CAP = { potion: 6, mana: 4 };
+AH.capMsg = k => k === 'potion' ? 'YOU CAN CARRY 6 HEALING POTIONS' : 'YOU CAN CARRY 4 MANA POTIONS';
 AH.CONSUMABLES = {
   potion: { name: 'HEALING POTION', icon: 'potion', price: 25, stack: 9 },
   mana: { name: 'MANA POTION', icon: 'mana', price: 20, stack: 9 },
@@ -327,6 +338,7 @@ AH.CONSUMABLES = {
   bomb: { name: 'BOMB', icon: 'bomb', price: 30, stack: 9 },
   key: { name: 'VAULT KEY', icon: 'key', price: 0, stack: 9 },
   idscroll: { name: 'SCROLL OF SIGHT', icon: 'scroll', price: 25, stack: 9 },
+  lockpick: { name: 'LOCKPICK', icon: 'lockpick', price: 35, stack: 9 },
 };
 // which ore the smith needs to work an item of a given tier, and what rocks hold at each depth
 AH.ORE_FOR_TIER = ['ore', 'iron', 'silver', 'goldore', 'goldore', 'mithril'];
@@ -383,7 +395,7 @@ AH.itemLines = function (it, cls) {
   if (it.kind === 'rune') { L.push({ t: AH.RUNES[it.rune].lab, c: '#9ec0ff' }); L.push({ t: 'SOCKET INTO GEAR AT THE SMITH OR IN THE BAG', c: '#6f6880' }); }
   if (it.kind === 'tome') { L.push({ t: AH.SKILLS[it.skill].desc, c: '#9ec0ff' }); L.push({ t: 'READ TO LEARN OR IMPROVE THIS SKILL', c: '#6f6880' }); }
   if (it.kind === 'cons') {
-    const d = { potion: 'RESTORES LIFE', mana: 'RESTORES MANA', murky: 'ANYTHING CAN HAPPEN...', torch: 'REFILLS YOUR TORCH', ore: 'THE SMITH NEEDS IT', coal: 'FEEDS YOUR TORCH', iron: 'THE SMITH NEEDS IT', silver: 'THE SMITH NEEDS IT', goldore: 'THE SMITH NEEDS IT', mithril: 'THE SMITH NEEDS IT', gem: 'SELLS WELL', bomb: 'BREAKS WALLS AND FOES', key: 'OPENS A VAULT DOOR', idscroll: 'IDENTIFIES A RING' }[it.cons];
+    const d = { potion: 'RESTORES LIFE', mana: 'RESTORES MANA', murky: 'ANYTHING CAN HAPPEN...', torch: 'REFILLS YOUR TORCH', ore: 'THE SMITH NEEDS IT', coal: 'FEEDS YOUR TORCH', iron: 'THE SMITH NEEDS IT', silver: 'THE SMITH NEEDS IT', goldore: 'THE SMITH NEEDS IT', mithril: 'THE SMITH NEEDS IT', gem: 'SELLS WELL', bomb: 'BREAKS WALLS AND FOES', key: 'OPENS A VAULT DOOR', idscroll: 'IDENTIFIES A RING', lockpick: 'OPENS LOCKED CHESTS. THE ROGUE NEEDS NONE.' }[it.cons];
     L.push({ t: d, c: '#9ec0ff' });
   }
   if (it.req) L.push({ t: `REQUIRES ${it.req.v} ${it.req.stat.toUpperCase()}`, c: '#a39bb0' });

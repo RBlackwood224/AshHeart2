@@ -2,6 +2,7 @@
 // Boot, main loop, scaling, device handling, saving
 (function () {
   AH.options = AH.Save.options();
+  AH.Input.applyBinds();
   if (!AH.options.lang) { const nl = (navigator.language || 'en').slice(0, 2); AH.options.lang = nl === 'hu' || nl === 'fr' ? nl : 'en'; }
   AH.setLang(AH.options.lang);
   AH.Audio.setVol(AH.options.music, AH.options.sfx);
@@ -12,6 +13,16 @@
   const ui = AH.makeCanvas(AH.UW, AH.UH);
   const uctx = ui.getContext('2d');
   const R = new AH.Render(world); AH.R = R;
+  // smooth motion (PC): the world is drawn with 3 canvas pixels per art pixel, so the camera and the
+  // moving things can step a third of an art pixel. Art pixels still map to whole screen pixels, so it stays sharp.
+  AH.smoothOn = () => AH.options && (AH.options.smooth === undefined ? !AH.isTouch : !!AH.options.smooth);
+  function syncSS() {
+    const ss = AH.smoothOn() ? Math.min(3, AH.ssCap || 3) : 1;
+    if (AH.SS === ss && world.width === AH.W * ss) return;
+    AH.SS = ss; world.width = AH.W * ss; world.height = AH.H * ss;
+    R.ctx.imageSmoothingEnabled = false; R.cams = {};
+  }
+  syncSS();
   AH.renderer = R;
 
   // host: forward sounds to guests
@@ -134,13 +145,25 @@
   function frame(now) {
     let dt = (now - last) / 1000; last = now;
     if (dt > 0.05) dt = 0.05;
+    // steady frame pacing: browsers (Firefox above all) hand out slightly uneven timestamps even when
+    // the screen refreshes like clockwork; within 25% of the usual frame time, use the usual frame time
+    if (!frame.avg) frame.avg = dt;
+    if (Math.abs(dt - frame.avg) < frame.avg * 0.25) { frame.avg += (dt - frame.avg) * 0.05; dt = frame.avg; }
+    else frame.avg += (dt - frame.avg) * 0.2;
+    syncSS();
     AH.Input.poll();
     // each step guarded on its own: one faulty piece must never freeze the whole game
     const safe = f => { try { f(); } catch (e) { if (AH.lastError !== String(e && e.stack || e)) console.error(e); AH.lastError = String(e && e.stack || e); } };
     safe(() => { if (!G.menu && G.scene === 'title') G.openMenu('title', null); if (G.menu) AH.UI.tick(G, dt); else handleDevices(); });
     safe(() => { if (AH.Mouse) AH.Mouse.tick(G, dt); });
     safe(() => { if (G.net && !G.isHost) G.guestUpdate(dt); else G.update(dt); });
+    const td = performance.now();
     safe(() => R.draw(G));
+    // a slow machine steps smooth motion down (3 -> 2 -> 1) instead of losing frames
+    if (AH.SS > 1 && G.scene === 'mine') {
+      const ms = performance.now() - td; frame.dAvg = frame.dAvg === undefined ? ms : frame.dAvg + (ms - frame.dAvg) * 0.02;
+      if (frame.dAvg > 9) { AH.ssCap = AH.SS - 1; frame.dAvg = undefined; }
+    }
     safe(() => AH.UI.render(G, uctx));
     safe(() => { if (AH.Mouse) AH.Mouse.drawCursor(G, uctx); });
     sctx.fillStyle = '#000'; sctx.fillRect(0, 0, screen.width, screen.height);

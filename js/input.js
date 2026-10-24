@@ -5,12 +5,22 @@ AH.Input = (function () {
   const keys = {};
   const KB = {
     kb1: { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'],
-      a: ['KeyJ'], b: ['KeyL'], x: ['KeyK'], y: ['KeyI', 'Digit1'], lb: ['KeyU', 'Digit2'], rb: ['KeyO', 'Digit3'],
+      a: ['KeyJ'], b: ['KeyL'], x: ['KeyK'], y: ['Digit1', 'KeyI'], lb: ['Digit2', 'KeyU'], rb: ['Digit3', 'KeyO'],
       pot: ['KeyQ'], mana: ['KeyE', 'KeyR'], start: ['Escape'], select: ['Tab', 'KeyB'], dodge: ['Space'] },
     kb2: { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'],
       a: ['Numpad1', 'Period'], b: ['Numpad2', 'Slash'], x: ['Numpad4', 'Comma'], y: ['Numpad5', 'Semicolon'], lb: ['Numpad7', 'KeyM'], rb: ['Numpad8', 'Quote'],
       pot: ['Numpad0', 'KeyN'], mana: ['NumpadDecimal', 'KeyH'], start: ['NumpadEnter', 'Backslash'], select: ['NumpadAdd', 'BracketRight'] },
   };
+  // ---------- player-set controls: each keyboard and each controller keeps its own layout ----------
+  const KB_DEF = JSON.parse(JSON.stringify(KB));
+  const GP_DEF = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, pot: 6, mana: 7, select: 8, start: 9 };
+  const GP = {};
+  function applyBinds() {
+    const B = (AH.options && AH.options.binds) || {};
+    for (const id of ['kb1', 'kb2']) { KB[id] = JSON.parse(JSON.stringify(KB_DEF[id])); if (B[id]) for (const k in B[id]) KB[id][k] = B[id][k].slice(); }
+  }
+  const gpMap = i => Object.assign({}, GP_DEF, ((AH.options && AH.options.binds) || {})['gp' + i] || {});
+  let capture = null; // waiting for the next key / button to bind
   const dev = {}; // id -> {cur, prev, ax, ay, rep}
   const mk = id => (dev[id] = dev[id] || { id, cur: {}, prev: {}, ax: 0, ay: 0, rep: { t: 0, dx: 0, dy: 0 }, lastActive: 0 });
   mk('kb1'); mk('kb2');
@@ -19,6 +29,7 @@ AH.Input = (function () {
 
   const menuKeys = {}; // keys that went down while a menu was open (so Esc that opened the pause menu doesn't also close it)
   window.addEventListener('keydown', e => {
+    if (capture && capture.kind === 'key') { e.preventDefault(); const cb = capture.cb; capture = null; cb(e.code); return; }
     keys[e.code] = true;
     if (AH.game && (AH.game.menu || AH.game.scene === 'title')) menuKeys[e.code] = true;
     if (['Tab', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace'].indexOf(e.code) >= 0) e.preventDefault();
@@ -54,12 +65,20 @@ AH.Input = (function () {
       const d = mk('gp' + i);
       d.prev = d.cur; d.cur = {};
       const B = n => !!(p.buttons[n] && p.buttons[n].pressed);
+      const raw = p.buttons.map(b => !!(b && b.pressed));
+      if (capture && capture.kind === 'pad' && capture.id === 'gp' + i) {
+        const nb = raw.findIndex((v, k) => v && !(d.raw && d.raw[k]));
+        if (nb >= 0 && nb < 12) { const cb = capture.cb; capture = null; cb(nb); }
+      }
+      d.raw = raw;
       let ax = p.axes[0] || 0, ay = p.axes[1] || 0;
       if (Math.hypot(ax, ay) < 0.28) { ax = 0; ay = 0; }
-      d.cur.a = B(0); d.cur.b = B(1); d.cur.x = B(2); d.cur.y = B(3); d.cur.lb = B(4); d.cur.rb = B(5);
-      d.cur.select = B(8); d.cur.start = B(9);
+      const g = gpMap(i);
+      d.cur.a = B(g.a); d.cur.b = B(g.b); d.cur.x = B(g.x); d.cur.y = B(g.y); d.cur.lb = B(g.lb); d.cur.rb = B(g.rb);
+      d.cur.select = B(g.select); d.cur.start = B(g.start);
       d.cur.up = B(12); d.cur.down = B(13); d.cur.left = B(14); d.cur.right = B(15);
-      d.cur.pot = d.cur.up || B(6); d.cur.mana = d.cur.down || B(7);
+      d.cur.pot = d.cur.up || B(g.pot); d.cur.mana = d.cur.down || B(g.mana);
+      if (capture && capture.id === 'gp' + i) { for (const k in d.cur) d.cur[k] = false; }
       if (d.cur.left) ax = -1; if (d.cur.right) ax = 1;
       d.ax = ax; d.ay = ay;
       d.stickUp = ay < -0.6; d.stickDown = ay > 0.6; d.stickLeft = ax < -0.6; d.stickRight = ax > 0.6;
@@ -148,5 +167,37 @@ AH.Input = (function () {
       el.addEventListener('pointerleave', off); el.addEventListener('pointercancel', off);
     });
   }
-  return { poll, pressed, held, axis, menuDir, devices, lastDevice, rumble, anyPressed, setupTouch, dev, keys, touch };
+  // names shown on screen
+  const KEYN = { Space: 'SPACE', Escape: 'ESC', Enter: 'ENTER', Tab: 'TAB', Backspace: 'BKSP', ShiftLeft: 'SHIFT', ShiftRight: 'RSHIFT', ControlLeft: 'CTRL', ControlRight: 'RCTRL', AltLeft: 'ALT', AltRight: 'ALTGR',
+    ArrowUp: 'UP', ArrowDown: 'DOWN', ArrowLeft: 'LEFT', ArrowRight: 'RIGHT', Period: '.', Comma: ',', Slash: '/', Semicolon: ';', Quote: "'", Backslash: '\\', BracketLeft: '[', BracketRight: ']', Minus: '-', Equal: '=', Backquote: '`',
+    NumpadEnter: 'NUMENTER', NumpadAdd: 'NUM+', NumpadSubtract: 'NUM-', NumpadMultiply: 'NUM*', NumpadDivide: 'NUM/', NumpadDecimal: 'NUM.', CapsLock: 'CAPS' };
+  const keyName = c => !c ? '-' : KEYN[c] || c.replace(/^Key/, '').replace(/^Digit/, '').replace(/^Numpad/, 'NUM').toUpperCase();
+  const PADN = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'SELECT', 'START', 'L3', 'R3'];
+  const short = c => { const n = keyName(c); return n.length > 4 ? n.replace('NUMENTER', 'NENT').replace('NUM', 'N').replace('SPACE', 'SPC').replace('SHIFT', 'SHF').slice(0, 4) : n; };
+  // what the player presses for an action on this device
+  function label(id, act, brief) {
+    if (id && id.startsWith('gp')) { if (act === 'pot') return '^'; if (act === 'mana') return '_'; const g = gpMap(+id.slice(2)); return PADN[g[act]] || '?'; }
+    const m = KB[id]; if (!m) return { a: 'A', b: 'B', x: 'X', y: 'Y', lb: 'LB', rb: 'RB', pot: 'HP', mana: 'MP', select: 'BAG', start: 'II', dodge: 'B' }[act] || '?';
+    if (!m[act]) return '?';
+    return brief ? short(m[act][0]) : keyName(m[act][0]);
+  }
+  function setKey(id, act, code) {
+    const o = AH.options; o.binds = o.binds || {}; const B = o.binds[id] = o.binds[id] || {};
+    // a key belongs to one action: the action that had it gets this action's old key
+    const old = KB[id][act] ? KB[id][act][0] : null;
+    for (const k in KB[id]) if (k !== act && KB[id][k].indexOf(code) >= 0) { B[k] = KB[id][k].map(c => c === code ? old : c).filter(Boolean); }
+    B[act] = [code]; applyBinds(); AH.Save.setOptions(o);
+  }
+  function setPad(id, act, btn) {
+    const o = AH.options; o.binds = o.binds || {}; const B = o.binds[id] = o.binds[id] || {};
+    const g = gpMap(+id.slice(2)), old = g[act];
+    for (const k in g) if (k !== act && g[k] === btn) B[k] = old;
+    B[act] = btn; AH.Save.setOptions(o);
+  }
+  function resetBinds(id) { const o = AH.options; if (o.binds) delete o.binds[id]; applyBinds(); AH.Save.setOptions(o); }
+  function startCapture(kind, id, cb) { capture = { kind, id, cb }; }
+  function cancelCapture() { capture = null; }
+  const capturing = () => !!capture;
+  return { poll, pressed, held, axis, menuDir, devices, lastDevice, rumble, anyPressed, setupTouch, dev, keys, touch,
+    applyBinds, label, keyName, setKey, setPad, resetBinds, startCapture, cancelCapture, capturing };
 })();
