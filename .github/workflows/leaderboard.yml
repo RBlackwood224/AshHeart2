@@ -1,0 +1,33 @@
+# ASHHEART leaderboard robot: reads result codes sent as issues, checks them and writes board/data.json
+name: leaderboard
+on:
+  issues:
+    types: [opened, edited]
+permissions:
+  contents: write
+  issues: write
+concurrency:
+  group: leaderboard
+  cancel-in-progress: false
+jobs:
+  board:
+    if: contains(github.event.issue.title, 'ASHHEART')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Read the result
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node .github/scripts/board.js
+      - name: Save the board
+        run: |
+          git config user.name "ashheart-board"
+          git config user.email "ashheart-board@users.noreply.github.com"
+          git add board
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "leaderboard: issue #${{ github.event.issue.number }}"
+          git pull --rebase
+          git push
