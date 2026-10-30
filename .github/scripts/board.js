@@ -134,7 +134,8 @@ function seasonPoints(data, n) {
     const keys = Object.keys(data.weeks).sort(); while (keys.length > 20) delete data.weeks[keys.shift()];
   } else {
     const r = res.r, s = data.seasons[r.s] = data.seasons[r.s] || { heroes: [], points: [], shaft: 0 };
-    const i = s.heroes.findIndex(x => x.p === r.p && x.id === r.id);
+    // the same hero (same id, same GitHub account) keeps one row, even if the player name changed
+    const i = s.heroes.findIndex(x => x.id === r.id && (x.p === r.p || owners[x.p] === login));
     if (i >= 0 && s.heroes[i].f >= r.f && s.heroes[i].l >= r.l) msg = 'Thanks! Nothing new since the last time.';
     else { if (i >= 0) s.heroes.splice(i, 1); s.heroes.push(r); s.heroes.sort((a, b) => b.f - a.f || b.l - a.l); msg = 'Added! ' + r.h + ' reached floor ' + r.f + ' this season.'; }
     s.shaft = s.heroes.reduce((a, h) => a + h.f, 0);
