@@ -8,6 +8,10 @@ AH.PETS = {
 };
 // every level takes longer than the last: the deeper you are, the more you farm for the next one
 AH.xpNeed = L => Math.floor(30 + 20 * L + 8 * L * L + 0.25 * L * L * L);
+// past level 70 experience turns into paragon levels
+AH.LEVEL_CAP = 70;
+AH.parNeed = n => Math.floor(AH.xpNeed(AH.LEVEL_CAP) * (0.6 + n * 0.012));
+AH.xpNeedFor = ch => ch.level >= AH.LEVEL_CAP ? AH.parNeed(ch.par || 0) : AH.xpNeed(ch.level);
 
 AH.newCharacter = function (cls, name, pet, hardcore) {
   const C = AH.CLASSES[cls];
@@ -21,9 +25,9 @@ AH.newCharacter = function (cls, name, pet, hardcore) {
   ch.skills[C.skills[0]] = 1;
   const w = AH.genItem(rng, 1, { rarity: 0, base: C.start.weapon }); ch.equip.weapon = w;
   if (C.start.off) ch.equip.off = AH.genItem(rng, 1, { rarity: 0, base: C.start.off });
-  const head = { paladin: 'helm', rogue: 'hood', wizard: 'hat', necro: 'hood', barb: null }[cls];
+  const head = { paladin: 'helm', rogue: 'hood', wizard: 'hat', necro: 'hood', barb: null, priest: null }[cls];
   if (head) ch.equip.head = AH.genItem(rng, 1, { rarity: 0, base: head });
-  ch.equip.chest = AH.genItem(rng, 1, { rarity: 0, base: { paladin: 'plate', rogue: 'leather', wizard: 'robe', necro: 'robe', barb: 'fur' }[cls] });
+  ch.equip.chest = AH.genItem(rng, 1, { rarity: 0, base: { paladin: 'plate', rogue: 'leather', wizard: 'robe', necro: 'robe', barb: 'fur', priest: 'robe' }[cls] });
   ch.equip.chest.req = null;
   ch.bag[0] = AH.makeCons('potion', 3);
   ch.bag[1] = AH.makeCons('torch', 3);
@@ -61,13 +65,14 @@ P.recalc = function () {
     if (!it.unid) for (const a of it.affixes) { const def = AH.AFFIXES.find(x => x.k === a.k); S[a.k] = (S[a.k] || 0) + a.v * (AH.fits(def, ch.cls) ? 1.5 : 1); }
     if (it.bargain !== undefined && !it.unid) add(AH.BARGAINS[it.bargain].fx);
     if (it.legend) S.powers.add(it.legend);
-    for (const r of it.runes || []) add(AH.RUNES[r].fx);
+    for (const r of it.runes || []) add(AH.sockFx ? AH.sockFx(r, it) : AH.RUNES[r].fx);
     const rw = AH.runewordOf(it); if (rw) { add(rw.fx); S.runewords.push(rw.name); }
   }
   const sb = AH.setBonuses(Object.values(ch.equip));
   for (const b of sb.list) add(b.fx);
   S.sets = sb;
   for (const id of ch.passives) { const n = AH.PASSIVES[id]; if (n) add(n.fx); }
+  if (AH.paragonStats) AH.paragonStats(S, ch);
   S.hp += C.hp + S.vit * 5 + (ch.level - 1) * 5; S.hp = Math.round(S.hp * (1 + S.hpPct / 100));
   S.mp += C.mp + S.int * 3 + (ch.level - 1) * 2;
   S.armor = Math.round(S.armor * (1 + S.armorPct / 100));
@@ -83,6 +88,7 @@ P.recalc = function () {
   if (ch.pet === 'canary') S.light += 20; // the canary's bright feathers
   S.light = Math.max(-50, S.light);
   if (S.keys.has('thousand')) { S.ias += 35; S.dmg -= 15; }
+  if (AH.ruleStats) { AH.ruleStats(S, ch); S.speed = C.speed * (1 + S.move / 100); S.light = Math.max(-50, S.light); }
   S.mprTotal = S.noMpr || C.rage ? 0 : (0.8 + S.int * 0.06 + S.mpr + (this.wbase().mpr ? 1 : 0));
   this.S = S;
   if (this.hp > S.hp) this.hp = S.hp; if (this.mp > S.mp) this.mp = S.mp;
@@ -99,9 +105,16 @@ P.buildLook = function () {
   if (chest) {
     const b = AH.ARMORS[chest.base]; look.torso = b.look;
     const mat = AH.MATERIALS[chest.tier].metal;
-    if (b.look === 'plate') { pal.a = mat[0]; pal.m = mat[1]; pal.n = mat[2]; if (chest.rarity >= 1) { pal.t = rarCol(chest.rarity); pal.T = AH.shade(pal.t, 0.6); } }
+    if (b.look === 'plate') {
+      pal.a = mat[0]; pal.m = mat[1]; pal.n = mat[2];
+      // plate on someone who is not a paladin: their own colours on the tabard, and no holy cross
+      const own = { necro: '#3a5a34', wizard: '#3d4fa8', rogue: '#4a5a3a', barb: '#7a3a22' }[ch.cls];
+      if (own) { pal.t = own; pal.T = AH.shade(own, 0.6); }
+      if (chest.rarity >= 1) { pal.t = rarCol(chest.rarity); pal.T = AH.shade(pal.t, 0.6); }
+      if (ch.cls !== 'paladin') pal.c = pal.t;
+    }
     else if (b.look === 'leather') { const lc = ['#8a6440', '#7a5a3a', '#5a4a3a', '#6a5a5a', '#4a6a64', '#5a3a32'][chest.tier]; pal.a = AH.shade(lc, 1.2); pal.m = lc; pal.n = AH.shade(lc, 0.65); }
-    else { const rc = chest.rarity ? rarCol(chest.rarity) : (ch.cls === 'necro' ? AH.CLASS_PAL.necro.m : AH.CLASS_PAL.wizard.m); pal.a = AH.shade(rc, 1.25); pal.m = rc; pal.n = AH.shade(rc, 0.6); look.legs = 'robe'; pal.x = '#e8c25a'; pal.X = '#a8823a'; }
+    else { const rc = chest.rarity ? rarCol(chest.rarity) : (ch.cls === 'necro' ? AH.CLASS_PAL.necro.m : ch.cls === 'priest' ? '#d8ccb0' : AH.CLASS_PAL.wizard.m); pal.a = AH.shade(rc, 1.25); pal.m = rc; pal.n = AH.shade(rc, 0.6); look.legs = 'robe'; pal.x = '#e8c25a'; pal.X = '#a8823a'; }
   } else { look.torso = 'leather'; pal.a = '#b8a888'; pal.m = '#9a8a6a'; pal.n = '#6a5a4a'; }
   if (chest && AH.ARMORS[chest.base].look === 'fur') { const fc = ['#c8b49a', '#b8a48a', '#a8a8b0', '#d8d8e0', '#8ab0b0', '#c87a5a'][chest.tier]; pal.A = chest.rarity ? AH.shade(rarCol(chest.rarity), 1.2) : fc; pal.m = '#5a4030'; pal.n = '#3a2818'; if (ch.cls !== 'barb') { pal.f = '#d0a070'; pal.F = '#8a6040'; } }
   if (ch.cls === 'wizard' && chest && AH.ARMORS[chest.base].look === 'robe') look.legs = 'robe';
@@ -112,12 +125,29 @@ P.buildLook = function () {
     const b = AH.ARMORS[head.base]; look.head = b.look;
     if (b.look === 'hat' && ch.cls === 'wizard') look.head = 'beard';
     const mat = AH.MATERIALS[head.tier].metal;
-    if (b.look === 'helm' || b.look === 'greathelm' || b.look === 'horned') { pal.W = mat[0]; pal.w = mat[1]; pal.k = mat[2]; pal.K = AH.shade(mat[2], 0.7); if (head.rarity) { pal.p = rarCol(head.rarity); pal.P = AH.shade(pal.p, 0.6); } }
+    if (b.look === 'helm' || b.look === 'greathelm' || b.look === 'horned') {
+      pal.W = mat[0]; pal.w = mat[1]; pal.k = mat[2]; pal.K = AH.shade(mat[2], 0.7);
+      const plume = { necro: '#3a5a34', wizard: '#3d4fa8', rogue: '#4a5a3a', barb: '#7a3a22' }[ch.cls];
+      if (plume) { pal.p = plume; pal.P = AH.shade(plume, 0.6); }
+      if (ch.cls === 'necro') { pal.v = '#0a0a0e'; look.emissive = 'e'; } // green eyes glow behind the visor
+      if (head.rarity) { pal.p = rarCol(head.rarity); pal.P = AH.shade(pal.p, 0.6); }
+    }
     if (b.look === 'hood') { const hc = head.rarity ? rarCol(head.rarity) : AH.CLASS_PAL[ch.cls === 'necro' ? 'necro' : 'rogue'].h; pal.h = hc; pal.H = AH.shade(hc, 0.6); }
     if (b.look === 'hat') { const hc = head.rarity ? rarCol(head.rarity) : AH.CLASS_PAL.wizard.U; pal.U = hc; pal.u = AH.shade(hc, 1.3); pal.q = AH.shade(hc, 0.6); }
     if (head.rarity === 4) look.head = 'crown';
   } else if (ch.cls === 'barb') { look.head = 'wild'; } else { look.head = 'bare'; pal.h = ch.cls === 'wizard' ? '#c8c0b0' : ch.cls === 'rogue' ? '#3a2a1a' : ch.cls === 'necro' ? '#d8d4cc' : '#6a3a20'; }
   if (ch.cls === 'necro') look.emissive = 'e'; // eyes that glow in the dark
+  // gloves, boots and cloak show on the hero: material colour, or the rarity colour for magic and better
+  const gearCol = (it, leather) => {
+    if (!it) return null;
+    if (it.rarity >= 1) return rarCol(it.rarity);
+    return leather ? ['#7a5a3a', '#6a5a4a', '#5a5a64', '#8a8aa0', '#4a8a84', '#5a3a32'][it.tier] : AH.MATERIALS[it.tier].metal[1];
+  };
+  pal.j = pal.f || '#e0b088';
+  const gl = eq.hands; if (gl) pal.j = gearCol(gl, false);
+  const bt = eq.feet; if (bt) { pal.b = gearCol(bt, true); pal.B = AH.shade(pal.b, 0.65); }
+  const ck = eq.cloak; if (ck) look.cloak = ck.rarity >= 1 ? AH.shade(rarCol(ck.rarity), 0.85) : ['#5a3a3a', '#3a4a5a', '#4a4a52', '#5a5a6a', '#2a5a5a', '#5a2a22'][ck.tier];
+  if (ck && AH.Season && AH.Season.cloakCol(ch)) look.cloak = AH.shade(AH.Season.cloakCol(ch), 0.8);
   // held
   const w = eq.weapon;
   const hp = {};
@@ -188,13 +218,17 @@ P.atkTime = function () { const b = this.wbase(); return b.spd / (1 + (this.S.ia
 
 P.gainXp = function (G, n) {
   if (this.remote && G.isHost) { G.netEvent('xp', this, n); return; }
+  if (AH.rule('dblxp')) n *= 2;
   const ch = this.ch; ch.xp += n;
   let up = false;
-  while (ch.xp >= AH.xpNeed(ch.level) && ch.level < 99) {
+  while (ch.level < AH.LEVEL_CAP && ch.xp >= AH.xpNeed(ch.level)) {
     ch.xp -= AH.xpNeed(ch.level); ch.level++; ch.pts += 3; ch.ppts += 1;
     const C = AH.CLASSES[ch.cls]; ch.base[C.stat] += 1; ch.base.vit += 1;
     up = true;
   }
+  let par = 0;
+  while (ch.level >= AH.LEVEL_CAP && ch.xp >= AH.parNeed(ch.par || 0)) { ch.xp -= AH.parNeed(ch.par || 0); ch.par = (ch.par || 0) + 1; ch.parPts = (ch.parPts || 0) + 1; par++; }
+  if (par) { AH.Audio.sfx('levelup'); G.toast(this, 'PARAGON ' + ch.par + '! A POINT TO SPEND', '#ff9a3e'); AH.fx.ring(G, this.x, this.y - 8, '#ff9a3e', 30); }
   if (up) {
     const C = AH.CLASSES[ch.cls];
     [[4, 1], [8, 2]].forEach(([lv, i]) => {
@@ -298,14 +332,17 @@ P.useItem = function (G, i) {
 };
 P.drink = function (G, k) {
   if (k === 'potion') {
-    if (this.cd.pot > 0 || !this.countCons('potion')) { if (!this.countCons('potion')) G.toast(this, 'NO POTIONS!', '#ff8a8a'); return; }
+    if (this.cd.pot > 0 || !this.countCons('potion')) { if (!this.countCons('potion')) G.toast(this, 'NO POTIONS!', '#ff8a8a'); else if (G.time - (this.potWarn || 0) > 1.5) { this.potWarn = G.time; G.toast(this, 'THE POTION IS NOT READY YET', '#a39bb0'); } return; }
+    if (AH.rule('nopot')) { G.toast(this, 'HEALING POTIONS DO NOT WORK HERE', '#ff8a8a'); AH.Audio.sfx('error'); return; }
     if (this.hp >= this.S.hp) { G.toast(this, 'YOU FEEL FINE', '#a39bb0'); return; }
     this.takeCons('potion'); this.cd.pot = 4;
-    const heal = this.S.hp * 0.3 * (1 + this.S.potion / 100);
+    const heal = this.S.hp * 0.3 * (1 + this.S.potion / 100) * (AH.rule('bigpot') ? 2 : 1);
     this.heal(G, heal); AH.Audio.sfx('drink'); return;
   }
   if (k === 'mana') {
     if (this.cd.mana > 0 || !this.countCons('mana')) { if (!this.countCons('mana')) G.toast(this, 'NO MANA POTIONS!', '#9ec0ff'); return; }
+    if (AH.usesRage && AH.usesRage(this.ch.cls)) { G.toast(this, 'RAGE COMES FROM BATTLE, NOT POTIONS', '#a39bb0'); return; }
+    if (this.mp >= this.S.mp - 0.5) { G.toast(this, 'YOUR MANA IS FULL', '#a39bb0'); return; }
     this.takeCons('mana'); this.cd.mana = 1.2; this.mp = Math.min(this.S.mp, this.mp + this.S.mp * 0.6); AH.Audio.sfx('drink'); return;
   }
   if (k === 'murky') {
@@ -313,7 +350,7 @@ P.drink = function (G, k) {
     const r = Math.random();
     if (r < 0.2) { this.hp = this.S.hp; G.toast(this, 'FULLY HEALED!', '#8ae08e'); }
     else if (r < 0.38) { this.hurt(G, this.S.hp * 0.25, null, true); G.toast(this, 'UGH. POISON!', '#9ad84a'); }
-    else if (r < 0.52) { this.gainXp(G, AH.xpNeed(this.ch.level) * 0.3); G.toast(this, 'YOUR MIND EXPANDS!', '#f2c94c'); }
+    else if (r < 0.52) { this.gainXp(G, AH.xpNeedFor(this.ch) * 0.3); G.toast(this, 'YOUR MIND EXPANDS!', '#f2c94c'); }
     else if (r < 0.64) { this.torch = 100; this.mp = this.S.mp; G.toast(this, 'MANA AND TORCH RESTORED!', '#9ec0ff'); }
     else if (r < 0.74) { this.ch.base.vit += 1; this.recalc(); G.toast(this, 'PERMANENT +1 VITALITY!', '#ffb347'); }
     else if (r < 0.86) { this.buffs.haste = 15; G.toast(this, 'YOU FEEL FAST!', '#8ae08e'); }
@@ -340,6 +377,7 @@ P.hurt = function (G, dmg, src, raw) {
     if (this.buffs.alert > 0) d *= 0.85;
     if (this.buffs.warcry > 0) d *= 0.85;
   }
+  if (AH.rule('glass')) d *= 2;
   d = Math.max(1, Math.round(d));
   this.addRage(4 + d / Math.max(1, this.S.hp) * 40);
   this.hp -= d; this.flash = 0.12; this.inv = raw ? 0 : 0.45;
@@ -574,25 +612,27 @@ P.tryDodge = function (G) {
 P.trySkill = function (G, slot) {
   if (G.scene === 'town') return;
   const id = this.ch.slots[slot]; if (!id) return;
+  if (slot > 0 && AH.rule('onespell')) { if (G.time - (this.osWarn || 0) > 2) { this.osWarn = G.time; G.toast(this, 'ONLY YOUR FIRST SKILL WORKS THIS WEEK', '#a39bb0'); } return; }
   const sk = AH.SKILLS[id], rank = this.ch.skills[id] || 1;
   if ((this.skillCd[id] || 0) > 0) return;
   if (!this.mouseAiming(G) && AH.autoTargetOn()) this.autoAim(G, 170);
   const cost = this.manaCost(sk.mp);
-  const native = AH.CLASSES[this.ch.cls].skills.indexOf(id) >= 0;
+  const native = AH.CLASSES[this.ch.cls].skills.indexOf(id) >= 0 || AH.GENERIC_SKILLS.indexOf(id) >= 0;
+  const pen = native ? 1 : 2; // another class's skill: double cost, half power
   if (this.S.keys.has('bloodmagic')) {
     // blood magic: spells are paid with life, never with the last of it
-    const hpCost = cost * (native ? 1 : 1.3) * 1.2;
+    const hpCost = cost * pen * 1.2;
     if (this.hp <= hpCost + 1) { G.toast(this, 'NOT ENOUGH LIFE', '#ff6a5a'); AH.Audio.sfx('error'); return; }
     this.skillCd[id] = sk.cd * (1 - Math.min(50, this.S.cdr) / 100);
-    if (G.castSkill(this, id, 1 + (rank - 1) * 0.22) === false) { this.skillCd[id] = 0.3; return; }
+    if (G.castSkill(this, id, (1 + (rank - 1) * 0.22) / pen * (AH.rule('onespell') ? 2 : 1)) === false) { this.skillCd[id] = 0.3; return; }
     this.hp -= hpCost; AH.fx.num(G, this.x, this.y - 22, '-' + Math.round(hpCost), '#c83a4a');
     return;
   }
-  if (this.mp < cost) { G.toast(this, AH.usesRage(this.ch.cls) ? 'NOT ENOUGH RAGE' : 'NOT ENOUGH MANA', AH.usesRage(this.ch.cls) ? '#ffb07a' : '#9ec0ff'); AH.Audio.sfx('error'); return; }
-  this.mp -= cost * (native ? 1 : 1.3);
+  if (this.mp < cost * pen) { G.toast(this, AH.usesRage(this.ch.cls) ? 'NOT ENOUGH RAGE' : 'NOT ENOUGH MANA', AH.usesRage(this.ch.cls) ? '#ffb07a' : '#9ec0ff'); AH.Audio.sfx('error'); return; }
+  this.mp -= cost * pen;
   this.skillCd[id] = sk.cd * (1 - Math.min(50, this.S.cdr) / 100);
-  const rm = 1 + (rank - 1) * 0.22;
-  if (G.castSkill(this, id, rm) === false) { this.skillCd[id] = 0.3; this.mp += cost * (native ? 1 : 1.3); }
+  const rm = (1 + (rank - 1) * 0.22) / pen * (AH.rule('onespell') ? 2 : 1);
+  if (G.castSkill(this, id, rm) === false) { this.skillCd[id] = 0.3; this.mp += cost * pen; }
 };
 
 // ---------- draw ----------

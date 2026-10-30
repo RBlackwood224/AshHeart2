@@ -19,7 +19,10 @@ AH.Input = (function () {
     const B = (AH.options && AH.options.binds) || {};
     for (const id of ['kb1', 'kb2']) { KB[id] = JSON.parse(JSON.stringify(KB_DEF[id])); if (B[id]) for (const k in B[id]) KB[id][k] = B[id][k].slice(); }
   }
-  const gpMap = i => Object.assign({}, GP_DEF, ((AH.options && AH.options.binds) || {})['gp' + i] || {});
+  // controllers without the browser's standard layout (Firefox often): Back = 6, Start = 7, triggers and D-pad are axes
+  const GP_RAW = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, pot: 98, mana: 99, select: 6, start: 7 };
+  const padRaw = i => { const ps = navigator.getGamepads ? navigator.getGamepads() : []; const p = ps[i]; return !!(p && p.mapping !== 'standard' && p.buttons.length < 16); };
+  const gpMap = i => Object.assign({}, padRaw(i) ? GP_RAW : GP_DEF, ((AH.options && AH.options.binds) || {})['gp' + i] || {});
   let capture = null; // waiting for the next key / button to bind
   const dev = {}; // id -> {cur, prev, ax, ay, rep}
   const mk = id => (dev[id] = dev[id] || { id, cur: {}, prev: {}, ax: 0, ay: 0, rep: { t: 0, dx: 0, dy: 0 }, lastActive: 0 });
@@ -29,6 +32,7 @@ AH.Input = (function () {
 
   const menuKeys = {}; // keys that went down while a menu was open (so Esc that opened the pause menu doesn't also close it)
   window.addEventListener('keydown', e => {
+    if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return; // typing into a text box (save code, names)
     if (capture && capture.kind === 'key') { e.preventDefault(); const cb = capture.cb; capture = null; cb(e.code); return; }
     keys[e.code] = true;
     if (AH.game && (AH.game.menu || AH.game.scene === 'title')) menuKeys[e.code] = true;
@@ -64,7 +68,17 @@ AH.Input = (function () {
       const p = pads[i]; if (!p) continue;
       const d = mk('gp' + i);
       d.prev = d.cur; d.cur = {};
-      const B = n => !!(p.buttons[n] && p.buttons[n].pressed);
+      const A = p.axes || [];
+      const raw0 = p.mapping !== 'standard' && p.buttons.length < 16;
+      // D-pad and triggers as axes: (6,7) pair, or one hat-switch axis (9) that reads 1.28 when idle
+      let hu = false, hd = false, hl = false, hr = false, lt = false, rt = false;
+      if (raw0) {
+        if (A.length > 7) { hu = A[7] < -0.5; hd = A[7] > 0.5; hl = A[6] < -0.5; hr = A[6] > 0.5; }
+        const h = A[9];
+        if (h !== undefined && h >= -1.05 && h <= 1.05) { const k = Math.round((h + 1) / (2 / 7)); hu = hu || k === 0 || k === 1 || k === 7; hr = hr || k >= 1 && k <= 3; hd = hd || k >= 3 && k <= 5; hl = hl || k >= 5 && k <= 7; }
+        if (A.length > 5) { lt = A[2] > 0.3; rt = A[5] > 0.3; }
+      }
+      const B = n => n === 98 ? lt : n === 99 ? rt : !!(p.buttons[n] && p.buttons[n].pressed);
       const raw = p.buttons.map(b => !!(b && b.pressed));
       if (capture && capture.kind === 'pad' && capture.id === 'gp' + i) {
         const nb = raw.findIndex((v, k) => v && !(d.raw && d.raw[k]));
@@ -76,7 +90,7 @@ AH.Input = (function () {
       const g = gpMap(i);
       d.cur.a = B(g.a); d.cur.b = B(g.b); d.cur.x = B(g.x); d.cur.y = B(g.y); d.cur.lb = B(g.lb); d.cur.rb = B(g.rb);
       d.cur.select = B(g.select); d.cur.start = B(g.start);
-      d.cur.up = B(12); d.cur.down = B(13); d.cur.left = B(14); d.cur.right = B(15);
+      d.cur.up = B(12) || hu; d.cur.down = B(13) || hd; d.cur.left = B(14) || hl; d.cur.right = B(15) || hr;
       d.cur.pot = d.cur.up || B(g.pot); d.cur.mana = d.cur.down || B(g.mana);
       if (capture && capture.id === 'gp' + i) { for (const k in d.cur) d.cur[k] = false; }
       if (d.cur.left) ax = -1; if (d.cur.right) ax = 1;
@@ -172,7 +186,7 @@ AH.Input = (function () {
     ArrowUp: 'UP', ArrowDown: 'DOWN', ArrowLeft: 'LEFT', ArrowRight: 'RIGHT', Period: '.', Comma: ',', Slash: '/', Semicolon: ';', Quote: "'", Backslash: '\\', BracketLeft: '[', BracketRight: ']', Minus: '-', Equal: '=', Backquote: '`',
     NumpadEnter: 'NUMENTER', NumpadAdd: 'NUM+', NumpadSubtract: 'NUM-', NumpadMultiply: 'NUM*', NumpadDivide: 'NUM/', NumpadDecimal: 'NUM.', CapsLock: 'CAPS' };
   const keyName = c => !c ? '-' : KEYN[c] || c.replace(/^Key/, '').replace(/^Digit/, '').replace(/^Numpad/, 'NUM').toUpperCase();
-  const PADN = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'SELECT', 'START', 'L3', 'R3'];
+  const PADN = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'SELECT', 'START', 'L3', 'R3']; PADN[98] = 'LT'; PADN[99] = 'RT';
   const short = c => { const n = keyName(c); return n.length > 4 ? n.replace('NUMENTER', 'NENT').replace('NUM', 'N').replace('SPACE', 'SPC').replace('SHIFT', 'SHF').slice(0, 4) : n; };
   // what the player presses for an action on this device
   function label(id, act, brief) {

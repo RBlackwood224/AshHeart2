@@ -35,15 +35,17 @@ AH.Enemy = function (def, x, y, floor, opt) {
   const f = Math.max(1, floor);
   const lv = f > 100 ? 1 + (f - 100) * 0.06 : 1;
   const pc = opt.players || 1;
-  const hpScale = (1 + f * 0.072) * lv * (1 + (pc - 1) * 0.72);
+  const hpScale = (1 + f * 0.072) * lv * (1 + (pc - 1) * 0.45); // co-op: a little tougher each, and more of them (see spawnFloorEnemies)
   const dmgScale = (1 + Math.min(f, 50) * 0.056 + Math.max(0, f - 50) * 0.04) * lv * (1 + (pc - 1) * 0.18);
-  this.maxHp = Math.round(def.hp * 1.3 * hpScale * AH.regionEase(f, 'hp') * (opt.hpMult || 1));
+  const DF = AH.diffNow ? AH.diffNow() : { hp: 1, dmg: 1, xp: 1 };
+  this.maxHp = Math.round(def.hp * 1.3 * hpScale * AH.regionEase(f, 'hp') * (opt.hpMult || 1) * DF.hp);
   this.hp = this.maxHp;
-  this.dmg = def.dmg * 1.5 * dmgScale * AH.regionEase(f, 'dmg') * (opt.dmgMult || 1);
+  this.dmg = def.dmg * 1.5 * dmgScale * AH.regionEase(f, 'dmg') * (opt.dmgMult || 1) * DF.dmg;
   this.spd = def.spd * 38 * (opt.spdMult || 1);
-  this.xp = Math.round((def.xp || 5) * (1 + f * 0.05) * (opt.xpMult || 1));
+  this.xp = Math.round((def.xp || 5) * (1 + f * 0.05) * (opt.xpMult || 1) * DF.xp);
   this.scale = opt.scale || 1;
   this.spr = AH.creatureSprite(def);
+  if (AH.ruleFoe && !opt.noRules) AH.ruleFoe(this);
   this.r = Math.max(4, Math.floor(this.spr.w * this.scale / 3));
   this.state = 'idle'; this.st = 0; this.atkCd = AH.rand.range(0.5, 1.5); this.think = 0;
   this.elite = opt.elite || null; this.legend = opt.legend || null; this.boss = !!opt.boss; this.nemesis = opt.nemesis || null;
@@ -67,6 +69,7 @@ E.hurt = function (G, dmg, by, opt) {
   if (this.shieldT > 0) { AH.fx.num(G, this.x, this.y - this.spr.h * this.scale, 'SHIELD', '#9ec0ff'); return 0; }
   if (by && by.S && by.S.powers && by.S.powers.has('executioner') && this.hp < this.maxHp * 0.3) dmg *= 1.5;
   let d = dmg;
+  if (by && by.pid !== undefined && AH.rule('glass')) d *= 2;
   if (this.curseT > 0) d *= 1 + this.curseAmt;
   if (by && by.pid !== undefined) {
     if (this.undead) { const w = by.wbase(); if (w.undead) d *= w.undead; if (by.ch.cls === 'paladin') d *= 1.25; }
@@ -355,13 +358,20 @@ AH.spawnFloorEnemies = function (G, rng) {
   for (const sp of m.spawns) {
     if (sp.critter) { G.enemies.push(new AH.Enemy(rng.pick(critters), sp.x, sp.y, f, { players: pc, hpMult: 0.6, dmgMult: 0.5 })); continue; }
     const def = rng.pick(pool);
-    const isElite = f >= 8 && rng() < 0.08 + f * 0.003;
+    const DF = AH.diffNow();
+    const isElite = AH.rule('elite') || f >= (DF.elite ? 3 : 8) && rng() < 0.08 + f * 0.003 + DF.elite;
     let elite = null;
     if (isElite) { elite = [rng.pick(AH.ELITE_AFFIX).id]; if (f > 30 && rng() < 0.4) elite.push(rng.pick(AH.ELITE_AFFIX).id); }
     const e = new AH.Enemy(def, sp.x, sp.y, f, { elite, players: pc, hpMult: elite ? 2.6 : 1, dmgMult: elite ? 1.3 : 1, xpMult: elite ? 4 : 1, aggro: !!sp.ambush });
     if (elite) e.name = elite.map(a => AH.ELITE_AFFIX.find(x => x.id === a).name).join(' ') + ' ' + def.name;
     // champion pack: elites bring friends
     G.enemies.push(e);
+    // higher difficulties: more monsters on every floor (Brutal IV: twice as many)
+    for (let extra = (DF.count || 1) * (1 + (pc - 1) * 0.25) * (AH.rule('swarm') ? 1.5 : 1) - 1; extra > 0; extra -= 1) {
+      if (rng() >= Math.min(1, extra)) continue;
+      const x = sp.x + rng.int(-18, 18), y = sp.y + rng.int(-12, 12);
+      if (!m.blocked(x, y, 4)) G.enemies.push(new AH.Enemy(rng.pick(pool), x, y, f, { players: pc, aggro: !!sp.ambush }));
+    }
     if (elite) for (let k = 0; k < 2; k++) { const x = sp.x + rng.int(-14, 14), y = sp.y + rng.int(-10, 10); if (!m.blocked(x, y, 4)) G.enemies.push(new AH.Enemy(def, x, y, f, { players: pc })); }
   }
 };

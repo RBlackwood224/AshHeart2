@@ -48,6 +48,10 @@ N.hostRecv = function (conn, d) {
   if (!d || !d.t) return;
   if (d.t === 'hello') {
     const ch = d.ch; if (!ch || !AH.CLASSES[ch.cls]) return;
+    // seasonal heroes play only with seasonal heroes (and normal with normal)
+    const host = G.players[0] || (this.hostCh ? { ch: this.hostCh } : this.localCh ? { ch: this.localCh } : null);
+    if (host && host.ch && (host.ch.weekly || '') !== (ch.weekly || '')) { conn.send({ t: 'wkmix' }); setTimeout(() => conn.close(), 300); return; }
+    if (host && host.ch && (host.ch.season || 0) !== (ch.season || 0)) { conn.send({ t: 'season' }); setTimeout(() => conn.close(), 300); return; }
     // friends join in the lobby before the game starts, never in the middle of it
     if (this.lobby) {
       if (this.pending.indexOf(conn) >= 0) return;
@@ -62,7 +66,7 @@ N.hostRecv = function (conn, d) {
     const lead = G.players[0]; p.x = lead.x + 12; p.y = lead.y + 8; G.placeSafe(p);
     G.players.push(p); G.makePet(p);
     conn.player = p;
-    conn.send({ t: 'welcome', pid, scene: G.scene, floor: G.floorNo, seed: G.mapSeed, event: G.event, mode: G.mode, world: this.worldLite(), hostName: G.players[0].ch.name });
+    conn.send({ t: 'welcome', wk: G.wk ? { key: G.wk.key, rules: G.wk.rules, left: G.wk.left } : null, pid, scene: G.scene, floor: G.floorNo, seed: G.mapSeed, event: G.event, mode: G.mode, world: this.worldLite(), hostName: G.players[0].ch.name });
     this.sendRoster();
     G.toast(null, ch.name + ' JOINED!', '#8ae08e'); AH.Audio.sfx('levelup');
   } else if (d.t === 'in' && conn.player) {
@@ -118,7 +122,7 @@ N.hostTick = function (dt) {
     al: G.allies.map(a => a.kind === 'minion' ? [r(a.x), r(a.y), a.face, 1, a.def ? a.def.spr : 'skel', a.def ? a.def.pal : {}, Math.round(a.hp / a.maxHp * 20), a.fly ? 1 : 0, a.rise > 0 ? 1 : 0, a.t < 3 ? 1 : 0] : [r(a.x), r(a.y), a.face]),
     cp: (G.corpses || []).filter(c => !c.used).map(c => { if (c.netSent) return c.id; c.netSent = true; return [c.id, r(c.x), r(c.y), c.face, c.def ? c.def.spr : 'skel', c.def ? c.def.pal : {}, c.sc, Math.round(c.t)]; }),
     fx: this.collectFx(), sfx: this.sfxQ, bn: this.bnQ || [],
-    st: G.map && G.map.stairs ? (G.map.stairs.locked ? 1 : 0) : 0, rt: r(G.runTimer || 0), ct: r(G.collapseT || 0),
+    st: G.map && G.map.stairs ? (G.map.stairs.locked ? 1 : 0) : 0, rt: r(G.runTimer || 0), wl: G.wk ? r(G.wk.left) : undefined, ct: r(G.collapseT || 0),
     ps: this.propState(),
   };
   this.fxQ = []; this.sfxQ = []; this.bnQ = [];
@@ -172,6 +176,9 @@ N.join = function (code, cb) {
 N.guestRecv = function (d) {
   const G = this.G;
   if (d.t === 'full') { this.status = 'THE GAME IS FULL'; return; }
+  if (d.t === 'season') { this.status = 'SEASONAL HEROES PLAY ONLY WITH SEASONAL HEROES'; return; }
+  if (d.t === 'wkmix') { this.status = 'WEEKLY HEROES JOIN ONLY WEEKLY GAMES'; return; }
+  if (d.t === 'wkend') { G.wkGuestEnd(d.res); return; }
   if (d.t === 'started') { this.status = 'THAT GAME HAS ALREADY STARTED'; return; }
   if (d.t === 'lobby') { this.status = 'IN THE LOBBY'; this.lobbyList = d.names; return; }
   if (d.t === 'welcome') {
@@ -215,8 +222,10 @@ GG.guestStart = function (d) {
   const ch = this.net.localCh;
   this.players = [];
   const me = new AH.Player(d.pid, ch, this.net.device); me.puppet = true; this.players.push(me);
-  this.world = Object.assign(AH.Save.load()[this.slotIdx].world || AH.Save.newWorld(), d.world);
+  const sl = this.slotIdx >= 0 ? AH.Save.load()[this.slotIdx] : null;
+  this.world = Object.assign((sl && sl.world) || AH.Save.newWorld(), d.world);
   this.mode = d.mode;
+  if (d.wk) { this.wk = Object.assign({ used: 0, maxFloor: 1, kills: 0, ended: false }, d.wk); this.rules = new Set(d.wk.rules); } else { this.wk = null; this.rules = new Set(); }
   if (d.scene === 'mine') this.guestFloor({ seed: d.seed, floor: d.floor, event: d.event, mode: d.mode }); else this.guestTown();
   this.toast(null, 'JOINED ' + d.hostName + "'S GAME", '#8ae08e');
   this.netMirror = { en: {} };
@@ -234,7 +243,7 @@ GG.guestFloor = function (d) {
   if (this.netMirror) { this.netMirror.en = {}; this.netMirror.cp = {}; }
   AH.Audio.music(d.floor % 10 === 0 ? 'boss' : 'mine');
   const me = this.localPlayers()[0];
-  if (me) { if (d.floor > me.ch.deepest && this.mode === 'story') me.ch.deepest = d.floor; if (d.floor % 5 === 0 && me.ch.lifts.indexOf(d.floor) < 0 && this.mode !== 'time') me.ch.lifts.push(d.floor); }
+  if (me) { if (d.floor > me.ch.deepest && this.mode === 'story') me.ch.deepest = d.floor; if (d.floor % 5 === 0 && me.ch.lifts.indexOf(d.floor) < 0 && !this.isRun()) me.ch.lifts.push(d.floor); }
 };
 GG.guestRoster = function (roster) {
   const me = this.localPlayers()[0];
@@ -251,6 +260,7 @@ GG.guestRoster = function (roster) {
 };
 GG.guestSnap = function (d) {
   const W = this.world; Object.assign(W, d.w);
+  if (this.wk && d.wl !== undefined) this.wk.left = d.wl;
   if (d.sc === 'town' && this.scene !== 'town') this.guestTown();
   if (!this.map) return;
   // players
@@ -366,9 +376,10 @@ U.init.online = function (G, m) { m.step = m.step || 'menu'; m.sel = 0; m.code =
 U.update.online = function (G, m, dt) {
   const n = U.nav(G, m, dt);
   if (m.step === 'menu') {
-    const items = [{ id: 'host', label: 'HOST A GAME' }, { id: 'join', label: 'JOIN A GAME' }, { id: 'back', label: 'BACK' }];
+    const items = U.onlineItems();
     U.listUpdate(G, m, dt, items, it => {
       if (it.id === 'back') { G.closeAllMenus(); G.openMenu('title', null); return; }
+      if (it.id === 'wkhost' || it.id === 'wkjoin') { G.openMenu('wkonline', null, { dev: m.dev || m.lastDev || 'kb1', role: it.id === 'wkhost' ? 'host' : 'join' }); return; }
       if (!AH.Save.load().length) { G.toast(null, 'CREATE A HERO FIRST', '#ff8a8a'); return; }
       const dev = m.dev || m.lastDev || 'kb1';
       G.openMenu('slots', null, { dev, purpose: 'online', onDone: idx => {
@@ -399,8 +410,8 @@ U.update.online = function (G, m, dt) {
     if (n.p.b || n.p.start) { kill(); G.closeAllMenus(); G.openMenu('title', null); return; }
     if (m.go && m.code.length === 5) {
       m.go = false; kill();
-      G.slotIdx = m.slotIdx; G.world = AH.Save.load()[m.slotIdx].world;
-      G.net = new AH.Net(G); G.net.localCh = AH.Save.load()[m.slotIdx].ch; G.net.device = 'touch';
+      G.slotIdx = m.wkCh ? -1 : m.slotIdx; G.world = m.wkCh ? AH.Save.newWorld() : AH.Save.load()[m.slotIdx].world;
+      G.net = new AH.Net(G); G.net.localCh = m.wkCh || AH.Save.load()[m.slotIdx].ch; G.net.device = 'touch';
       m.step = 'wait';
       G.net.join(m.code);
     }
@@ -416,8 +427,8 @@ U.update.online = function (G, m, dt) {
     if (n.p.b) { window.removeEventListener('keydown', m.kh); G.closeAllMenus(); G.openMenu('title', null); return; }
     if (m.go && m.code.length === 5) {
       m.go = false; window.removeEventListener('keydown', m.kh);
-      G.slotIdx = m.slotIdx; G.world = AH.Save.load()[m.slotIdx].world;
-      G.net = new AH.Net(G); G.net.localCh = AH.Save.load()[m.slotIdx].ch; G.net.device = m.dev || 'kb1';
+      G.slotIdx = m.wkCh ? -1 : m.slotIdx; G.world = m.wkCh ? AH.Save.newWorld() : AH.Save.load()[m.slotIdx].world;
+      G.net = new AH.Net(G); G.net.localCh = m.wkCh || AH.Save.load()[m.slotIdx].ch; G.net.device = m.dev || 'kb1';
       m.step = 'wait';
       G.net.join(m.code);
     }
@@ -429,6 +440,7 @@ U.update.online = function (G, m, dt) {
     const ready = net && net.peer && net.status === 'WAITING FOR FRIENDS';
     if (n.p.a && ready) {
       AH.Audio.sfx('select');
+      if (net.wkList) { if (AH.priestAlone && net.pending.length === 0 && net.hostCh.cls === 'priest') { G.toast(null, 'THE PRIEST NEEDS AT LEAST ONE COMPANION', '#fff2b0'); AH.Audio.sfx('error'); return; } G.closeAllMenus(); G.startWeekly(net.wkList); net.startFromLobby(); return; }
       G.closeAllMenus(); G.startSession(m.slotIdx, m.dev || 'kb1'); net.startFromLobby();
       return;
     }
@@ -440,7 +452,7 @@ U.update.online = function (G, m, dt) {
 U.draw.online = function (G, ctx, m) {
   U.bg(ctx, false); U.title(ctx, 'ONLINE CO-OP', 16);
   if (m.step === 'menu') {
-    U.list(ctx, [{ label: 'HOST A GAME' }, { label: 'JOIN A GAME' }, { label: 'BACK' }], m.sel, 150, 70, 180);
+    U.list(ctx, U.onlineItems(), m.sel, 140, 64, 200);
     ['UP TO 3 HEROES. THE HOST RUNS THE GAME,', 'FRIENDS JOIN WITH A 5-LETTER CODE.', 'EACH PLAYER SEES THEIR OWN LOOT.'].forEach((l, i) => AH.text(ctx, UW / 2, 150 + i * 11, l, '#8d8494', { align: 'center' }));
   } else if (m.step === 'code' && AH.isTouch) {
     AH.text(ctx, UW / 2, 60, 'ENTER THE HOST CODE', '#cfc6b4', { align: 'center' });

@@ -27,11 +27,36 @@ AH.CLASSES = {
     skills: ['leap', 'warcry', 'slam'], desc: 'A WILD WARRIOR FROM THE NORTH. NO MANA, ONLY RAGE: HIT AND GET HIT TO FEED IT.',
   },
 };
-AH.CLASS_KEYS = ['paladin', 'rogue', 'wizard', 'necro', 'barb'];
-AH.CLASS_START = { paladin: 'p0', rogue: 'r0', wizard: 'm0', necro: 'n0', barb: 'b0' };
+// the priest walks only with companions: chosen and played in co-op
+AH.CLASSES.priest = {
+  name: 'PRIEST', color: '#fff2b0', stat: 'int', base: { str: 4, dex: 4, int: 9, vit: 7 }, hp: 48, mp: 42, speed: 1.0, coop: true,
+  look: { head: 'bare', torso: 'robe', legs: 'robe' }, start: { weapon: 'mace', off: 'tomeoff' },
+  skills: ['healray', 'bless', 'sanctuary'], tomes: ['revive', 'holyfire', 'prayer'], desc: 'CO-OP ONLY. HEALS, SHIELDS AND RAISES THE FALLEN. HEALING FILLS HIS FAITH.',
+};
+AH.CLASS_KEYS = ['paladin', 'rogue', 'wizard', 'necro', 'barb', 'priest'];
+AH.CLASS_START = { paladin: 'p0', rogue: 'r0', wizard: 'm0', necro: 'n0', barb: 'b0', priest: 'q0' };
 AH.usesRage = cls => cls === 'barb';
-AH.isCaster = cls => cls === 'wizard' || cls === 'necro';
+// difficulty, chosen in town at the mine entrance. Monsters get more life and hit harder, and there are
+// more of them (count); the reward is more experience, gold and magic find, and more elite packs.
+AH.DIFFS = [
+  { name: 'NORMAL MODE', count: 1, col: '#cfc6b4', hp: 1, dmg: 1, xp: 1, mf: 0, gold: 0, elite: 0 },
+  { name: 'HARD', count: 1.15, col: '#f2d36a', hp: 1.6, dmg: 1.3, xp: 1.3, mf: 25, gold: 25, elite: 0.03 },
+  { name: 'EXTREME', count: 1.3, col: '#ff9a3e', hp: 2.5, dmg: 1.65, xp: 1.6, mf: 50, gold: 50, elite: 0.06 },
+  { name: 'BRUTAL I', count: 1.45, col: '#ff6a5a', hp: 4, dmg: 2.1, xp: 2, mf: 80, gold: 80, elite: 0.09 },
+  { name: 'BRUTAL II', count: 1.6, col: '#ff4a4a', hp: 6, dmg: 2.6, xp: 2.4, mf: 110, gold: 110, elite: 0.12 },
+  { name: 'BRUTAL III', count: 1.75, col: '#e03ad8', hp: 9, dmg: 3.2, xp: 2.9, mf: 150, gold: 150, elite: 0.15 },
+  { name: 'BRUTAL IV', count: 2, col: '#b04aff', hp: 13, dmg: 4, xp: 3.5, mf: 200, gold: 200, elite: 0.18 },
+];
+// the game follows the host's (first player's) difficulty; the daily time attack is always normal
+AH.diffNow = function () {
+  const G = AH.game; if (!G || G.mode === 'time' || G.mode === 'weekly') return AH.DIFFS[0];
+  const p = G.players && G.players[0];
+  return AH.DIFFS[Math.max(0, Math.min(AH.DIFFS.length - 1, (p && p.ch && p.ch.diff) || 0))];
+};
+AH.isCaster = cls => cls === 'wizard' || cls === 'necro' || cls === 'priest';
 
+// books anyone can learn; every other skill belongs to one class
+AH.GENERIC_SKILLS = ['whirl', 'mend', 'spiritwolf'];
 // skills: mp cost, cooldown (s), icon
 AH.SKILLS = {
   smite: { name: 'HOLY SMITE', mp: 10, cd: 4, icon: 'sun', desc: 'HOLY BLAST AROUND YOU. DOUBLE VS UNDEAD.' },

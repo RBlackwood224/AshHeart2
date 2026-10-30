@@ -122,7 +122,7 @@
   };
   // place quest relics and foes when a floor is entered
   GG.questFloor = function (rng) {
-    if (this.mode === 'time') return;
+    if (this.isRun()) return;
     const QS = this.qstate(), m = this.map, f = this.floorNo;
     for (const q of AH.QUESTS) {
       const st = QS[q.id]; if (!st || st.done || st.ready) continue;

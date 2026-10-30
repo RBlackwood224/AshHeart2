@@ -2,7 +2,7 @@
 // Passive tree: one big shared web (~310 points). Each of the five classes starts on its own side with three
 // long themed branches that end in a keystone; an outer ring of general points links the classes together.
 // Coordinates are in tree space; the menu scrolls around it.
-AH.TREE_V = 4;
+AH.TREE_V = 5;
 (function () {
   const N = {}, L = [];
   const CX = 520, CY = 400;
@@ -76,7 +76,7 @@ AH.TREE_V = 4;
     const a0 = C.ang * D;
     const [sx, sy] = pol(a0, 80);
     node(C.id + '0', sx, sy, 'start', C.start, C.name);
-    N[C.id + '0'].cls = C.cls;
+    N[C.id + '0'].cls = C.cls; N[C.id + '0'].owner = C.cls;
     link('c', C.id + '0');
     branchEnds[ci] = [];
     C.branches.forEach((B, bi) => {
@@ -92,6 +92,7 @@ AH.TREE_V = 4;
         if (k === 's') { node(id, x, y, 'small', Object.assign({}, B.small[si % B.small.length])); si++; }
         else if (k === 'n1' || k === 'n2' || k === 'n3') node(id, x, y, 'notable', B[k][1], B[k][0]);
         else node(id, x, y, 'key', B.ks[1], B.ks[0], B.ks[2]);
+        N[id].owner = C.cls;
         link(prev, id); prev = id;
         if (i === 4) mid = id;
       });
@@ -161,12 +162,48 @@ AH.TREE_V = 4;
     link(branchEnds[a[0]][a[1]].three, id); link(id, branchEnds[b[0]][b[1]].three);
   });
 
+  // the priest's island: above the paladin, past the end of his branches (added without moving anything else)
+  {
+    const PR = { cls: 'priest', id: 'q', name: 'PRIEST', start: { int: 3, mp: 10 }, branches: [
+      { key: 'mercy', small: [{ mp: 8 }, { int: 3 }, { mpr: 0.5 }, { hp: 10 }, { spell: 4 }],
+        n1: ['GENTLE HANDS', { spell: 12, mpr: 1 }], n2: ['WELLSPRING', { mp: 30, int: 10 }], n3: ['GRACE', { spell: 14, hpPct: 5 }],
+        ks: ['MARTYR\'S LIGHT', { key: 'martyrlight', hpPct: -10 }, 'YOUR HEALS ALSO HEAL YOU FOR HALF. 10% LESS LIFE.'] },
+      { key: 'ward', small: [{ armor: 6 }, { res: 1 }, { vit: 3 }, { hp: 12 }, { block: 2 }],
+        n1: ['SANCTITY', { res: 4, armorPct: 10 }], n2: ['GUARDIAN ANGEL', { hpPct: 10, vit: 6 }], n3: ['HALLOWED', { res: 4, hp: 25 }],
+        ks: ['DIVINE SHELL', { key: 'divineshell' }, 'YOUR BLESSED SHIELDS ARE TWICE AS STRONG, BUT LAST HALF AS LONG.'] },
+      { key: 'zeal', small: [{ dmg: 4 }, { str: 3 }, { fire: 3 }, { crit: 1 }, { spell: 3 }],
+        n1: ['SMITING HAND', { dmg: 10, fire: 6 }], n2: ['ZEALOT', { spell: 10, dmg: 8 }], n3: ['RADIANCE', { firePct: 20, spell: 8 }],
+        ks: ['WRATH OF HEAVEN', { key: 'wrath', spell: 20 }, 'HOLY FIRE HITS EVERY FOE AS IF IT WERE UNDEAD.'] },
+    ] };
+    const a0 = -90 * D;
+    const [sx, sy] = pol(a0, 560);
+    node('q0', sx, sy, 'start', PR.start, PR.name); N.q0.cls = 'priest'; N.q0.owner = 'priest';
+    link('q0', 'pholy15'); // a narrow way down into the great web
+    PR.branches.forEach((B, bi) => {
+      const kinds = ['s', 's', 's', 's', 'n1', 's', 's', 's', 's', 'n2', 's', 's', 's', 'n3', 's', 's', 'ks'];
+      let prev = 'q0', si = 0;
+      kinds.forEach((k, i) => {
+        const r = 560 + 26 + i * 22, spread = (bi - 1) * 16 * D * Math.min(1, (i + 1) / 3);
+        const [x, y] = pol(a0 + spread, r);
+        const id = 'q' + B.key + i;
+        if (k === 's') { node(id, x, y, 'small', Object.assign({}, B.small[si % B.small.length])); si++; }
+        else if (k === 'ks') node(id, x, y, 'key', B.ks[1], B.ks[0], B.ks[2]);
+        else node(id, x, y, 'notable', B[k][1], B[k][0]);
+        N[id].owner = 'priest'; link(prev, id); prev = id;
+      });
+    });
+    link('qmercy3', 'qward3'); link('qward8', 'qzeal8'); link('qmercy12', 'qward12');
+  }
   AH.PASSIVES = N; AH.PASSIVE_LINKS = L;
   // bounds for the scrolling view
   let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
   for (const id in N) { x0 = Math.min(x0, N[id].x); y0 = Math.min(y0, N[id].y); x1 = Math.max(x1, N[id].x); y1 = Math.max(y1, N[id].y); }
   AH.TREE_BOUNDS = { x0: x0 - 30, y0: y0 - 30, x1: x1 + 30, y1: y1 + 30 };
 })();
+// another class's part of the tree: every point costs 2, and its keystones are theirs alone
+AH.passiveForeign = (id, cls) => { const n = AH.PASSIVES[id]; return !!(n && n.owner && n.owner !== cls); };
+AH.passiveCost = (id, cls) => AH.passiveForeign(id, cls) ? 2 : 1;
+AH.passiveBlocked = (id, cls) => AH.passiveForeign(id, cls) && (AH.PASSIVES[id].t === 'key' || AH.PASSIVES[id].t === 'start');
 AH.passiveNeighbors = function (id) {
   if (!AH._pnCache) { AH._pnCache = {}; for (const [a, b] of AH.PASSIVE_LINKS) { (AH._pnCache[a] = AH._pnCache[a] || []).push(b); (AH._pnCache[b] = AH._pnCache[b] || []).push(a); } }
   return AH._pnCache[id] || [];

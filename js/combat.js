@@ -420,13 +420,16 @@ GP.dropItem = function (x, y, item, owner) {
   if (item.rarity >= 3 && owner !== undefined) { AH.Audio.sfx('legend'); }
 };
 GP.dropGold = function (x, y, n, owner) {
+  if (AH.rule('dblgold')) n *= 2;
+  if (AH.rule('s_gold')) n *= 2;
   this.drops.push({ id: AH.uid(), x, y, vx: AH.rand.range(-25, 25), vy: AH.rand.range(-20, 10), z: 0, vz: 40, gold: Math.max(1, Math.round(n)), owner, t: 0 });
 };
 GP.rollLoot = function (x, y, src, p) {
-  const f = this.floorNo, rng = AH.rand, mf = p.S.mf + (p.buffs.luck > 0 ? 100 : 0);
+  const DF = AH.diffNow();
+  const f = this.floorNo, rng = AH.rand, mf = p.S.mf + (p.buffs.luck > 0 ? 100 : 0) + DF.mf;
   const legendary = src && (src.legend || src.boss || src.nemesis);
   const elite = src && src.elite;
-  let goldN = (1 + f * 0.45) * (1 + p.S.gold / 100) * rng.range(0.6, 1.4);
+  let goldN = (1 + f * 0.45) * (1 + (p.S.gold + DF.gold) / 100) * rng.range(0.6, 1.4);
   if (rng() < (legendary ? 1 : elite ? 0.9 : 0.45)) this.dropGold(x, y, goldN * (legendary ? 12 : elite ? 4 : 1), p.pid);
   const early = f <= 10;
   let itemChance = legendary ? 1 : elite ? (early ? 0.3 : 0.5) : (early ? 0.035 : 0.06);
@@ -443,7 +446,7 @@ GP.rollLoot = function (x, y, src, p) {
   else if (r < 0.095) this.dropItem(x, y, AH.makeCons('murky'), p.pid);
   else if (r < 0.105 && f >= 3) this.dropItem(x, y, AH.makeCons('lockpick'), p.pid);
   else if (r < 0.105 + (elite ? 0.1 : 0)) this.dropItem(x, y, AH.genRune(rng, f), p.pid);
-  else if (r < 0.11 + (legendary ? 0.5 : 0)) { const sk = rng.pick(Object.keys(AH.SKILLS)); this.dropItem(x, y, AH.makeTome(sk), p.pid); }
+  else if (r < 0.11 + (legendary ? 0.5 : 0)) { const sk = rng.pick(AH.CLASSES[p.ch.cls].skills.concat(AH.CLASSES[p.ch.cls].tomes || [], AH.GENERIC_SKILLS)); this.dropItem(x, y, AH.makeTome(sk), p.pid); } // only your own class's books and the shared ones
 };
 GP.updateDrops = function (dt) {
   for (const d of this.drops) {

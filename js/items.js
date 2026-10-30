@@ -373,8 +373,8 @@ AH.itemLines = function (it, cls) {
   if (it.kind === 'armor' && AH.ARMORS[it.base].bonus) for (const t of AH.fxLabel(AH.ARMORS[it.base].bonus)) L.push({ t, c: '#ffffff' });
   if (it.sockets && !it.unid) {
     const rw = AH.runewordOf(it);
-    L.push({ t: `SOCKETS: ${it.runes.join(' ') || '-'} (${it.runes.length}/${it.sockets})`, c: '#a39bb0' });
-    for (const r of it.runes) L.push({ t: r + ': ' + AH.RUNES[r].lab, c: AH.RUNES[r].col });
+    L.push({ t: 'SOCKETS: ' + (it.runes.map(r => AH.sockName ? AH.sockName(r) : r).join(' ') || '-') + ' (' + it.runes.length + '/' + it.sockets + ')', c: '#a39bb0' });
+    for (const r of it.runes) L.push(AH.RUNES[r] ? { t: r + ': ' + AH.RUNES[r].lab, c: AH.RUNES[r].col } : { t: AH.sockName(r) + ': ' + AH.sockLab(r, it), c: AH.sockCol(r) });
     if (rw) L.push({ t: 'RUNEWORD ' + rw.name + ': ' + rw.lab, c: '#6fbf73' });
   }
   if (it.unid) L.push({ t: 'PUT IT ON OR IDENTIFY IT', c: '#a39bb0' });

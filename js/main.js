@@ -2,7 +2,7 @@
 // Boot, main loop, scaling, device handling, saving
 (function () {
   // all game files must come from the same version: a half-updated browser cache breaks menus silently
-  const parts = { util: AH.px, data: AH.usesRage, input: AH.Input && AH.Input.label, items: AH.CONS_CAP, player: AH.autoTargetOn, ui: AH.UI && AH.UI.optRows };
+  const parts = { util: AH.px, data: AH.usesRage, input: AH.Input && AH.Input.label, items: AH.CONS_CAP, player: AH.autoTargetOn, ui: AH.UI && AH.UI.optRows, i18n2: AH.I18N && AH.I18N.hu && AH.I18N.hu['YOUR MANA IS FULL'], rules: AH.RULES, qr: AH.QR, extras: AH.heroCode, weekly: AH.Weekly, season: AH.Season, board: AH.Board, craft: AH.GEMS, priest: AH.SKILLS && AH.SKILLS.healray, town: AH.RESIDENTS, secrets: AH.SPR && AH.SPR.sheep };
   const stale = Object.keys(parts).filter(k => !parts[k]);
   if (stale.length) {
     const d = document.createElement('div');
@@ -149,6 +149,35 @@
     }
   }
 
+  // ---------- F3: performance meter (frame rate, frame times, smooth-motion level) ----------
+  const PF = AH.PF = { on: false, times: [], draws: [], last: 0 };
+  window.addEventListener('keydown', e => { if (e.code === 'F3') { e.preventDefault(); PF.on = !PF.on; } });
+  function perfHud(now, drawMs) {
+    if (PF.last) { PF.times.push(now - PF.last); PF.draws.push(drawMs); }
+    PF.last = now;
+    if (PF.times.length > 120) { PF.times.shift(); PF.draws.shift(); }
+    if (!PF.on || !PF.times.length) return;
+    const avg = PF.times.reduce((a, b) => a + b, 0) / PF.times.length, worst = Math.max(...PF.times);
+    const dAvg = PF.draws.reduce((a, b) => a + b, 0) / PF.draws.length;
+    const late = PF.times.filter(t => t > avg * 1.5).length;
+    const ua = navigator.userAgent, br = /Firefox\//.test(ua) ? 'Firefox' : /Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : '?';
+    const lines = [
+      'FPS ' + (1000 / avg).toFixed(0) + '   frame ' + avg.toFixed(1) + ' ms   worst ' + worst.toFixed(1) + ' ms',
+      'late frames (2 s): ' + late + '   draw ' + dAvg.toFixed(1) + ' ms',
+      'smooth x' + AH.SS + (AH.ssCap ? ' (stepped down)' : '') + '   lights ' + (AH.fancyOn() ? 'fancy' : 'simple') + '   ' + br,
+      'screen ' + view.w + 'x' + view.h + '   dpr ' + (window.devicePixelRatio || 1),
+    ];
+    const fs = Math.max(12, Math.round(screen.height / 60));
+    sctx.save(); sctx.font = fs + 'px monospace'; sctx.textBaseline = 'top';
+    sctx.fillStyle = 'rgba(0,0,0,0.7)'; sctx.fillRect(view.x + 4, view.y + 4, fs * 26, fs * 1.3 * lines.length + 8);
+    sctx.fillStyle = '#9fff9f'; lines.forEach((l, i) => sctx.fillText(l, view.x + 10, view.y + 8 + i * fs * 1.3));
+    // frame-time graph: one bar per frame, red when late
+    const gx = view.x + 10, gy = view.y + 12 + fs * 1.3 * lines.length, gh = fs * 2;
+    sctx.fillStyle = 'rgba(0,0,0,0.7)'; sctx.fillRect(gx - 6, gy - 2, 120 * 3 + 12, gh + 6);
+    PF.times.forEach((t, i) => { const h = Math.min(gh, t / 50 * gh); sctx.fillStyle = t > avg * 1.5 ? '#ff5a5a' : '#9fff9f'; sctx.fillRect(gx + i * 3, gy + gh - h, 2, h); });
+    sctx.restore();
+  }
+
   // ---------- loop ----------
   let last = performance.now();
   function frame(now) {
@@ -163,11 +192,12 @@
     AH.Input.poll();
     // each step guarded on its own: one faulty piece must never freeze the whole game
     const safe = f => { try { f(); } catch (e) { if (AH.lastError !== String(e && e.stack || e)) console.error(e); AH.lastError = String(e && e.stack || e); } };
-    safe(() => { if (!G.menu && G.scene === 'title') G.openMenu('title', null); if (G.menu) AH.UI.tick(G, dt); else handleDevices(); });
+    safe(() => { if (!G.menu && G.scene === 'title') G.openMenu('title', null); if (G.menu && G.menu.type === 'title' && !AH._linkChecked && AH.checkHeroLink) { AH._linkChecked = 1; AH.checkHeroLink(G); } if (G.menu) AH.UI.tick(G, dt); else handleDevices(); });
     safe(() => { if (AH.Mouse) AH.Mouse.tick(G, dt); });
     safe(() => { if (G.net && !G.isHost) G.guestUpdate(dt); else G.update(dt); });
     const td = performance.now();
     safe(() => R.draw(G));
+    const drawMs = performance.now() - td;
     // a slow machine steps smooth motion down (3 -> 2 -> 1) instead of losing frames
     if (AH.SS > 1 && G.scene === 'mine') {
       const ms = performance.now() - td; frame.dAvg = frame.dAvg === undefined ? ms : frame.dAvg + (ms - frame.dAvg) * 0.02;
@@ -179,6 +209,7 @@
     sctx.imageSmoothingEnabled = false;
     if (G.scene !== 'title' || !G.menu) { sctx.drawImage(world, view.x, view.y, view.w, view.h); if (G.scene !== 'title' && AH.fancyOn && AH.fancyOn()) R.bloom(sctx, world, view); }
     sctx.drawImage(ui, view.x, view.y, view.w, view.h);
+    perfHud(now, drawMs);
     requestAnimationFrame(frame);
   }
   if (AH.isTouch) { AH.Input.setupTouch(); document.getElementById('fs').style.display = 'block'; }

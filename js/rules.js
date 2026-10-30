@@ -1,0 +1,131 @@
+'use strict';
+// Run rules: the weekly challenge draws three of these, a season adds its own.
+// The game asks AH.rule('id') wherever a rule changes something.
+AH.RULES = [
+  // the hard ones
+  { id: 'elite', kind: 'hard', name: 'ELITE HORDE', desc: 'EVERY MONSTER IS AN ELITE.' },
+  { id: 'nopot', kind: 'hard', name: 'DRY THROATS', desc: 'HEALING POTIONS DO NOT WORK.' },
+  { id: 'dark', kind: 'hard', name: 'DEEP DARK', desc: 'YOUR LIGHT IS MUCH SMALLER.' },
+  { id: 'fastfoe', kind: 'hard', name: 'RESTLESS DEAD', desc: 'MONSTERS MOVE 25% FASTER.' },
+  { id: 'legend5', kind: 'hard', name: 'BEAST SEASON', desc: 'A LEGENDARY BEAST WAITS ON EVERY 5TH FLOOR.' },
+  { id: 'nomana', kind: 'hard', name: 'SILENT MIND', desc: 'MANA DOES NOT REFILL BY ITSELF.' },
+  { id: 'poison', kind: 'hard', name: 'FOUL AIR', desc: 'YOU SLOWLY LOSE LIFE IN THE MINE.' },
+  { id: 'mimics', kind: 'hard', name: 'HUNGRY CHESTS', desc: 'MANY MORE CHESTS ARE MIMICS.' },
+  { id: 'giant', kind: 'hard', name: 'GIANTS', desc: 'MONSTERS ARE BIGGER AND TOUGHER, BUT SLOWER.' },
+  { id: 'fog', kind: 'hard', name: 'NO MAP', desc: 'THE MINIMAP IS GONE.' },
+  // the kind ones
+  { id: 'dblxp', kind: 'easy', name: 'QUICK LEARNER', desc: 'DOUBLE EXPERIENCE.' },
+  { id: 'legstart', kind: 'easy', name: 'HEIRLOOM', desc: 'YOU START WITH A LEGENDARY WEAPON.' },
+  { id: 'bigpot', kind: 'easy', name: 'STRONG BREW', desc: 'POTIONS HEAL TWICE AS MUCH.' },
+  { id: 'dblgold', kind: 'easy', name: 'GOLD FEVER', desc: 'DOUBLE GOLD.' },
+  { id: 'lantern', kind: 'easy', name: 'BRIGHT LANTERN', desc: 'A MUCH BIGGER LIGHT.' },
+  { id: 'well', kind: 'easy', name: 'FRESH START', desc: 'EVERY NEW FLOOR FILLS YOUR LIFE AND MANA.' },
+  { id: 'regen', kind: 'easy', name: 'TROLL BLOOD', desc: 'YOUR LIFE SLOWLY COMES BACK.' },
+  { id: 'bombs', kind: 'easy', name: 'DEMOLITION', desc: 'YOU START WITH NINE BOMBS.' },
+  { id: 'crits', kind: 'easy', name: 'SHARP EYES', desc: '+20% CRIT CHANCE.' },
+  { id: 'fastatk', kind: 'easy', name: 'QUICK HANDS', desc: '+30% ATTACK SPEED.' },
+  { id: 'freeze', kind: 'easy', name: 'WINTER TOUCH', desc: 'YOUR HITS MAY FREEZE FOES.' },
+  { id: 'thorns', kind: 'easy', name: 'THORN SKIN', desc: 'MONSTERS THAT HIT YOU GET HURT.' },
+  { id: 'goldrat', kind: 'easy', name: 'RAT RACE', desc: 'A GOLDEN RAT ON EVERY FLOOR.' },
+  { id: 'kit', kind: 'easy', name: 'WELL PACKED', desc: 'YOU START WITH EXTRA POTIONS AND A RARE ARMOR.' },
+  // the strange ones
+  { id: 'boom', kind: 'odd', name: 'VOLATILE', desc: 'MONSTERS EXPLODE WHEN THEY DIE. STAND BACK!' },
+  { id: 'haste', kind: 'odd', name: 'FAST FORWARD', desc: 'EVERYONE MOVES 25% FASTER, YOU AND THEM.' },
+  { id: 'onespell', kind: 'odd', name: 'ONE TRICK', desc: 'ONLY YOUR FIRST SKILL WORKS, BUT IT IS TWICE AS STRONG.' },
+  { id: 'glass', kind: 'odd', name: 'GLASS CANNON', desc: 'YOU DEAL AND TAKE DOUBLE DAMAGE.' },
+  { id: 'timekill', kind: 'odd', name: 'BORROWED TIME', desc: 'EVERY KILL ADDS 3 SECONDS TO THE CLOCK.' },
+  { id: 'swarm', kind: 'odd', name: 'SWARM', desc: 'HALF AGAIN AS MANY MONSTERS, BUT WEAKER.' },
+];
+AH.ruleDef = id => AH.RULES.find(r => r.id === id) || (AH.SEASON_RULES || []).find(r => r.id === id);
+AH.rule = function (id) { const G = AH.game; return !!(G && G.rules && G.rules.has(id) && G.scene === 'mine'); };
+AH.ruleOn = function (id) { const G = AH.game; return !!(G && G.rules && G.rules.has(id)); }; // also counts in town / on the start
+// what the active rules do to a hero's numbers (called from recalc)
+AH.ruleStats = function (S, ch) {
+  const G = AH.game; if (!G || !G.rules || !G.rules.size) return;
+  const r = id => G.rules.has(id);
+  if (r('dark')) S.light -= 45;
+  if (r('lantern')) S.light += 50;
+  if (r('nomana') && !(AH.usesRage && AH.usesRage(ch.cls))) S.noMpr = 1;
+  if (r('crits')) S.crit += 20;
+  if (r('fastatk')) S.ias += 30;
+  if (r('freeze')) S.freeze += 15;
+  if (r('haste')) S.move += 25;
+  if (r('thorns')) S.thorns += 6 + ch.level * 2;
+  if (r('s_winter')) { S.firePct += 60; S.fire += 4 + ch.level; }
+};
+// what the active rules do to a monster as it is made
+AH.ruleFoe = function (e) {
+  const G = AH.game; if (!G || !G.rules || !G.rules.size || G.scene !== 'mine') return;
+  const r = id => G.rules.has(id);
+  if (r('fastfoe')) e.spd *= 1.25;
+  if (r('haste')) e.spd *= 1.25;
+  if (r('giant') && !e.boss) { e.maxHp = Math.round(e.maxHp * 1.5); e.dmg *= 1.15; e.scale = (e.scale || 1) * 1.3; e.spd *= 0.85; }
+  if (r('swarm')) { e.maxHp = Math.round(e.maxHp * 0.65); }
+  if (r('s_bloodmoon') && G.world && (G.world.hour >= 20 || G.world.hour < 6 || G.scene === 'mine')) { e.maxHp = Math.round(e.maxHp * 1.2); e.dmg *= 1.2; }
+  e.hp = e.maxHp;
+};
+
+AH.addI18n(`
+ELITE HORDE|HORDE D'ÉLITE|ELIT HORDA
+EVERY MONSTER IS AN ELITE.|CHAQUE MONSTRE EST UN ÉLITE.|MINDEN SZÖRNY ELIT.
+DRY THROATS|GORGES SÈCHES|SZÁRAZ TOROK
+HEALING POTIONS DO NOT WORK.|LES POTIONS DE SOIN NE MARCHENT PAS.|AZ ÉLETERŐ-ITALOK NEM HATNAK.
+DEEP DARK|NUIT PROFONDE|MÉLY SÖTÉT
+YOUR LIGHT IS MUCH SMALLER.|TA LUMIÈRE EST BIEN PLUS PETITE.|SOKKAL KISEBB A FÉNYED.
+RESTLESS DEAD|MORTS AGITÉS|NYUGTALAN HOLTAK
+MONSTERS MOVE 25% FASTER.|LES MONSTRES VONT 25% PLUS VITE.|A SZÖRNYEK 25%-KAL GYORSABBAK.
+BEAST SEASON|SAISON DES BÊTES|BESTIÁK IDEJE
+A LEGENDARY BEAST WAITS ON EVERY 5TH FLOOR.|UNE BÊTE LÉGENDAIRE ATTEND À CHAQUE 5E ÉTAGE.|MINDEN 5. SZINTEN LEGENDÁS BESTIA VÁR.
+SILENT MIND|ESPRIT MUET|NÉMA ELME
+MANA DOES NOT REFILL BY ITSELF.|LE MANA NE REMONTE PAS TOUT SEUL.|A MANA NEM TÖLTŐDIK MAGÁTÓL.
+FOUL AIR|AIR VICIÉ|ROSSZ LEVEGŐ
+YOU SLOWLY LOSE LIFE IN THE MINE.|TU PERDS LENTEMENT DE LA VIE DANS LA MINE.|A BÁNYÁBAN LASSAN FOGY AZ ÉLETED.
+HUNGRY CHESTS|COFFRES AFFAMÉS|ÉHES LÁDÁK
+MANY MORE CHESTS ARE MIMICS.|BIEN PLUS DE COFFRES SONT DES MIMIQUES.|SOKKAL TÖBB LÁDA MIMIK.
+GIANTS|GÉANTS|ÓRIÁSOK
+MONSTERS ARE BIGGER AND TOUGHER, BUT SLOWER.|LES MONSTRES SONT PLUS GROS ET RÉSISTANTS, MAIS PLUS LENTS.|A SZÖRNYEK NAGYOBBAK ÉS SZÍVÓSABBAK, DE LASSABBAK.
+NO MAP|PAS DE CARTE|NINCS TÉRKÉP
+THE MINIMAP IS GONE.|LA MINI-CARTE A DISPARU.|NINCS KISTÉRKÉP.
+QUICK LEARNER|ÉLÈVE DOUÉ|GYORS TANULÓ
+DOUBLE EXPERIENCE.|EXPÉRIENCE DOUBLÉE.|DUPLA TAPASZTALAT.
+HEIRLOOM|HÉRITAGE|ÖRÖKSÉG
+YOU START WITH A LEGENDARY WEAPON.|TU COMMENCES AVEC UNE ARME LÉGENDAIRE.|LEGENDÁS FEGYVERREL KEZDESZ.
+STRONG BREW|BREUVAGE FORT|ERŐS FŐZET
+POTIONS HEAL TWICE AS MUCH.|LES POTIONS SOIGNENT DEUX FOIS PLUS.|AZ ITALOK KÉTSZER ANNYIT GYÓGYÍTANAK.
+GOLD FEVER|FIÈVRE DE L'OR|ARANYLÁZ
+DOUBLE GOLD.|OR DOUBLÉ.|DUPLA ARANY.
+BRIGHT LANTERN|LANTERNE VIVE|FÉNYES LÁMPÁS
+A MUCH BIGGER LIGHT.|UNE LUMIÈRE BIEN PLUS GRANDE.|SOKKAL NAGYOBB FÉNY.
+FRESH START|NOUVEAU DÉPART|FRISS KEZDET
+EVERY NEW FLOOR FILLS YOUR LIFE AND MANA.|CHAQUE NOUVEL ÉTAGE REMPLIT TA VIE ET TON MANA.|MINDEN ÚJ SZINT FELTÖLTI AZ ÉLETED ÉS A MANÁDAT.
+TROLL BLOOD|SANG DE TROLL|TROLLVÉR
+YOUR LIFE SLOWLY COMES BACK.|TA VIE REVIENT LENTEMENT.|AZ ÉLETED LASSAN VISSZATÖLTŐDIK.
+DEMOLITION|DÉMOLITION|ROBBANTÁS
+YOU START WITH NINE BOMBS.|TU COMMENCES AVEC NEUF BOMBES.|KILENC BOMBÁVAL KEZDESZ.
+SHARP EYES|ŒIL DE LYNX|ÉLES SZEM
++20% CRIT CHANCE.|+20% DE CHANCE DE CRITIQUE.|+20% KRITIKUS ESÉLY.
+QUICK HANDS|MAINS RAPIDES|GYORS KEZEK
++30% ATTACK SPEED.|+30% DE VITESSE D'ATTAQUE.|+30% TÁMADÁSI SEBESSÉG.
+WINTER TOUCH|TOUCHER D'HIVER|TÉLI ÉRINTÉS
+YOUR HITS MAY FREEZE FOES.|TES COUPS PEUVENT GELER LES ENNEMIS.|AZ ÜTÉSEID MEGFAGYASZTHATJÁK AZ ELLENSÉGET.
+THORN SKIN|PEAU D'ÉPINES|TÜSKEBŐR
+MONSTERS THAT HIT YOU GET HURT.|LES MONSTRES QUI TE FRAPPENT SE BLESSENT.|AKI MEGÜT, AZ MEGSÉRÜL.
+RAT RACE|COURSE AUX RATS|PATKÁNYVERSENY
+A GOLDEN RAT ON EVERY FLOOR.|UN RAT D'OR À CHAQUE ÉTAGE.|MINDEN SZINTEN ARANYPATKÁNY.
+WELL PACKED|BIEN ÉQUIPÉ|JÓL FELPAKOLVA
+YOU START WITH EXTRA POTIONS AND A RARE ARMOR.|TU COMMENCES AVEC DES POTIONS EN PLUS ET UNE ARMURE RARE.|PLUSZ ITALOKKAL ÉS RITKA PÁNCÉLLAL KEZDESZ.
+VOLATILE|INSTABLES|ROBBANÉKONY
+MONSTERS EXPLODE WHEN THEY DIE. STAND BACK!|LES MONSTRES EXPLOSENT EN MOURANT. RECULE !|A SZÖRNYEK HALÁLUKKOR FELROBBANNAK. ÁLLJ HÁTRÉBB!
+FAST FORWARD|AVANCE RAPIDE|GYORSÍTÁS
+EVERYONE MOVES 25% FASTER, YOU AND THEM.|TOUT LE MONDE VA 25% PLUS VITE, TOI ET EUX.|MINDENKI 25%-KAL GYORSABB, TE IS ÉS ŐK IS.
+ONE TRICK|UN SEUL TOUR|EGY TRÜKK
+ONLY YOUR FIRST SKILL WORKS, BUT IT IS TWICE AS STRONG.|SEULE TA PREMIÈRE COMPÉTENCE MARCHE, MAIS DEUX FOIS PLUS FORT.|CSAK AZ ELSŐ KÉPESSÉGED MŰKÖDIK, DE KÉTSZER OLYAN ERŐS.
+GLASS CANNON|CANON DE VERRE|ÜVEGÁGYÚ
+YOU DEAL AND TAKE DOUBLE DAMAGE.|TU INFLIGES ET SUBIS DOUBLE DÉGÂTS.|DUPLA SEBZÉST ADSZ ÉS KAPSZ.
+BORROWED TIME|TEMPS EMPRUNTÉ|KÖLCSÖNIDŐ
+EVERY KILL ADDS 3 SECONDS TO THE CLOCK.|CHAQUE VICTIME AJOUTE 3 SECONDES À L'HORLOGE.|MINDEN ÖLÉS 3 MÁSODPERCET AD AZ ÓRÁHOZ.
+SWARM|ESSAIM|RAJ
+HALF AGAIN AS MANY MONSTERS, BUT WEAKER.|MOITIÉ PLUS DE MONSTRES, MAIS PLUS FAIBLES.|MÁSFÉLSZER ANNYI SZÖRNY, DE GYENGÉBBEK.
+ONLY YOUR FIRST SKILL WORKS THIS WEEK|SEULE TA PREMIÈRE COMPÉTENCE MARCHE CETTE SEMAINE|EZEN A HÉTEN CSAK AZ ELSŐ KÉPESSÉGED MŰKÖDIK
+HEALING POTIONS DO NOT WORK HERE|LES POTIONS DE SOIN NE MARCHENT PAS ICI|ITT NEM HATNAK AZ ÉLETERŐ-ITALOK
+`);

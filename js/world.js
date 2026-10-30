@@ -561,8 +561,8 @@ AH.renderTown = function (m) {
     m.puddles.push({ x: pxx, y: py, w });
   }
   // mine-cart rails from the mine down the street
-  for (let Y = B; Y < 17 * T; Y += 5) rect(54 * T - 2, Y, 21, 2, '#4a3424');
-  rect(54 * T - 1, B, 1, 6 * T, '#8a8298'); rect(54 * T + 17, B, 1, 6 * T, '#8a8298');
+  for (let Y = B; Y < 17 * T; Y += 5) rect(m.mine.x - 2, Y, 21, 2, '#4a3424');
+  rect(m.mine.x - 1, B, 1, 6 * T, "#8a8298"); rect(m.mine.x + 17, B, 1, 6 * T, "#8a8298");
   // --- grass verge + low fence
   rect(0, 17 * T, W, H - 17 * T, '#2e4a26');
   for (let k = 0; k < W * 3; k++) { const X = rnd.int(0, W), Y = rnd.int(17 * T, 19 * T); px(X, Y, '#4a7a3a'); px(X - 1, Y + 1, '#4a7a3a'); px(X + 1, Y + 1, '#4a7a3a'); px(X, Y + 1, '#24401e'); }
@@ -633,6 +633,13 @@ AH.renderTown = function (m) {
       win(X + 9, wy + 8, 8, 9); if (w >= 80) win(X + 30, wy + 8, 8, 9);
       door(X + w - 22, B - 20, 12, 20, false);
     }
+    if (b.door && ['smith', 'store', 'inn', 'shrine'].indexOf(b.id) < 0) {
+      // the newer buildings of a growing town: windows, a door and a sign
+      win(X + 9, wy + 8, 8, 9); if (w >= 80) win(X + w - 18, wy + 8, 8, 9);
+      door(dX + 2, B - 22, 12, 22, b.lit);
+      if (b.lit) m.windows.push({ x: dX + 8, y: B - 6 });
+      if (b.name) sign(X + w / 2, Y + roofH - 8, b.name);
+    }
     if (b.id === 'smith') {
       // open forge on the left
       const fx = X + 10, fy = B - 28;
@@ -697,7 +704,7 @@ AH.renderTown = function (m) {
     }
   }
   // --- mine: rocky hill with a timbered mouth
-  const MX = 50 * T, MW = 10 * T, MY = 3 * T, MH = B - MY;
+  const MX = m.mine.x - 4 * T, MW = 10 * T, MY = 3 * T, MH = B - MY;
   for (let j = 0; j < MH; j++) for (let i = 0; i < MW; i++) {
     const d = ((i - MW / 2) / (MW / 2)) ** 2 + ((j - MH) / MH) ** 2; if (d >= 1) continue;
     let col = ((MX + i) * 3 + (MY + j) * 5) % 7 ? '#3a3442' : '#2c2834';
@@ -705,7 +712,7 @@ AH.renderTown = function (m) {
     px(MX + i, MY + j, col);
   }
   for (let k = 0; k < 30; k++) { const a = rnd.int(MX + 20, MX + MW - 20), b2 = rnd.int(MY + 30, B - 10); rect(a, b2, rnd.int(3, 6), 2, '#2a2532'); rect(a, b2, 2, 1, '#544c5e'); }
-  const ex0 = 54 * T + 8, ew = 34, eh = 40;
+  const ex0 = m.mine.x + 8, ew = 34, eh = 40;
   for (let j = 0; j < eh; j++) for (let i = 0; i < ew; i++) if (((i - ew / 2) / (ew / 2)) ** 2 + ((j - eh) / eh) ** 2 < 1) px(ex0 - ew / 2 + i, B - eh + j, j > eh - 10 ? '#0a080e' : '#050408');
   rect(ex0 - 21, B - 36, 5, 36, '#6b4a2e'); rect(ex0 + 16, B - 36, 5, 36, '#6b4a2e'); rect(ex0 - 21, B - 36, 1, 36, '#86603c'); rect(ex0 + 16, B - 36, 1, 36, '#86603c');
   rect(ex0 - 24, B - 41, 48, 6, '#5a3c22'); rect(ex0 - 24, B - 41, 48, 1, '#86603c'); rect(ex0 - 24, B - 36, 48, 1, AH.OUT);

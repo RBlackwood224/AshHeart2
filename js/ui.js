@@ -118,7 +118,7 @@ U.titleItems = function () {
   return [
     { id: 'play', label: slots.length ? 'PLAY' : 'NEW HERO' },
     { id: 'online', label: 'ONLINE CO-OP' },
-  ].concat(AH.isTouch ? [] : [{ id: 'local', label: 'LOCAL CO-OP' }]).concat([
+  ].concat(AH.isTouch ? [] : [{ id: 'local', label: 'LOCAL CO-OP' }]).concat(AH.Weekly && AH.Weekly.on() ? [{ id: 'weekly', label: 'WEEKLY DEPTH', col: '#c8a0ff' }] : []).concat([
     { id: 'options', label: 'OPTIONS' },
     { id: 'help', label: 'HOW TO PLAY' },
   ]);
@@ -134,6 +134,7 @@ U.update.title = function (G, m, dt) {
     if (it.id === 'online') G.openMenu('online', null, { dev });
     if (it.id === 'local') { if (!AH.Save.load().length) { G.toast(null, 'CREATE A HERO FIRST', '#ff8a8a'); return; } G.localLobby = []; G.openMenu('local', null, {}); }
     if (it.id === 'options') G.openMenu('options', null, { dev });
+    if (it.id === 'weekly') G.openMenu('weekly', null, { dev });
     if (it.id === 'help') G.openMenu('help', null, { dev });
   });
 };
@@ -180,7 +181,9 @@ U.update.local = function (G, m, dt) {
     const used = L.map(x => x.idx);
     G.openMenu('slots', null, { dev: id, purpose: 'join', exclude: used, onDone: idx => {
       const sl = AH.Save.load()[idx];
-      if (sl && !sl.ch.dead && used.indexOf(idx) < 0) { G.localLobby.push({ dev: id, idx }); AH.Audio.sfx('levelup'); }
+      const first = G.localLobby[0] && AH.Save.load()[G.localLobby[0].idx];
+      if (sl && first && (sl.ch.season || 0) !== (first.ch.season || 0)) { G.toast(null, 'SEASONAL HEROES PLAY ONLY WITH SEASONAL HEROES', '#ff8a8a'); AH.Audio.sfx('error'); }
+      else if (sl && !sl.ch.dead && used.indexOf(idx) < 0) { G.localLobby.push({ dev: id, idx }); AH.Audio.sfx('levelup'); }
       G.openMenu('local', null, {});
     } });
     return;
@@ -217,9 +220,10 @@ U.slotItems = function (m) {
   const items = slots.map((s, i) => {
     const ch = s.ch;
     const taken = m.exclude && m.exclude.indexOf(i) >= 0;
-    return { id: 'slot', i, label: ch.name + (ch.dead ? ' (FALLEN)' : '') + (ch.hardcore ? ' *' : ''), right: AH.CLASSES[ch.cls].name + ' LV' + ch.level + ' F' + ch.deepest, col: ch.dead ? '#6a3a3a' : AH.CLASSES[ch.cls].color, disabled: taken || ch.dead && m.purpose !== 'start' };
+    return { id: 'slot', i, label: ch.name + (ch.dead ? ' (FALLEN)' : '') + (ch.hardcore ? ' *' : '') + (ch.season ? ' [S' + ch.season + ']' : ''), right: AH.CLASSES[ch.cls].name + ' LV' + ch.level + ' F' + ch.deepest, col: ch.dead ? '#6a3a3a' : AH.CLASSES[ch.cls].color, disabled: taken || ch.dead && m.purpose !== 'start' };
   });
   if (slots.length < AH.Save.MAX) items.push({ id: 'new', label: '+ NEW HERO', col: '#ffb347' });
+  items.push({ id: 'loadcode', label: 'LOAD HERO FROM CODE', col: '#8d8494' });
   items.push({ id: 'import', label: 'IMPORT HERO FILE', col: '#8d8494' });
   return items;
 };
@@ -230,6 +234,7 @@ U.update.slots = function (G, m, dt) {
       const i = m.sub.slot; m.sub = null;
       if (it.id === 'play') U.pickSlot(G, m, i);
       if (it.id === 'export') AH.Save.exportSlot(i);
+      if (it.id === 'code') G.openMenu('savecode', null, { dev: m.dev, slot: i });
       if (it.id === 'delete') { G.openMenu('confirm', null, { dev: m.dev, text: 'DELETE THIS HERO FOREVER?', yes: () => { AH.Save.remove(i); } }); }
     }, () => { m.sub = null; AH.Audio.sfx('back'); });
     return;
@@ -237,10 +242,11 @@ U.update.slots = function (G, m, dt) {
   const items = U.slotItems(m);
   U.listUpdate(G, m, dt, items, it => {
     if (it.id === 'new') G.openMenu('create', null, { dev: m.dev, purpose: m.purpose, onDone: m.onDone });
+    else if (it.id === 'loadcode') G.openMenu('loadcode', null, { dev: m.dev });
     else if (it.id === 'import') AH.Save.importFile((ok, msg) => { if (!ok) G.toast(null, msg, '#ff8a8a'); else AH.Audio.sfx('loot'); });
     else if (m.purpose === 'start') {
       const ch = AH.Save.load()[it.i].ch;
-      m.sub = { slot: it.i, sel: 0, dev: m.dev, items: ch.dead ? [{ id: 'export', label: 'EXPORT' }, { id: 'delete', label: 'DELETE' }] : [{ id: 'play', label: 'PLAY' }, { id: 'export', label: 'EXPORT FILE' }, { id: 'delete', label: 'DELETE' }] };
+      m.sub = { slot: it.i, sel: 0, dev: m.dev, items: ch.dead ? [{ id: 'export', label: 'EXPORT' }, { id: 'delete', label: 'DELETE' }] : [{ id: 'play', label: 'PLAY' }, { id: 'code', label: 'SAVE CODE' }, { id: 'export', label: 'EXPORT FILE' }, { id: 'delete', label: 'DELETE' }] };
     } else U.pickSlot(G, m, it.i);
   }, () => G.closeMenu());
 };
@@ -253,7 +259,7 @@ U.draw.slots = function (G, ctx, m) {
   U.title(ctx, m.purpose === 'join' ? 'JOIN THE GAME' : 'CHOOSE YOUR HERO', 20);
   const items = U.slotItems(m);
   U.list(ctx, items, m.sel, 90, 56, 300, { lh: 18 });
-  if (m.sub) { AH.frame(ctx, 330, 56 + m.sel * 18 - 6, 120, m.sub.items.length * 16 + 10); U.list(ctx, m.sub.items, m.sub.sel, 334, 56 + m.sel * 18, 112); }
+  if (m.sub) { const sy = Math.min(56 + m.sel * 18, AH.UH - 30 - m.sub.items.length * 16); AH.frame(ctx, 330, sy - 6, 120, m.sub.items.length * 16 + 10); U.list(ctx, m.sub.items, m.sub.sel, 334, sy, 112); }
   U.hint(ctx, U.btnName(G, m, 'a') + ' SELECT   ' + U.btnName(G, m, 'b') + ' BACK   * = PERMADEATH');
 };
 
@@ -261,8 +267,8 @@ U.draw.slots = function (G, ctx, m) {
 // the rope out of the mine: climb one floor up (to reach a grave) or all the way to town
 U.ropeItems = function (G, m) {
   const it = [];
-  if (G.mode !== 'time' && G.floorNo > 1) it.push({ id: 'up', label: 'CLIMB UP ONE FLOOR', right: 'FLOOR ' + (G.floorNo - 1) });
-  it.push({ id: 'town', label: G.mode === 'time' ? 'GIVE UP THE SPRINT' : 'RETURN TO DUNMERE' });
+  if (!G.isRun() && G.floorNo > 1) it.push({ id: 'up', label: 'CLIMB UP ONE FLOOR', right: 'FLOOR ' + (G.floorNo - 1) });
+  it.push({ id: 'town', label: G.mode === 'time' ? 'GIVE UP THE SPRINT' : G.mode === 'weekly' ? 'END THE RUN' : 'RETURN TO DUNMERE' });
   it.push({ id: 'stay', label: 'STAY' });
   return it;
 };
@@ -374,12 +380,14 @@ U.update.create = function (G, m, dt) {
     if (n.p.start && m.name.length) { m.step = 2; m.sel = 0; }
     if (n.p.b) { m.step = 0; AH.Audio.sfx('back'); }
   } else {
-    const rows = 3;
+    const SN = AH.Season && AH.Season.now(), rows = SN ? 4 : 3;
     if (n.dy) { m.sel = (m.sel + n.dy + rows) % rows; AH.Audio.sfx('move'); }
     if (m.sel === 0 && n.dx) { m.pet = (m.pet + n.dx + 3) % 3; AH.Audio.sfx('move'); }
     if (m.sel === 1 && (n.dx || n.p.a)) { m.hc = 1 - m.hc; AH.Audio.sfx('move'); }
-    else if (m.sel === 2 && n.p.a) {
+    else if (SN && m.sel === 2 && (n.dx || n.p.a)) { m.seasonal = !m.seasonal; AH.Audio.sfx('move'); }
+    else if (m.sel === rows - 1 && n.p.a) {
       const ch = AH.newCharacter(clsKeys[m.cls], m.name || 'HERO', pets[m.pet], m.hc);
+      if (SN && m.seasonal) ch.season = SN.n;
       const slots = AH.Save.load();
       if (slots.length >= AH.Save.MAX) { G.toast(null, 'ALL SLOTS ARE FULL', '#ff8a8a'); return; }
       slots.push({ ch, world: AH.Save.newWorld() }); AH.Save.store(slots);
@@ -392,14 +400,14 @@ U.update.create = function (G, m, dt) {
     if (n.p.b || n.p.start) { m.step = 1; m.kbTyping = false; AH.Audio.sfx('back'); }
   }
 };
-U.CARD_W = 86; U.CARD_X = i => 10 + i * 93;
+U.CARD_W = 74; U.CARD_X = i => 6 + i * 79;
 U.draw.create = function (G, ctx, m) {
   U.bg(ctx, false);
   const clsKeys = AH.CLASS_KEYS;
   U.title(ctx, ['CHOOSE A CLASS', 'NAME YOUR HERO', 'COMPANION'][m.step], 14);
   if (!U.previews) U.previews = clsKeys.map(k => { const ch = AH.newCharacter(k, 'X', 'dog'); return new AH.Player(0, ch, null); });
   // cards grow with the longest description in the current language
-  const lines = Math.max(...clsKeys.map(k => AH.wrap(AH.CLASSES[k].desc, U.CARD_W - 10).length));
+  const lines = Math.max(...clsKeys.map(k => AH.wrap(AH.CLASSES[k].desc, U.CARD_W - 8).length));
   const cardH = m.step >= 1 ? 68 : Math.max(162, 120 + lines * 10);
   clsKeys.forEach((k, i) => {
     const x = U.CARD_X(i), y = 44, on = i === m.cls, W = U.CARD_W, cx = x + W / 2;
@@ -410,7 +418,8 @@ U.draw.create = function (G, ctx, m) {
     AH.drawSpr(ctx, s, cx - s.w * sc / 2, sy, false, sc);
     if (p.look.emissive) AH.drawSprEm(ctx, s, cx - s.w * sc / 2, sy, false, sc);
     AH.text(ctx, cx, m.step >= 1 ? y + 56 : y + 101, AH.CLASSES[k].name, on ? AH.CLASSES[k].color : '#8d8494', { align: 'center', maxW: W - 6 });
-    if (m.step === 0) AH.wrap(AH.CLASSES[k].desc, W - 10).forEach((l, j) => AH.text(ctx, cx, y + 116 + j * 10, l, '#6f6880', { align: 'center' }));
+    if (m.step === 0) AH.wrap(AH.CLASSES[k].desc, W - 8).forEach((l, j) => AH.text(ctx, cx, y + 116 + j * 10, l, '#6f6880', { align: 'center' }));
+    if (AH.CLASSES[k].coop && AH.coopStamp) AH.coopStamp(ctx, x + W - 37, y + 3);
   });
   if (m.step >= 1) {
     AH.frame(ctx, 40, 118, 400, 137, { fill: '#120e14', edge: '#c9a24a', hi: '#f2e3b3' });
@@ -426,51 +435,125 @@ U.draw.create = function (G, ctx, m) {
       else AH.text(ctx, UW / 2, 243, kb ? 'TYPE A NAME   ENTER: DONE   ESC: BACK' : 'PICK LETTERS   ' + U.btnName(G, m, 'y') + ' RANDOM', '#6a6274', { align: 'center' });
     } else {
       const pets = ['canary', 'dog', 'rat'];
-      const rows = [{ label: 'COMPANION', right: '< ' + AH.tr(AH.PETS[pets[m.pet]].name) + ' >' }, { label: 'PERMADEATH', right: m.hc ? 'ON - ONE LIFE ONLY' : 'OFF', rcol: m.hc ? '#ff6a5a' : '#8d8494' }, { label: 'BEGIN THE DESCENT', col: '#ffb347' }];
-      U.list(ctx, rows, m.sel, 56, 132, 368, { lh: 17 });
-      const s = AH.SPR[AH.PETS[pets[m.pet]].spr];
-      AH.drawSpr(ctx, s, UW / 2 - s.w * 1.5, 194, false, 3);
-      AH.wrap(AH.PETS[pets[m.pet]].desc, 370).forEach((l, j) => AH.text(ctx, UW / 2, 222 + j * 10, l, '#a39bb0', { align: 'center' }));
+      const SN = AH.Season && AH.Season.now();
+      const rows = [{ label: 'COMPANION', right: '< ' + AH.tr(AH.PETS[pets[m.pet]].name) + ' >' }, { label: 'PERMADEATH', right: m.hc ? 'ON - ONE LIFE ONLY' : 'OFF', rcol: m.hc ? '#ff6a5a' : '#8d8494' }]
+        .concat(SN ? [{ label: 'HERO TYPE', right: m.seasonal ? AH.tr('SEASONAL') + ' - ' + AH.tr(SN.theme.name) : 'NORMAL', rcol: m.seasonal ? SN.theme.col : '#8d8494' }] : [])
+        .concat([{ label: 'BEGIN THE DESCENT', col: '#ffb347' }]);
+      U.list(ctx, rows, m.sel, 56, 130, 368, { lh: rows.length > 3 ? 15 : 17 });
+      if (SN && m.sel === 2) {
+        AH.wrap(m.seasonal ? AH.tr('SEASON') + ' ' + SN.n + ': ' + AH.tr(SN.theme.desc) + ' ' + AH.tr('A FRESH START WITH THE OTHER SEASONAL HEROES. AT THE END OF THE SEASON YOU CHOOSE: STAY OR BECOME A LEGEND.') : 'A NORMAL HERO LIVES IN THE TOWN FOREVER. SEASONS DO NOT TOUCH IT.', 370).forEach((l, j) => AH.text(ctx, UW / 2, 200 + j * 10, l, '#a39bb0', { align: 'center' }));
+      } else {
+        const s = AH.SPR[AH.PETS[pets[m.pet]].spr];
+        AH.drawSpr(ctx, s, UW / 2 - s.w * 1.5, 194, false, 3);
+        AH.wrap(AH.PETS[pets[m.pet]].desc, 370).forEach((l, j) => AH.text(ctx, UW / 2, 222 + j * 10, l, '#a39bb0', { align: 'center' }));
+      }
     }
   }
   if (!(m.step === 1 && (m.kbTyping || (m.dev && m.dev.startsWith('kb')) || (m.lastDev && m.lastDev.startsWith('kb'))))) U.hint(ctx, U.btnName(G, m, 'a') + ' CONFIRM   ' + U.btnName(G, m, 'b') + ' BACK');
 };
 
-// ---------- OPTIONS / HELP ----------
+// ---------- OPTIONS (tabs) / HELP ----------
+U.OPT_TABS = [{ id: 'game', label: 'GAME' }, { id: 'video', label: 'VIDEO' }, { id: 'audio', label: 'AUDIO' }, { id: 'ctrl', label: 'CONTROLS' }, { id: 'acct', label: 'ACCOUNT' }];
+U.OPT_DEF = {
+  lang: { label: 'LANGUAGE', desc: 'THE LANGUAGE OF THE WHOLE GAME.' },
+  weekly: { label: 'WEEKLY CHALLENGE', desc: 'SHOW THE WEEKLY DEPTH CHALLENGE AND ITS NEWS. OFF: JUST PLAY IN PEACE.' },
+  seasonnews: { label: 'SEASON NEWS', desc: 'SHOW NEWS ABOUT THE CURRENT SEASON IN TOWN AND ON THE TITLE SCREEN.' },
+  fs: { label: 'FULLSCREEN', desc: 'FILL THE WHOLE SCREEN WITH THE GAME.' },
+  smooth: { label: 'SMOOTH MOTION', desc: 'SMOOTHER MOVEMENT ON BIG SCREENS. MAY SLOW DOWN WEAK COMPUTERS.' },
+  fancy: { label: 'SPECTACULAR LIGHTS', desc: 'COLOURED GLOW FROM SPELLS, FIRE AND CRYSTALS.' },
+  shake: { label: 'SCREEN SHAKE', desc: 'THE SCREEN SHAKES ON BIG HITS AND EXPLOSIONS.' },
+  perf: { label: 'PERFORMANCE METER', desc: 'FRAME RATE AND TIMINGS IN THE CORNER (ALSO F3).' },
+  music: { label: 'MUSIC', desc: 'MUSIC VOLUME.' },
+  sfx: { label: 'SOUND', desc: 'SOUND EFFECTS VOLUME.' },
+  binds: { label: 'KEYS AND BUTTONS', desc: 'CHANGE THE KEYS OF EVERY KEYBOARD AND CONTROLLER.' },
+  autoaim: { label: 'AUTO-TARGET', desc: 'WITHOUT A MOUSE YOUR ATTACKS TURN TO THE NEAREST FOE.' },
+  nick: { label: 'PLAYER NAME', desc: 'YOUR NAME ON THE LEADERBOARD. YOUR HERO NAME IS ADDED BY ITSELF.' },
+  board: { label: 'LEADERBOARD', desc: 'THE WEEKLY AND SEASON RANKINGS.' },
+  herocode: { label: 'HERO SAVE CODE', desc: 'A CODE THAT CARRIES THIS HERO TO ANOTHER DEVICE.' },
+  back: { label: 'BACK', desc: '' },
+};
+U.optRows = function (tab, m) {
+  const ids = {
+    game: ['lang', 'weekly', 'seasonnews'],
+    video: ['fs', 'smooth', 'fancy', 'shake', 'perf'],
+    audio: ['music', 'sfx'],
+    ctrl: ['binds', 'autoaim'],
+    acct: ['nick', 'board'].concat(m && m.p && m.p.slotIdx >= 0 && !m.p.remote ? ['herocode'] : []),
+  }[tab || 'game'] || [];
+  return ids.concat(['back']).map(id => Object.assign({ id }, U.OPT_DEF[id]));
+};
+U.init.options = function (G, m) { m.tab = m.tab || 0; m.sel = 0; };
+U.OPT_TAB_X = i => 40 + i * 82;
 U.update.options = function (G, m, dt) {
   const o = AH.options;
+  const tabId = U.OPT_TABS[m.tab || 0].id;
+  const rowsAll = U.optRows(tabId, m);
   const n = U.nav(G, m, dt);
-  const rows = U.optRows().length;
+  // tabs: LB / RB, the mouse, or a tap
+  const M = AH.Mouse; let pt = null;
+  if (M && M.tap) { pt = M.tap; }
+  else if (M && M.active && !AH.isTouch && M.leftPressed) { const c = M.uiPos(); if (c && c.y >= 40 && c.y < 56) pt = c; }
+  if (pt && pt.y >= 40 && pt.y < 56) {
+    for (let i = 0; i < U.OPT_TABS.length; i++) if (pt.x >= U.OPT_TAB_X(i) && pt.x < U.OPT_TAB_X(i) + 78) { m.tab = i; m.sel = 0; AH.Audio.sfx('move'); }
+    if (M.tap) M.tap = null; M.leftPressed = false; return;
+  }
+  if (M && M.tap) {
+    // a tap on a row
+    const L = U._lastList; const c = M.tap; M.tap = null;
+    if (L && c.x >= L.x && c.x < L.x + L.w && c.y >= L.y && c.y < L.y + L.n * L.lh) { const hit = Math.floor((c.y - L.y) / L.lh); if (hit === m.sel) n.p.a = true; m.sel = hit; }
+  }
+  const kbTab = ((m.dev || m.lastDev || 'kb1') + '').startsWith('kb') && (n.p.pot || n.p.mana);
+  if (kbTab) { n.p.lb = n.p.pot; n.p.rb = n.p.mana; }
+  if (n.p.lb || n.p.rb) { m.tab = (m.tab + (n.p.rb ? 1 : -1) + U.OPT_TABS.length) % U.OPT_TABS.length; m.sel = 0; AH.Audio.sfx('move'); return; }
   const ms = U.mouseList(G, m);
-  let id = U.optRows()[m.sel] && U.optRows()[m.sel].id;
+  let id = rowsAll[m.sel] && rowsAll[m.sel].id;
   if (ms && ms.pick) { if (id === 'music' || id === 'sfx') n.dx = (id === 'music' ? o.music : o.sfx) >= 1 ? -10 : 1; else n.p.a = true; }
   if (ms && ms.back) n.p.b = true;
-  if (n.dy) { m.sel = (m.sel + n.dy + rows) % rows; AH.Audio.sfx('move'); id = null; }
-  if (id === 'lang' && (n.dx || n.p.a)) {
+  if (n.dy) { m.sel = (m.sel + n.dy + rowsAll.length) % rowsAll.length; AH.Audio.sfx('move'); id = null; }
+  // left / right on a row that has nothing to change moves between tabs
+  const sideways = ['back', 'binds', 'board', 'herocode', 'fs', 'nick'];
+  if (n.dx && (!id || sideways.indexOf(id) >= 0)) { m.tab = (m.tab + n.dx + U.OPT_TABS.length) % U.OPT_TABS.length; m.sel = 0; AH.Audio.sfx('move'); return; }
+  const flip = () => n.dx || n.p.a;
+  if (id === 'lang' && flip()) {
     const ids = AH.LANGS.map(l => l.id); const i = ids.indexOf(o.lang || 'en');
     o.lang = ids[(i + (n.dx || 1) + ids.length) % ids.length]; AH.setLang(o.lang); if (G.townMap) AH.renderTown(G.townMap); AH.Save.setOptions(o); AH.Audio.sfx('move');
   }
   if (id === 'music' && n.dx) o.music = AH.clamp(Math.round((o.music + n.dx * 0.1) * 10) / 10, 0, 1);
   if (id === 'sfx' && n.dx) o.sfx = AH.clamp(Math.round((o.sfx + n.dx * 0.1) * 10) / 10, 0, 1);
-  if (id === 'shake' && (n.dx || n.p.a)) o.shake = !o.shake;
-  if (id === 'fancy' && (n.dx || n.p.a)) { o.fancy = !AH.fancyOn(); AH.Save.setOptions(o); AH.Audio.sfx('move'); }
-  if (id === 'smooth' && (n.dx || n.p.a)) { o.smooth = !AH.smoothOn(); AH.Save.setOptions(o); AH.Audio.sfx('move'); }
-  if (id === 'autoaim' && (n.dx || n.p.a)) { o.autoaim = !AH.autoTargetOn(); AH.Save.setOptions(o); AH.Audio.sfx('move'); }
+  if (id === 'shake' && flip()) { o.shake = !o.shake; AH.Audio.sfx('move'); }
+  if (id === 'fancy' && flip()) { o.fancy = !AH.fancyOn(); AH.Save.setOptions(o); AH.Audio.sfx('move'); }
+  if (id === 'smooth' && flip()) { o.smooth = !AH.smoothOn(); AH.Save.setOptions(o); AH.Audio.sfx('move'); }
+  if (id === 'autoaim' && flip()) { o.autoaim = !AH.autoTargetOn(); AH.Save.setOptions(o); AH.Audio.sfx('move'); }
+  if (id === 'weekly' && flip()) { o.noWeekly = !o.noWeekly; AH.Save.setOptions(o); AH.Audio.sfx('move'); }
+  if (id === 'seasonnews' && flip()) { o.noSeasonNews = !o.noSeasonNews; AH.Save.setOptions(o); AH.Audio.sfx('move'); }
+  if (id === 'perf' && flip()) { if (AH.PF) AH.PF.on = !AH.PF.on; AH.Audio.sfx('move'); }
   if (id === 'fs' && n.p.a) AH.toggleFullscreen();
   if (id === 'binds' && n.p.a) { G.openMenu('binds', m.p, { dev: m.dev }); return; }
+  if (id === 'nick' && n.p.a) { U.askName(G, m, 'PLAYER NAME', o.nick || '', v => { o.nick = v; AH.Save.setOptions(o); }); return; }
+  if (id === 'board' && n.p.a) { G.openMenu('board', m.p, { dev: m.dev }); return; }
+  if (id === 'herocode' && n.p.a) { G.saveAll(); G.openMenu('savecode', m.p, { dev: m.dev, slot: m.p.slotIdx }); return; }
   if (id === 'back' && n.p.a || n.p.b || n.p.start) { AH.Save.setOptions(o); G.closeMenu(); }
   AH.Audio.setVol(o.music, o.sfx);
 };
 U.draw.options = function (G, ctx, m) {
-  U.bg(ctx); U.title(ctx, 'OPTIONS', 30);
+  U.bg(ctx); U.title(ctx, 'OPTIONS', 14);
   const o = AH.options, bar = v => '#'.repeat(Math.round(v * 10)) + '-'.repeat(10 - Math.round(v * 10)) + ' ' + Math.round(v * 100) + '%';
+  const onoff = b => b ? 'ON' : 'OFF';
+  U.OPT_TABS.forEach((t, i) => {
+    const x = U.OPT_TAB_X(i), on = i === (m.tab || 0);
+    AH.frame(ctx, x, 40, 78, 15, on ? { fill: '#2e2638', edge: '#c9a24a', hi: '#f2e3b3' } : { fill: '#120e14' });
+    AH.text(ctx, x + 39, 44, t.label, on ? '#ffb347' : '#8d8494', { align: 'center', maxW: 74 });
+  });
   const ln = (AH.LANGS.find(l => l.id === (o.lang || 'en')) || AH.LANGS[0]).name;
-  const val = { binds: '>', lang: '< ' + ln + ' >', music: bar(o.music), sfx: bar(o.sfx), shake: o.shake ? 'ON' : 'OFF', fancy: AH.fancyOn() ? 'ON' : 'OFF', smooth: AH.smoothOn() ? 'ON' : 'OFF', autoaim: AH.autoTargetOn() ? 'ON' : 'OFF' };
-  const rows = U.optRows();
-  U.list(ctx, rows.map(r => ({ label: r.label, right: val[r.id] })), m.sel, 120, 62, 240, { lh: rows.length > 8 ? 16 : 18 });
+  const val = { binds: '>', board: '>', herocode: '>', lang: '< ' + ln + ' >', music: bar(o.music), sfx: bar(o.sfx), shake: onoff(o.shake), fancy: onoff(AH.fancyOn()), smooth: onoff(AH.smoothOn()), autoaim: onoff(AH.autoTargetOn()),
+    weekly: onoff(!o.noWeekly), seasonnews: onoff(!o.noSeasonNews), perf: onoff(AH.PF && AH.PF.on), nick: o.nick || '-', fs: '' };
+  const rows = U.optRows(U.OPT_TABS[m.tab || 0].id, m);
+  AH.frame(ctx, 40, 58, 400, 150, { fill: 'rgba(14,10,18,0.9)' });
+  U.list(ctx, rows.map(r => ({ label: r.label, right: val[r.id] })), m.sel, 60, 68, 360, { lh: 18 });
+  const r = rows[m.sel];
+  if (r && r.desc) AH.wrap(r.desc, 390).forEach((l, i) => AH.text(ctx, UW / 2, 216 + i * 10, l, '#a39bb0', { align: 'center' }));
+  U.hint(ctx, (AH.isTouch ? '' : (((m.dev || m.lastDev || 'kb1') + '').startsWith('kb') ? AH.Input.label(m.dev || m.lastDev || 'kb1', 'pot') + '/' + AH.Input.label(m.dev || m.lastDev || 'kb1', 'mana') : U.btnName(G, m, 'lb') + '/' + U.btnName(G, m, 'rb')) + ' TABS   ') + U.btnName(G, m, 'a') + ' CHANGE   ' + U.btnName(G, m, 'b') + ' BACK');
 };
-U.optRows = () => [{ id: 'lang', label: 'LANGUAGE' }, { id: 'music', label: 'MUSIC' }, { id: 'sfx', label: 'SOUND' }, { id: 'shake', label: 'SCREEN SHAKE' },
-  { id: 'fancy', label: 'SPECTACULAR LIGHTS' }, { id: 'smooth', label: 'SMOOTH MOTION' }, { id: 'autoaim', label: 'AUTO-TARGET' }, { id: 'binds', label: 'CONTROLS' }, { id: 'fs', label: 'FULLSCREEN' }, { id: 'back', label: 'BACK' }];
 // ---------- controls: every keyboard and controller has its own layout ----------
 U.BIND_ACTS = {
   kb: [['up', 'MOVE UP'], ['down', 'MOVE DOWN'], ['left', 'MOVE LEFT'], ['right', 'MOVE RIGHT'], ['a', 'ATTACK / USE'], ['x', 'HEAVY ATTACK'], ['dodge', 'DODGE ROLL'],
@@ -531,6 +614,7 @@ U.draw.help = function (G, ctx, m) {
 // ---------- PAUSE ----------
 U.pauseItems = function (G, m) {
   const it = [{ id: 'resume', label: 'RESUME' }, { id: 'inv', label: 'INVENTORY' }, { id: 'char', label: 'CHARACTER' }, { id: 'pass', label: 'PASSIVE TREE' }, { id: 'skills', label: 'SKILLS' }, { id: 'options', label: 'OPTIONS' }];
+  if (m.p && G.allies && G.allies.some(a => a.kind === 'minion' && a.owner === m.p && !a.dead)) it.push({ id: 'dismiss', label: 'DISMISS SERVANTS' });
   if (m.p && m.p.pid > 0 && !m.p.remote && !G.net) it.push({ id: 'leave', label: 'LEAVE GAME' });
   if (!G.net || G.isHost) it.push({ id: 'quit', label: 'SAVE AND QUIT' });
   else it.push({ id: 'quit', label: 'DISCONNECT' });
@@ -545,6 +629,7 @@ U.update.pause = function (G, m, dt) {
     if (it.id === 'skills') { G.closeMenu(); G.openMenu('inv', m.p, { tab: 3 }); }
     if (it.id === 'options') G.openMenu('options', m.p);
     if (it.id === 'leave') { G.closeAllMenus(); G.removePlayer(m.p); }
+    if (it.id === 'dismiss') { G.closeAllMenus(); G.dismissMinions(m.p); }
     if (it.id === 'quit') { G.closeAllMenus(); G.quitToTitle(); }
   }, () => G.closeMenu());
 };
@@ -642,10 +727,10 @@ U.update.inv = function (G, m, dt) {
         // insert rune into selected gear
         if (it && it.sockets && it.runes.length < it.sockets) {
           const r = ch.bag[m.socket.from];
-          it.runes.push(r.rune); r.stack--; if (r.stack <= 0) ch.bag[m.socket.from] = null;
+          it.runes.push(r.kind === 'rune' ? r.rune : r.cons); r.stack--; if (r.stack <= 0) ch.bag[m.socket.from] = null;
           m.socket = null; p.recalc(); AH.Audio.sfx('magic');
           const rw = AH.runewordOf(it);
-          G.toast(p, rw ? 'RUNEWORD AWAKENS: ' + rw.name : 'RUNE SOCKETED', rw ? '#6fbf73' : '#9ec0ff');
+          G.toast(p, rw ? 'RUNEWORD AWAKENS: ' + rw.name : r.kind === 'rune' ? 'RUNE SOCKETED' : 'GEM SET', rw ? '#6fbf73' : '#9ec0ff');
           if (rw) AH.Audio.sfx('legend');
           G.onLocalEquip && G.onLocalEquip(p);
         } else AH.Audio.sfx('error');
@@ -653,7 +738,7 @@ U.update.inv = function (G, m, dt) {
       }
       if (!it) return;
       if (m.area === 'eq') p.unequip(G, m.eq);
-      else if (it.kind === 'rune') { m.socket = { from: m.i }; G.toast(p, 'CHOOSE GEAR WITH A FREE SOCKET', '#9ec0ff'); }
+      else if (it.kind === 'rune' || (it.kind === 'cons' && AH.isGem && AH.isGem(it.cons))) { m.socket = { from: m.i }; G.toast(p, 'CHOOSE GEAR WITH A FREE SOCKET', '#9ec0ff'); }
       else p.useItem(G, m.i);
     }
     if (n.p.x && it && m.area === 'bag') {
@@ -683,8 +768,10 @@ U.update.inv = function (G, m, dt) {
       if (ch.passives.indexOf(id) >= 0) { AH.Audio.sfx('error'); return; }
       const adj = AH.passiveNeighbors(id).some(x => ch.passives.indexOf(x) >= 0);
       if (!adj) { G.toast(p, 'MUST CONNECT TO YOUR TREE', '#ff8a8a'); AH.Audio.sfx('error'); return; }
-      if (ch.ppts <= 0) { G.toast(p, 'NO PASSIVE POINTS', '#ff8a8a'); AH.Audio.sfx('error'); return; }
-      ch.ppts--; ch.passives.push(id); p.recalc(); AH.Audio.sfx('levelup');
+      if (AH.passiveBlocked(id, ch.cls)) { G.toast(p, 'ONLY ' + AH.tr(AH.CLASSES[AH.PASSIVES[id].owner].name) + ' CAN TAKE THIS', '#ff8a8a'); AH.Audio.sfx('error'); return; }
+      const cost = AH.passiveCost(id, ch.cls);
+      if (ch.ppts < cost) { G.toast(p, cost > 1 ? 'IT COSTS 2 POINTS' : 'NO PASSIVE POINTS', '#ff8a8a'); AH.Audio.sfx('error'); return; }
+      ch.ppts -= cost; ch.passives.push(id); p.recalc(); AH.Audio.sfx('levelup');
       G.onLocalEquip && G.onLocalEquip(p);
     }
   } else if (m.tab === 3) {
@@ -761,7 +848,7 @@ U.drawInvTab = function (G, ctx, m) {
   rows.forEach(([a, b], i) => { AH.text(ctx, 10, 190 + i * 12, a, '#6f6880'); AH.text(ctx, 148, 190 + i * 12, b, '#e9e2d0', { align: 'right' }); });
   // bag
   AH.frame(ctx, 158, 20, 200, 160);
-  AH.text(ctx, 164, 25, m.socket ? 'SOCKET RUNE INTO...' : 'BACKPACK', m.socket ? '#9ec0ff' : '#f2e3b3');
+  AH.text(ctx, 164, 25, m.socket ? (m.p.ch.bag[m.socket.from] && m.p.ch.bag[m.socket.from].kind === 'cons' ? 'SET THE GEM INTO...' : 'SOCKET RUNE INTO...') : 'BACKPACK', m.socket ? '#9ec0ff' : '#f2e3b3');
   AH.text(ctx, 352, 25, ch.bag.filter(Boolean).length + '/40', '#8d8494', { align: 'right' });
   { const gs = '' + ch.gold, gx = 352 - AH.textW(ch.bag.filter(Boolean).length + '/40') - 14 - AH.textW(gs); AH.coinIcon(ctx, gx - 8, 26); AH.text(ctx, gx, 25, gs, '#f2c94c'); }
   for (let i = 0; i < 40; i++) {
@@ -835,7 +922,8 @@ U.drawCharTab = function (G, ctx, m) {
   for (const k of S.keys) { const n = Object.values(AH.PASSIVES).find(q => q.fx.key === k); if (n) { AH.text(ctx, 328, y, n.name, '#f2c94c'); y += 9; } }
   if (y === 40) { AH.text(ctx, 328, y, 'NONE YET', '#4e4858'); y += 9; }
   y += 8;
-  const rec = [['KILLS', ch.kills], ['DEATHS', ch.deaths], ['DEEPEST', ch.deepest], ['LIFTS', ch.lifts.length], ['DAY', G.world ? G.world.day : 1]];
+  const rec = [['KILLS', ch.kills], ['DEATHS', ch.deaths], ['DEEPEST', ch.deepest], ['LIFTS', ch.lifts.length], ['DAY', G.world ? G.world.day : 1]].concat(ch.par ? [['PARAGON', ch.par]] : []);
+  for (const t of (ch.titles || []).slice(-2)) { AH.text(ctx, 328, y, t, '#ff9a3e', { maxW: 144 }); y += 10; }
   rec.forEach(([a, b]) => { AH.text(ctx, 328, y, a, '#6f6880'); AH.text(ctx, 470, y, '' + b, '#e9e2d0', { align: 'right' }); y += 11; });
   if (ch.hardcore) AH.text(ctx, 328, y + 6, 'PERMADEATH HERO', '#ff6a5a');
   U.hint(ctx, U.btnName(G, m, 'a') + ' SPEND POINT');
@@ -889,7 +977,10 @@ U.drawPassiveTab = function (G, ctx, m) {
   const q = AH.PASSIVES[m.pnode];
   let y = 42;
   AH.text(ctx, 348, y, q.name || (q.t === 'small' ? 'PASSIVE' : ''), q.t === 'key' ? '#ff8a6a' : '#f2e3b3'); y += 10;
-  AH.text(ctx, 348, y, { key: 'KEYSTONE', notable: 'NOTABLE', small: 'SMALL', start: 'CLASS START', heart: 'CENTER' }[q.t], '#6f6880'); y += 13;
+  AH.text(ctx, 348, y, { key: 'KEYSTONE', notable: 'NOTABLE', small: 'SMALL', start: 'CLASS START', heart: 'CENTER' }[q.t], '#6f6880'); y += 10;
+  if (AH.passiveBlocked(m.pnode, ch.cls)) { for (const l of AH.wrap(AH.tr('ONLY FOR') + ' ' + AH.tr(AH.CLASSES[q.owner].name), 122)) { AH.text(ctx, 348, y, l, '#ff6a5a'); y += 9; } }
+  else if (AH.passiveForeign(m.pnode, ch.cls)) { for (const l of AH.wrap(AH.tr(AH.CLASSES[q.owner].name) + ': ' + AH.tr('COSTS 2 POINTS'), 122)) { AH.text(ctx, 348, y, l, '#ff9a3e'); y += 9; } }
+  y += 3;
   if (q.desc) for (const l of AH.wrap(q.desc, 122)) { AH.text(ctx, 348, y, l, '#ffb347'); y += 9; }
   for (const l of AH.passiveLabel(q.fx)) for (const ll of AH.wrap(l, 122)) { AH.text(ctx, 348, y, ll, '#9ec0ff'); y += 9; }
   y += 5;
@@ -916,7 +1007,9 @@ U.drawSkillTab = function (G, ctx, m) {
     AH.wrap(sk.desc, 222).slice(0, 2).forEach((l, k) => AH.text(ctx, 36, y + 9 + k * 8, l, '#6f6880'));
     const sl = ch.slots.indexOf(id);
     if (sl >= 0) AH.text(ctx, 296, y, AH.Input.label(m.dev || m.p.device || 'kb1', ['y', 'lb', 'rb'][sl], true), '#8ae08e', { align: 'right' });
-    AH.text(ctx, 296, y + 9, m.p.manaCost(sk.mp) + (AH.usesRage(ch.cls) ? ' ' + AH.tr('RAGE') : ' MP'), AH.usesRage(ch.cls) ? '#d8642a' : '#4a7bd1', { align: 'right' });
+    const foreign = AH.CLASSES[ch.cls].skills.indexOf(id) < 0 && AH.GENERIC_SKILLS.indexOf(id) < 0;
+    if (foreign) AH.text(ctx, 230, y, 'HALF POWER', '#ff9a3e', { align: 'right' });
+    AH.text(ctx, 296, y + 9, m.p.manaCost(sk.mp) * (foreign ? 2 : 1) + (AH.usesRage(ch.cls) ? ' ' + AH.tr('RAGE') : ' MP'), AH.usesRage(ch.cls) ? '#d8642a' : '#4a7bd1', { align: 'right' });
   });
   AH.frame(ctx, 308, 20, 168, 246);
   AH.text(ctx, 314, 26, 'SKILL SLOTS', '#f2e3b3');
@@ -1222,6 +1315,7 @@ U.update.bounty = function (G, m, dt) {
   const n = U.nav(G, m, dt);
   if (n.dy && rows.length) { m.sel = (m.sel + n.dy + rows.length) % rows.length; AH.Audio.sfx('move'); }
   if (n.p.b || n.p.start) { G.closeMenu(); return; }
+  if (n.p.x) { G.openMenu('board', p, { dev: m.dev }); return; }
   if (!n.p.a || !rows.length) return;
   if (G.net && !G.isHost) { G.toast(p, 'THE HOST TAKES BOUNTIES', '#a39bb0'); return; }
   const r = rows[m.sel];
@@ -1261,7 +1355,7 @@ U.draw.bounty = function (G, ctx, m) {
   rows.filter(r => r.active).forEach(draw);
   y += 6; AH.text(ctx, 30, y - 4, 'POSTED TODAY', '#8d8494'); y += 8;
   rows.filter(r => !r.active).forEach(draw);
-  U.hint(ctx, U.btnName(G, m, 'a') + ' ACCEPT / CLAIM   ' + U.btnName(G, m, 'b') + ' BACK');
+  U.hint(ctx, U.btnName(G, m, 'a') + ' ACCEPT / CLAIM   ' + U.btnName(G, m, 'x') + ' LEADERBOARD   ' + U.btnName(G, m, 'y') + ' TOWN   ' + U.btnName(G, m, 'b') + ' BACK');
 };
 
 // ---------- STASH ----------
@@ -1299,24 +1393,42 @@ U.draw.stash = function (G, ctx, m) {
 // ---------- MINE SELECT ----------
 U.mineItems = function (G, m) {
   const p = m.p, lifts = p.ch.lifts.slice().sort((a, b) => a - b);
-  const items = [{ id: 'f', f: 1, label: 'FLOOR 1', right: 'THE BEGINNING' }];
-  for (const f of lifts) items.push({ id: 'f', f, label: 'LIFT TO FLOOR ' + f, right: AH.biomeOf(f).name });
+  const D = AH.DIFFS[p.ch.diff || 0];
+  const items = [{ id: 'diff', label: 'DIFFICULTY', right: '< ' + AH.tr(D.name) + ' >', rcol: D.col }, { id: 'f', f: 1, label: 'FLOOR 1', right: 'THE BEGINNING' }];
+  for (const f of lifts.slice(-8)) items.push({ id: 'f', f, label: 'LIFT TO FLOOR ' + f, right: AH.biomeOf(f).name });
   items.push({ id: 'time', label: 'TIME ATTACK', right: 'DAILY SPRINT 1-10', rcol: '#9ec0ff' });
+  if (AH.Season && AH.Season.active(p.ch)) items.push({ id: 'heart', label: 'THE HEART CHAMBER', right: AH.Season.heartOpen() ? AH.tr(AH.Season.now().theme.name) : AH.tr('SHAFT') + ' ' + AH.Season.shaft() + '/500', disabled: !AH.Season.heartOpen() || (p.ch.deepest || 0) < 10, rcol: AH.Season.now().theme.col });
   items.push({ id: 'endless', label: 'ENDLESS DEPTHS', right: G.world.storyDone || p.ch.storyDone ? 'NO BOTTOM' : 'BEAT FLOOR 100', disabled: !(G.world.storyDone || p.ch.storyDone), rcol: '#d890ff' });
   items.push({ id: 'back', label: 'NOT YET' });
   return items;
 };
 U.update.minesel = function (G, m, dt) {
   if (G.net && !G.isHost) { const n = U.nav(G, m, dt); if (n.p.a || n.p.b) G.closeMenu(); return; }
-  U.listUpdate(G, m, dt, U.mineItems(G, m), it => {
+  // left / right on the difficulty row
+  const its = U.mineItems(G, m);
+  if (its[m.sel] && its[m.sel].id === 'diff') {
+    const I = AH.Input, ids = m.dev ? [m.dev] : I.devices();
+    let dx = 0; for (const id of ids) { if (I.pressed(id, 'left')) dx = -1; if (I.pressed(id, 'right')) dx = 1; }
+    if (m.dev === 'kb1' || !m.dev) { if (AH.Input.keys.ArrowLeft && !m._al) dx = -1; if (AH.Input.keys.ArrowRight && !m._ar) dx = 1; m._al = AH.Input.keys.ArrowLeft; m._ar = AH.Input.keys.ArrowRight; }
+    if (dx) U.setDiff(G, m, dx);
+  }
+  U.listUpdate(G, m, dt, its, it => {
     if (it.id === 'back') { G.closeMenu(); return; }
+    if (it.id === 'diff') { U.setDiff(G, m, 1); return; }
     const noTorch = G.players.filter(q => !q.remote && q.countCons('torch') === 0 && (it.f || 1) >= 6);
     G.closeAllMenus(); G.saveAll();
     if (it.id === 'f') G.enterMine(it.f, 'story');
     if (it.id === 'time') G.enterMine(1, 'time');
+    if (it.id === 'heart') { G.heartRun = true; G.enterMine(Math.max(10, Math.floor((G.players[0].ch.deepest || 10) / 10) * 10), 'story'); }
     if (it.id === 'endless') G.enterMine(Math.max(101, G.players[0].ch.endlessBest ? 101 : 101), 'endless');
     if (noTorch.length) G.toast(null, 'NO SPARE TORCHES! THE STORE SELLS THEM.', '#ffb347');
   }, () => G.closeMenu());
+};
+U.setDiff = function (G, m, dx) {
+  const n = AH.DIFFS.length, p = m.p, v = ((p.ch.diff || 0) + dx + n) % n;
+  // the whole local party walks in on the same difficulty
+  for (const q of G.players) if (!q.remote) q.ch.diff = v;
+  AH.Audio.sfx('move'); G.saveAll();
 };
 U.draw.minesel = function (G, ctx, m) {
   U.bg(ctx); U.title(ctx, 'THE MINE', 16);
@@ -1325,6 +1437,8 @@ U.draw.minesel = function (G, ctx, m) {
   U.list(ctx, items, m.sel, 80, 50, 320, { lh: 16 });
   const key = new Date().toISOString().slice(0, 10), best = m.p.ch.bestTimes[key];
   AH.text(ctx, UW / 2, 236, 'TODAY\'S BEST SPRINT: ' + (best ? AH.fmtTime(best) : '--'), '#6a6274', { align: 'center' });
+  const D = AH.DIFFS[m.p.ch.diff || 0];
+  if (items[m.sel] && items[m.sel].id === 'diff') AH.text(ctx, UW / 2, 222, D === AH.DIFFS[0] ? 'THE MINE AS IT WAS MEANT TO BE' : AH.tr('MONSTER LIFE') + ' X' + D.hp + '   ' + AH.tr('DAMAGE') + ' X' + D.dmg + '   XP X' + D.xp + '   +' + D.mf + '% ' + AH.tr('MAGIC FIND'), D.col, { align: 'center', maxW: 440 });
 };
 
 // ---------- MERCHANT (in the mine) ----------

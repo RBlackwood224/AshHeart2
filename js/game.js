@@ -30,6 +30,7 @@ GG.moveEntity = function (e, dx, dy, r, noclip) {
     if (!m.blocked(e.x, e.y + sy, r)) e.y += sy; else if (e.vy !== undefined) e.vy *= 0.5;
   }
 };
+GG.isRun = function () { return this.mode === 'time' || this.mode === 'weekly'; };
 GG.localPlayers = function () { return this.players.filter(p => !p.remote); };
 GG.lampsLit = function () { return Math.ceil(AH.clamp(this.world.trust, 0, 100) / 12.5); };
 
@@ -94,7 +95,7 @@ GG.enterTown = function (why) {
   this.saveAll();
 };
 GG.newDay = function () {
-  const W = this.world; W.day++; W.hour = 7;
+  const W = this.world; W.day++; W.hour = 8; // wake in full daylight (7 was still dusky with the lamps on)
   const rng = AH.mulberry(W.seed + W.day * 31);
   const r = rng();
   W.weather = r < 0.42 ? 'clear' : r < 0.66 ? 'rain' : r < 0.78 ? 'fog' : r < 0.9 ? 'snow' : 'storm';
@@ -145,6 +146,7 @@ GG.enterMine = function (floor, mode) {
   const W = this.world; W.visits = (W.visits || 0) + 1;
   let seed;
   if (this.mode === 'time') seed = AH.hashStr('daily' + new Date().toISOString().slice(0, 10)) + floor * 7919;
+  else if (this.mode === 'weekly') seed = AH.hashStr('week' + AH.Weekly.key()) + floor * 7919;
   else seed = (W.seed ^ (floor * 2654435761) ^ (W.visits * 40503)) >>> 0;
   const rng = AH.mulberry(seed);
   const isBoss = floor % 10 === 0;
@@ -153,7 +155,7 @@ GG.enterMine = function (floor, mode) {
   if (this.netEventSeed) this.netEventSeed(seed, floor, this.event);
   this.map = AH.genFloor(seed, floor, this.event);
   AH.renderMap(this.map);
-  if (this.mode !== 'time') for (const g of (W.graves || []).filter(g => g.f === floor)) {
+  if (!this.isRun()) for (const g of (W.graves || []).filter(g => g.f === floor)) {
     const rooms = this.map.rooms.filter(r => r !== this.map.startRoom); const r = AH.rand.pick(rooms.length ? rooms : this.map.rooms);
     const pos = this.map.randomFloorIn(r, AH.rand); this.map.props.push({ type: 'grave', x: pos.x, y: pos.y, g });
     const owner = g.items && this.players.find(p => p.ch.created === g.owner);
@@ -167,7 +169,7 @@ GG.enterMine = function (floor, mode) {
   // record depth / lifts
   for (const p of this.players) {
     if (floor > p.ch.deepest && this.mode === 'story') { p.ch.deepest = floor; }
-    if (floor % 5 === 0 && p.ch.lifts.indexOf(floor) < 0 && this.mode !== 'time') { p.ch.lifts.push(floor); if (!p.remote) this.toast(p, 'LIFT UNLOCKED: FLOOR ' + floor, '#f2c94c'); }
+    if (floor % 5 === 0 && p.ch.lifts.indexOf(floor) < 0 && !this.isRun()) { p.ch.lifts.push(floor); if (!p.remote) this.toast(p, 'LIFT UNLOCKED: FLOOR ' + floor, '#f2c94c'); }
   }
   this.lampMult = 1 + (8 - this.lampsLit()) * 0.04;
   AH.spawnFloorEnemies(this, rng);
@@ -322,7 +324,7 @@ GG.useShrine = function (p, s) {
   else if (r < 0.4) { all.forEach(q => { q.hp = q.S.hp; q.mp = q.S.mp; q.torch = 100; }); this.banner('SHRINE OF RENEWAL', '#8ae08e', 'LIFE, MANA AND TORCH RESTORED'); }
   else if (r < 0.55) { all.forEach(q => q.buffs.luck = 120); this.banner('SHRINE OF FORTUNE', '#f2c94c', 'BETTER LOOT FOR TWO MINUTES'); }
   else if (r < 0.7) { all.forEach(q => q.buffs.haste = 60); this.banner('SHRINE OF THE WIND', '#9ec0ff', 'YOU MOVE FASTER'); }
-  else if (r < 0.85) { all.forEach(q => q.gainXp(this, AH.xpNeed(q.ch.level) * 0.25)); this.banner('SHRINE OF WISDOM', '#d890ff', 'EXPERIENCE FLOWS INTO YOU'); }
+  else if (r < 0.85) { all.forEach(q => q.gainXp(this, AH.xpNeedFor(q.ch) * 0.25)); this.banner('SHRINE OF WISDOM', '#d890ff', 'EXPERIENCE FLOWS INTO YOU'); }
   else { this.banner('A CURSED SHRINE!', '#e05a5a', 'THE DEAD ANSWER YOUR PRAYER'); const pool = AH.biomeCreaturesFor(this.floorNo); for (let k = 0; k < 5; k++) { const a = k * 1.25; const e = new AH.Enemy(AH.rand.pick(pool), s.x + Math.cos(a) * 40, s.y + Math.sin(a) * 30, this.floorNo, { aggro: true, players: this.players.length }); if (!this.map.blocked(e.x, e.y, 4)) this.enemies.push(e); } }
 };
 GG.rescue = function (p, n) {
@@ -364,7 +366,7 @@ GG.playerDown = function (p, src) {
   AH.fx.burst(this, p.x, p.y - 8, p.spr[0], 1);
   for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2; this.fx.push({ k: 'smoke', x: p.x + Math.cos(a) * 4, y: p.y - 6 + Math.sin(a) * 3, vx: Math.cos(a) * 18, vy: Math.sin(a) * 10 - 8, r: 3 + (k % 3), life: 0.9, max: 0.9 }); }
   AH.Audio.sfx('boom');
-  if (this.scene === 'mine' && this.mode !== 'time' && this.world) {
+  if (this.scene === 'mine' && !this.isRun() && this.world) {
     const w = p.weapon ? p.weapon() : null;
     const rec = { f: this.floorNo, x: Math.round(p.x), y: Math.round(p.y), name: p.ch.name, cls: p.ch.cls, lvl: p.ch.level, by: src && src.name ? src.name : '', day: this.world.day || 1, hp: p.S.hp, armor: p.S.armor, crit: Math.round(p.S.crit), dmg: w && w.dmg ? w.dmg[0] + '-' + w.dmg[1] : '1-3', wpn: w ? w.name : 'FISTS', biome: this.map && this.map.biome ? this.map.biome.name : '' };
     const W = this.world; W.graves = W.graves || []; W.graves.push(rec); while (W.graves.length > 40) { const i = W.graves.findIndex(g => !g.items); if (i < 0) break; W.graves.splice(i, 1); }
@@ -377,7 +379,7 @@ GG.playerDown = function (p, src) {
 // Diablo-style: on a final death everything the hero carries goes into the grave
 GG.buryGear = function (p) {
   const rec = p.graveRec; p.graveRec = null;
-  if (!rec || this.mode === 'time' || p.ch.hardcore) return;
+  if (!rec || this.isRun() || p.ch.hardcore) return;
   const eq = {}; let n = 0;
   for (const s of AH.EQUIP_SLOTS) if (p.ch.equip[s]) { eq[s] = p.ch.equip[s]; p.ch.equip[s] = null; n++; }
   const bag = p.ch.bag.filter(Boolean); n += bag.length;
@@ -401,13 +403,13 @@ GG.reclaimGrave = function (p, g) {
 // the smith lends plain gear to heroes who lost theirs (worth nothing when sold)
 GG.lendGear = function (p) {
   const C = AH.CLASSES[p.ch.cls], f = Math.max(1, Math.floor((p.ch.deepest || 1) * 0.85)), rng = AH.rand;
-  const chest = { paladin: 'plate', rogue: 'leather', wizard: 'robe', necro: 'robe', barb: 'fur' }[p.ch.cls];
+  const chest = { paladin: 'plate', rogue: 'leather', wizard: 'robe', necro: 'robe', barb: 'fur', priest: 'robe' }[p.ch.cls];
   const mk = base => { const it = AH.genItem(rng, f, { rarity: 0, base, noSet: true }); it.loaner = 1; it.req = null; return it; };
   if (!p.ch.equip.weapon) p.ch.equip.weapon = mk(C.start.weapon);
   if (C.start.off && !p.ch.equip.off) p.ch.equip.off = mk(C.start.off);
   if (!p.ch.equip.chest) p.ch.equip.chest = mk(chest);
   // a full plain set, so the walk back to the grave is hard but not hopeless
-  const head = { paladin: 'helm', rogue: 'hood', wizard: 'hat', necro: 'hood', barb: 'hornhelm' }[p.ch.cls];
+  const head = { paladin: 'helm', rogue: 'hood', wizard: 'hat', necro: 'hood', barb: 'hornhelm', priest: 'hood' }[p.ch.cls];
   if (!p.ch.equip.head) p.ch.equip.head = mk(head);
   if (!p.ch.equip.hands) p.ch.equip.hands = mk('gloves');
   if (!p.ch.equip.feet) p.ch.equip.feet = mk('boots');
@@ -420,7 +422,7 @@ GG.allDead = function () {
   const W = this.world;
   // nemesis
   const k = this.lastKiller;
-  if (k && this.scene === 'mine' && this.mode !== 'time') {
+  if (k && this.scene === 'mine' && !this.isRun()) {
     if (k.nemesis) { k.nemesis.rank = Math.min(4, k.nemesis.rank + 1); k.nemesis.floor = this.floorNo; k.nemesis.title = AH.rand.pick(AH.NEMESIS_TITLES); this.banner(k.nemesis.name + ' GROWS STRONGER', '#e05a5a'); }
     else if (!k.boss && (W.nemeses || []).filter(n => !n.dead).length < 4) {
       const nm = (k.legend ? k.name : AH.rand.pick(['GRUK', 'MORL', 'VASH', 'SKREE', 'OLGRA', 'THRAX', 'NIBB', 'KORR', 'ZEL', 'URGOTH'])) + ' ' + AH.rand.pick(AH.NEMESIS_TITLES).split(' ')[0];
@@ -580,6 +582,12 @@ GG.dogDig = function (pt) {
   else if (r < 0.9) this.dropItem(s.x, s.y, AH.genRune(AH.rand, this.floorNo), o.pid);
   else { this.toast(o, 'THE DOG FOUND A BONE. GOOD BOY.', '#c48c56'); }
 };
+// the necromancer lets his servants rest
+GG.dismissMinions = function (p) {
+  const mine = this.allies.filter(a => a.kind === 'minion' && a.owner === p && !a.dead);
+  for (const a of mine) { a.dead = true; AH.fx.puff(this, a.x, a.y - 4, '#9ad88a'); }
+  if (mine.length) { AH.Audio.sfx('magic'); this.toast(p, 'YOUR SERVANTS RETURN TO THE EARTH', '#9ad88a'); }
+};
 GG.updateAllies = function (dt) {
   for (const a of this.allies) {
     if (a.kind === 'minion') { this.updateMinion(a, dt); continue; }
@@ -628,7 +636,8 @@ GG.update = function (dt) {
     if (this.map.arena && !this.bossSpawned && this.players.some(p => { const a = this.map.arena; return p.x > a.x * AH.T && p.x < (a.x + a.w) * AH.T && p.y > a.y * AH.T && p.y < (a.y + a.h) * AH.T + 4; })) {
       this.bossSpawned = true;
       const a = this.map.arena, cx = (a.x + a.w / 2) * AH.T, cy = (a.y + a.h / 3) * AH.T;
-      if (this.floorNo % 100 === 0 && this.mode === 'story') { this.bossNow = AH.spawnAshheart(this, cx, cy); if (!this.bossNow.title) this.bossNow.title = 'THE BURNING DREAM'; }
+      if (this.heartRun && AH.spawnSeasonHeart) { this.bossNow = AH.spawnSeasonHeart(this, cx, cy); }
+      else if (this.floorNo % 100 === 0 && this.mode === 'story') { this.bossNow = AH.spawnAshheart(this, cx, cy); if (!this.bossNow.title) this.bossNow.title = 'THE BURNING DREAM'; }
       else { const L = AH.LEGENDS.find(l => l.name === AH.BOSSES[(Math.floor(this.floorNo / 10) - 1) % 9]); this.bossNow = AH.spawnLegend(this, L, cx, cy, { boss: true }); }
       AH.Audio.sfx('warn');
     }
@@ -706,7 +715,7 @@ GG.keyFor = function (p, act) {
 };
 GG.tip = function (p, key, text) {
   const ch = p.ch; ch.tips = ch.tips || {};
-  if (ch.tips[key] || this.mode === 'time') return;
+  if (ch.tips[key] || this.isRun()) return;
   ch.tips[key] = 1; this.toast(p, text, '#9ec0ff');
 };
 GG.tutorialTick = function () {

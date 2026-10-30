@@ -596,7 +596,8 @@ R.playerPanel = function (G, p, x, y, compact) {
     AH.bar(ctx, x + 31, y + 13, w - 35, 4, p.hp / p.S.hp, '#d43c3c', '#3a1416', '#ff8a8a');
     const rg = AH.usesRage(p.ch.cls);
     AH.bar(ctx, x + 31, y + 20, w - 35, 3, p.mp / p.S.mp, rg ? '#d8642a' : '#4a7bd1', rg ? '#2a1610' : '#141a2a', rg ? '#ffb07a' : '#9ec0ff');
-    AH.bar(ctx, x + 31, y + 26, w - 35, 1, p.ch.xp / AH.xpNeed(p.ch.level), '#e8c25a', '#2a2214');
+    if (AH.faithBar) AH.faithBar(ctx, p, x + 31, y + 24, w - 35);
+    AH.bar(ctx, x + 31, y + 26, w - 35, 1, p.ch.xp / AH.xpNeedFor(p.ch), p.ch.level >= AH.LEVEL_CAP ? '#ff9a3e' : '#e8c25a', '#2a2214');
   } else {
     AH.text(ctx, x + 4, y + 3, p.ch.name.slice(0, 7), p.color);
     AH.text(ctx, x + w - 4, y + 3, '' + p.ch.level, '#8d8494', { align: 'right' });
@@ -664,7 +665,7 @@ R.drawViewHud = function (G, v, views) {
       if (G.scene === 'mine' && G.floorNo >= 6) for (const p of locals) { this.torchGauge(G, p, v.x + 2, y); y += 8; }
       if (G.net && locals.length === 1) this.hotbar(G, locals[0]);
     }
-    if (G.scene === 'mine' && views.length === 1) { ctx.save(); ctx.globalAlpha = this.hudFade(G, v, 'tr', v.w - 64, 0, 64, 48); this.minimap(G, v); ctx.restore(); }
+    if (G.scene === 'mine' && views.length === 1 && !AH.rule('fog')) { ctx.save(); ctx.globalAlpha = this.hudFade(G, v, 'tr', v.w - 64, 0, 64, 48); this.minimap(G, v); ctx.restore(); }
     this.drawToasts(G, v, null);
   }
 };
@@ -795,8 +796,8 @@ R.hotbar = function (G, p) {
     { k: KL.b, ic: AH.ICON.dodge, cd: p.cd.dodge / 0.85 },
   ];
   ['y', 'lb', 'rb'].forEach((k, i) => { if (p.ch.slots[i]) items.push({ k: KL[k], sk: p.ch.slots[i] }); });
-  items.push({ k: KL.pot, ic: AH.ICON.potion, n: p.countCons('potion') });
-  if (AH.isCaster(p.ch.cls) || p.countCons('mana')) items.push({ k: KL.mana, ic: AH.ICON.mana, n: p.countCons('mana') });
+  items.push({ k: KL.pot, ic: AH.ICON.potion, n: p.countCons('potion'), cd: p.cd.pot / 4 });
+  if (AH.isCaster(p.ch.cls) || p.countCons('mana')) items.push({ k: KL.mana, ic: AH.ICON.mana, n: p.countCons('mana'), cd: p.cd.mana / 1.2 });
   const S = 18, Gp = 2, x0 = Math.floor((RW - (items.length * S + (items.length - 1) * Gp)) / 2), y = RH - 30;
   items.forEach((it, i) => {
     const x = x0 + i * (S + Gp);
@@ -853,8 +854,11 @@ R.drawGlobalHud = function (G, views) {
     if (views.length === 1) {
       AH.text(ctx, fx, 3, (G.mode === 'endless' ? 'DEPTH ' : 'FLOOR ') + G.floorNo, '#ffb347', { align: 'center' });
       AH.text(ctx, fx, 12, G.map.biome.name, '#6fd6e8', { align: 'center' });
+      const DF = AH.diffNow(); if (DF !== AH.DIFFS[0]) AH.text(ctx, fx, 21, DF.name, DF.col, { align: 'center' });
     } else AH.text(ctx, fx, RH - 9, 'F' + G.floorNo, '#ffb347', { align: 'center' });
     if (G.mode === 'time') AH.text(ctx, fx, 22, AH.fmtTime(G.runTimer || 0), '#f2e3b3', { align: 'center' });
+    if (G.mode === 'weekly' && AH.weeklyHud) AH.weeklyHud(this, G, ctx, RW);
+    if (AH.pulseHud) AH.pulseHud(G, ctx, RW, RH);
     if (G.event === 'collapse' && G.collapseT > 0) AH.text(ctx, fx, 22, 'COLLAPSE ' + Math.ceil(G.collapseT), '#ff8a8a', { align: 'center' });
     // quest tracker under the minimap
     if (views.length === 1 && G.activeQuests) {

@@ -15,10 +15,10 @@ AH.HEADS = {
   beard: [".......q......", "......qU......", ".....qUuu.....", "....qUUuuu....", "..qqUUUuuuuq..", "...qfefeFF....", "...xxxxxxX...."],
 };
 AH.TORSOS = {
-  plate: ["...aammmmn....", "..aattcttnn...", "..fatcccTnf...", "...attctTn....", "...mTttTTn....", "...ngggggn....", "...mtttTTn...."],
-  leather: ["...aammmmn....", "..aammmmmnn...", "..fammmmmnf...", "...ammmmmn....", "...mmmmmmn....", "...ngggggn....", "...mmmmmmn...."],
-  fur: ["..AAAmmmAA....", ".AAffffffFA...", "..ffffffFFf...", "...fffffFF....", "...ffffFFF....", "...ngggggn....", "...mmmmmmn...."],
-  robe: ["...xaaaaXn....", "..aaxxxXaan...", "..faaxXaaaf...", "...aaagaan....", "...maagaan....", "...ngggggn....", "...maagaan...."],
+  plate: ["...aammmmn....", "..aattcttnn...", "..jatcccTnj...", "...attctTn....", "...mTttTTn....", "...ngggggn....", "...mtttTTn...."],
+  leather: ["...aammmmn....", "..aammmmmnn...", "..jammmmmnj...", "...ammmmmn....", "...mmmmmmn....", "...ngggggn....", "...mmmmmmn...."],
+  fur: ["..AAAmmmAA....", ".AAffffffFA...", "..jfffffFFj...", "...fffffFF....", "...ffffFFF....", "...ngggggn....", "...mmmmmmn...."],
+  robe: ["...xaaaaXn....", "..aaxxxXaan...", "..jaaxXaaaj...", "...aaagaan....", "...maagaan....", "...ngggggn....", "...maagaan...."],
 };
 AH.LEGS = {
   pants: [
@@ -64,6 +64,7 @@ AH.composeHumanoid = function (look, frame) {
   const W = 18, OX = 2; // shift body right by 2 so off-hand fits
   const out = rows.map(r => { const a = new Array(W).fill('.'); r.forEach((c, i) => { if (c !== '.') a[i + OX] = c; }); return a; });
   const pal = Object.assign({}, look.pal);
+  if (!pal.j) pal.j = pal.f; // bare hands unless gloves say otherwise
   const place = (key, hx, hy) => {
     const it = AH.HELD[key]; if (!it) return;
     const ip = look.heldPal || {};
@@ -74,6 +75,12 @@ AH.composeHumanoid = function (look, frame) {
       const k = 'H' + c; out[Y][X] = k; pal[k] = ip[c] || AH.HELD_PAL[c];
     }));
   };
+  if (look.cloak) {
+    const top = head.length; // first torso row
+    for (let r = top + 1; r < Math.min(out.length - 1, top + 11); r++) for (const cx of [OX + 1, OX + 11]) if (out[r][cx] === '.') out[r][cx] = r < top + 7 ? 'z' : 'Z';
+    for (const cx of [OX + 3, OX + 4, OX + 5, OX + 6, OX + 7, OX + 8]) if (out[top][cx] === '.') out[top][cx] = 'z'; // collar
+    pal.z = look.cloak; pal.Z = AH.shade(look.cloak, 0.65);
+  }
   if (look.off) place(look.off, OX + 2, 10);
   if (look.held) place(look.held, OX + 11, 9);
   // multi-char keys: re-map to single chars
