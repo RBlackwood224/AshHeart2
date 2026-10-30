@@ -85,7 +85,8 @@
 
   // ---------- the board menu ----------
   B.TABS = ['THIS WEEK', 'TEAMS', 'SEASON', 'SEASON HEROES'];
-  U.init.board = function (G, m) { m.tab = m.tab || 0; m.scroll = 0; m.cls = -1; B.load(true); };
+  U.init.board = function (G, m) { if (m.tab === undefined) m.tab = m.p && AH.Season && AH.Season.active(m.p.ch) ? 3 : 0; // a seasonal hero opens on the season heroes
+  m.scroll = 0; m.cls = -1; B.load(true); };
   U.update.board = function (G, m, dt) {
     const n = U.nav(G, m, dt);
     const kb = ((m.dev || m.lastDev || 'kb1') + '').startsWith('kb');
