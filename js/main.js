@@ -155,6 +155,7 @@
   function perfHud(now, drawMs) {
     if (PF.last) { PF.times.push(now - PF.last); PF.draws.push(drawMs); }
     PF.last = now;
+    if (PF.ph) { PF.pa = PF.pa || [0, 0, 0, 0]; PF.ph.forEach((v, i) => { PF.pa[i] += (v - PF.pa[i]) * 0.05; }); }
     if (PF.times.length > 120) { PF.times.shift(); PF.draws.shift(); }
     if (!PF.on || !PF.times.length) return;
     const avg = PF.times.reduce((a, b) => a + b, 0) / PF.times.length, worst = Math.max(...PF.times);
@@ -164,12 +165,13 @@
     const lines = [
       'FPS ' + (1000 / avg).toFixed(0) + '   frame ' + avg.toFixed(1) + ' ms   worst ' + worst.toFixed(1) + ' ms',
       'late frames (2 s): ' + late + '   draw ' + dAvg.toFixed(1) + ' ms',
+      'update ' + PF.pa[0].toFixed(1) + '  ui ' + PF.pa[2].toFixed(1) + '  output ' + PF.pa[3].toFixed(1) + ' ms   busy ' + (PF.pa[0] + PF.pa[1] + PF.pa[2] + PF.pa[3]).toFixed(1),
       'smooth x' + AH.SS + (AH.ssCap ? ' (stepped down)' : '') + '   lights ' + (AH.fancyOn() ? 'fancy' : 'simple') + '   ' + br,
       'screen ' + view.w + 'x' + view.h + '   dpr ' + (window.devicePixelRatio || 1),
     ];
     const fs = Math.max(12, Math.round(screen.height / 60));
     sctx.save(); sctx.font = fs + 'px monospace'; sctx.textBaseline = 'top';
-    sctx.fillStyle = 'rgba(0,0,0,0.7)'; sctx.fillRect(view.x + 4, view.y + 4, fs * 26, fs * 1.3 * lines.length + 8);
+    sctx.fillStyle = 'rgba(0,0,0,0.7)'; sctx.fillRect(view.x + 4, view.y + 4, fs * 34, fs * 1.3 * lines.length + 8);
     sctx.fillStyle = '#9fff9f'; lines.forEach((l, i) => sctx.fillText(l, view.x + 10, view.y + 8 + i * fs * 1.3));
     // frame-time graph: one bar per frame, red when late
     const gx = view.x + 10, gy = view.y + 12 + fs * 1.3 * lines.length, gh = fs * 2;
@@ -194,21 +196,26 @@
     const safe = f => { try { f(); } catch (e) { if (AH.lastError !== String(e && e.stack || e)) console.error(e); AH.lastError = String(e && e.stack || e); } };
     safe(() => { if (!G.menu && G.scene === 'title') G.openMenu('title', null); if (G.menu && G.menu.type === 'title' && !AH._linkChecked && AH.checkHeroLink) { AH._linkChecked = 1; AH.checkHeroLink(G); } if (G.menu) AH.UI.tick(G, dt); else handleDevices(); });
     safe(() => { if (AH.Mouse) AH.Mouse.tick(G, dt); });
+    const tu = performance.now();
     safe(() => { if (G.net && !G.isHost) G.guestUpdate(dt); else G.update(dt); });
-    const td = performance.now();
+    const td = performance.now(), updMs = td - tu;
     safe(() => R.draw(G));
     const drawMs = performance.now() - td;
-    // a slow machine steps smooth motion down (3 -> 2 -> 1) instead of losing frames
+    // a slow machine steps smooth motion down instead of losing frames: 3 -> 2 quickly, 2 -> 1 only when really slow
     if (AH.SS > 1 && G.scene === 'mine') {
-      const ms = performance.now() - td; frame.dAvg = frame.dAvg === undefined ? ms : frame.dAvg + (ms - frame.dAvg) * 0.02;
-      if (frame.dAvg > 9) { AH.ssCap = AH.SS - 1; frame.dAvg = undefined; }
+      const ms = performance.now() - tu; frame.dAvg = frame.dAvg === undefined ? ms : frame.dAvg + (ms - frame.dAvg) * 0.02;
+      frame.dN = (frame.dN || 0) + 1;
+      if (frame.dN > 90 && frame.dAvg > (AH.SS === 3 ? 12 : 15)) { AH.ssCap = AH.SS - 1; frame.dAvg = undefined; frame.dN = 0; }
     }
+    const tui = performance.now();
     safe(() => AH.UI.render(G, uctx));
+    const tout = performance.now(), uiMs = tout - tui;
     safe(() => { if (AH.Mouse) AH.Mouse.drawCursor(G, uctx); });
     sctx.fillStyle = '#000'; sctx.fillRect(0, 0, screen.width, screen.height);
     sctx.imageSmoothingEnabled = false;
-    if (G.scene !== 'title' || !G.menu) { sctx.drawImage(world, view.x, view.y, view.w, view.h); if (G.scene !== 'title' && AH.fancyOn && AH.fancyOn()) R.bloom(sctx, world, view); }
+    if (G.scene !== 'title' || !G.menu) { if (G.scene !== 'title' && AH.fancyOn && AH.fancyOn()) safe(() => R.bloom(R.ctx, world, { x: 0, y: 0, w: world.width, h: world.height })); sctx.drawImage(world, view.x, view.y, view.w, view.h); }
     sctx.drawImage(ui, view.x, view.y, view.w, view.h);
+    PF.ph = [updMs, drawMs, uiMs, performance.now() - tout];
     perfHud(now, drawMs);
     requestAnimationFrame(frame);
   }

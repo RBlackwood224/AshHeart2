@@ -340,44 +340,69 @@ R.applyLight = function (G, v) {
       }
     }
   }
-  const SS = AH.SS, WS = W * SS;
-  const img = ctx.getImageData(v.x * SS, v.y * SS, WS, H * SS), px = img.data;
+  const LC = this.lightBufs(W, H), mul = LC.md, exc = LC.ed, add = LC.ad;
   const steps = 6;
   const dk0 = 6, dk1 = 5, dk2 = 12;
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const o = y * W + x;
-      const s = Ls[o];
-      let tot = s > 1 ? 1 : s;
-      let b = Math.round(tot * steps);
-      const f = b >= steps ? 1 : b / steps;
-      const inv = s > 0.0001 ? 1 / s : 0;
-      let tr = LR[o] * inv, tg = LG[o] * inv, tb = LB[o] * inv;
-      if (s > 1.2) { const k = Math.min(1, (s - 1.2) * 0.5); tr += (1 - tr) * k * 0.3; tg += (1 - tg) * k * 0.3; tb += (1 - tb) * k * 0.3; }
-      const a0 = dk0 * (1 - f), a1 = dk1 * (1 - f), a2 = dk2 * (1 - f);
-      for (let yy = 0; yy < SS; yy++) {
-        let p4 = ((y * SS + yy) * WS + x * SS) * 4;
-        for (let xx = 0; xx < SS; xx++, p4 += 4) {
-          let r = px[p4] * tr, g = px[p4 + 1] * tg, bb = px[p4 + 2] * tb;
-          if (r > 255) r = 255; if (g > 255) g = 255; if (bb > 255) bb = 255;
-          px[p4] = a0 + r * f; px[p4 + 1] = a1 + g * f; px[p4 + 2] = a2 + bb * f;
-        }
-      }
-    }
+  let anyExc = false;
+  for (let o = 0, p4 = 0; o < n; o++, p4 += 4) {
+    const s = Ls[o];
+    let tot = s > 1 ? 1 : s;
+    let b = Math.round(tot * steps);
+    const f = b >= steps ? 1 : b / steps;
+    const inv = s > 0.0001 ? 1 / s : 0;
+    let tr = LR[o] * inv, tg = LG[o] * inv, tb = LB[o] * inv;
+    if (s > 1.2) { const k = Math.min(1, (s - 1.2) * 0.5); tr += (1 - tr) * k * 0.3; tg += (1 - tg) * k * 0.3; tb += (1 - tb) * k * 0.3; }
+    const mr = tr * f, mg = tg * f, mb = tb * f;
+    mul[p4] = mr > 1 ? 255 : mr * 255; mul[p4 + 1] = mg > 1 ? 255 : mg * 255; mul[p4 + 2] = mb > 1 ? 255 : mb * 255;
+    if (mr > 1 || mg > 1 || mb > 1) { anyExc = true; exc[p4] = mr > 1 ? (mr - 1) * 255 : 0; exc[p4 + 1] = mg > 1 ? (mg - 1) * 255 : 0; exc[p4 + 2] = mb > 1 ? (mb - 1) * 255 : 0; }
+    else exc[p4] = exc[p4 + 1] = exc[p4 + 2] = 0;
+    add[p4] = dk0 * (1 - f); add[p4 + 1] = dk1 * (1 - f); add[p4 + 2] = dk2 * (1 - f);
   }
-  ctx.putImageData(img, v.x * SS, v.y * SS);
+  this.lightComposite(v, LC, anyExc, true);
+};
+// the light is worked out once per art pixel into three tiny pictures, then laid over the world by the canvas itself
+// (multiply, then the over-bright part and the dark tint added) - the cost no longer grows with smooth motion
+R.lightBufs = function (W, H) {
+  const key = W + 'x' + H; this.lcs = this.lcs || {}; let L = this.lcs[key];
+  if (!L) {
+    const mk = () => { const c = AH.makeCanvas(W, H); const x = c.getContext('2d'); const d = x.createImageData(W, H); for (let i = 3; i < d.data.length; i += 4) d.data[i] = 255; return { c, x, d }; };
+    const m = mk(), e = mk(), a = mk();
+    L = this.lcs[key] = { W, H, m, e, a, md: m.d.data, ed: e.d.data, ad: a.d.data, tmp: document.createElement('canvas'), smp: AH.makeCanvas(W, H, true) };
+  }
+  return L;
+};
+R.lightComposite = function (v, L, anyExc, anyAdd) {
+  const ctx = this.ctx, SS = AH.SS, X = v.x * SS, Y = v.y * SS, WS = L.W * SS, HS = L.H * SS;
+  L.m.x.putImageData(L.m.d, 0, 0);
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.imageSmoothingEnabled = false;
+  if (anyExc) {
+    // keep a copy of the unlit world: (world x extra) is added back after the multiply
+    const t = L.tmp; if (t.width !== WS || t.height !== HS) { t.width = WS; t.height = HS; }
+    const tx = t.getContext('2d'); tx.imageSmoothingEnabled = false;
+    tx.globalCompositeOperation = 'copy'; tx.drawImage(this.c, X, Y, WS, HS, 0, 0, WS, HS);
+    L.e.x.putImageData(L.e.d, 0, 0);
+    tx.globalCompositeOperation = 'multiply'; tx.drawImage(L.e.c, 0, 0, WS, HS);
+    tx.globalCompositeOperation = 'source-over';
+  }
+  ctx.globalCompositeOperation = 'multiply'; ctx.drawImage(L.m.c, X, Y, WS, HS);
+  ctx.globalCompositeOperation = 'lighter';
+  if (anyExc) ctx.drawImage(L.tmp, X, Y);
+  if (anyAdd) { L.a.x.putImageData(L.a.d, 0, 0); ctx.drawImage(L.a.c, X, Y, WS, HS); }
+  ctx.restore();
 };
 
 // "Spectacular lights": normals from the pixel art, walls that cut the light, actors that cast shadows, smooth falloff
 R.applyLightFancy = function (G, v, amb) {
   const ctx = this.ctx, W = v.w, H = v.h, n = W * H;
   const tint = G.scene === 'town' ? [0.82, 0.88, 1.08] : G.map.biome.tint;
-  const SS = AH.SS, WS = W * SS;
-  const img = ctx.getImageData(v.x * SS, v.y * SS, WS, H * SS), px = img.data;
+  const SS = AH.SS, LC = this.lightBufs(W, H);
+  const sx = LC.smp.getContext('2d', { willReadFrequently: true }); sx.imageSmoothingEnabled = false;
+  sx.globalCompositeOperation = 'copy'; sx.drawImage(this.c, v.x * SS, v.y * SS, W * SS, H * SS, 0, 0, W, H);
+  const px = sx.getImageData(0, 0, W, H).data;
   if (!this.fz || this.fz.n !== n) this.fz = { n, hgt: new Float32Array(n), NX: new Float32Array(n), NY: new Float32Array(n), NZ: new Float32Array(n), R: new Float32Array(n), G: new Float32Array(n), B: new Float32Array(n), sh: new Map(), mapRef: null };
   const F = this.fz, hgt = F.hgt, NX = F.NX, NY = F.NY, NZ = F.NZ, LR = F.R, LG = F.G, LB = F.B;
   if (F.mapRef !== G.map) { F.mapRef = G.map; F.sh.clear(); }
-  for (let i = 0; i < n; i++) { const p4 = SS === 1 ? i * 4 : (((i / W | 0) * SS) * WS + (i % W) * SS) * 4; hgt[i] = (px[p4] * 0.3 + px[p4 + 1] * 0.55 + px[p4 + 2] * 0.15) * (1 / 255); }
+  for (let i = 0; i < n; i++) { const p4 = i * 4; hgt[i] = (px[p4] * 0.3 + px[p4 + 1] * 0.55 + px[p4 + 2] * 0.15) * (1 / 255); }
   for (let i = 0; i < n; i++) {
     const nx = -(hgt[i < n - 1 ? i + 1 : i] - hgt[i > 0 ? i - 1 : i]) * 2.2, ny = -(hgt[i < n - W ? i + W : i] - hgt[i >= W ? i - W : i]) * 2.2;
     const nl = 1 / Math.sqrt(nx * nx + ny * ny + 1); NX[i] = nx * nl; NY[i] = ny * nl; NZ[i] = nl;
@@ -435,35 +460,42 @@ R.applyLightFancy = function (G, v, amb) {
       }
     }
   }
-  for (let i = 0; i < n; i++) {
+  const mul = LC.md, exc = LC.ed;
+  let anyExc = false;
+  for (let i = 0, p4 = 0; i < n; i++, p4 += 4) {
     let a = LR[i], b = LG[i], c = LB[i]; if (a > 1.7) a = 1.7; if (b > 1.7) b = 1.7; if (c > 1.7) c = 1.7;
     a = ((a * 8 + 0.5) | 0) / 8; b = ((b * 8 + 0.5) | 0) / 8; c = ((c * 8 + 0.5) | 0) / 8;
-    const y = i / W | 0, x = i - y * W;
-    for (let yy = 0; yy < SS; yy++) {
-      let p4 = ((y * SS + yy) * WS + x * SS) * 4;
-      for (let xx = 0; xx < SS; xx++, p4 += 4) {
-        const r = px[p4] * a, g = px[p4 + 1] * b, bb = px[p4 + 2] * c;
-        px[p4] = r > 255 ? 255 : r; px[p4 + 1] = g > 255 ? 255 : g; px[p4 + 2] = bb > 255 ? 255 : bb;
-      }
-    }
+    mul[p4] = a > 1 ? 255 : a * 255; mul[p4 + 1] = b > 1 ? 255 : b * 255; mul[p4 + 2] = c > 1 ? 255 : c * 255;
+    if (a > 1 || b > 1 || c > 1) { anyExc = true; exc[p4] = a > 1 ? (a - 1) * 255 : 0; exc[p4 + 1] = b > 1 ? (b - 1) * 255 : 0; exc[p4 + 2] = c > 1 ? (c - 1) * 255 : 0; }
+    else exc[p4] = exc[p4 + 1] = exc[p4 + 2] = 0;
   }
-  ctx.putImageData(img, v.x * SS, v.y * SS);
+  this.lightComposite(v, LC, anyExc, false);
 };
-// glow on the final screen: bright pixels bleed light (cheap: tiny canvases scaled up smoothly)
+// glow: bright pixels bleed light (tiny canvases scaled up smoothly). Drawn into the world picture, not the big screen,
+// so the browser has only one large picture to scale each frame
 R.bloom = function (sctx, world, view) {
-  if (!this.bl) { const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }; this.bl = { a: mk(80, 45), b: mk(40, 23), c: mk(20, 12), vg: null }; }
+  if (!this.bl) { const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }; this.bl = { a: AH.makeCanvas(80, 45, true), b: mk(40, 23), c: mk(20, 12), vg: null }; }
   const B = this.bl, a = B.a.getContext('2d'), b = B.b.getContext('2d'), c = B.c.getContext('2d');
-  a.globalCompositeOperation = 'copy'; a.filter = 'brightness(0.6) contrast(4) saturate(1.5)'; a.imageSmoothingEnabled = true; a.drawImage(world, 0, 0, 80, 45);
+  a.globalCompositeOperation = 'copy'; a.imageSmoothingEnabled = true; a.drawImage(world, 0, 0, 80, 45);
+  // only the bright parts glow (done by hand on 80x45 pixels: canvas filters are slow in some browsers)
+  const id = a.getImageData(0, 0, 80, 45), d = id.data;
+  for (let i = 0; i < d.length; i += 4) {
+    let r = (d[i] * 0.6 / 255 - 0.5) * 4 + 0.5, g = (d[i + 1] * 0.6 / 255 - 0.5) * 4 + 0.5, b = (d[i + 2] * 0.6 / 255 - 0.5) * 4 + 0.5;
+    r = r < 0 ? 0 : r > 1 ? 1 : r; g = g < 0 ? 0 : g > 1 ? 1 : g; b = b < 0 ? 0 : b > 1 ? 1 : b;
+    const l = r * 0.2126 + g * 0.7152 + b * 0.0722;
+    d[i] = Math.max(0, Math.min(255, (l + (r - l) * 1.5) * 255)); d[i + 1] = Math.max(0, Math.min(255, (l + (g - l) * 1.5) * 255)); d[i + 2] = Math.max(0, Math.min(255, (l + (b - l) * 1.5) * 255));
+  }
+  a.putImageData(id, 0, 0);
   b.globalCompositeOperation = 'copy'; b.imageSmoothingEnabled = true; b.drawImage(B.a, 0, 0, 40, 23);
   c.globalCompositeOperation = 'copy'; c.imageSmoothingEnabled = true; c.drawImage(B.b, 0, 0, 20, 12);
-  sctx.save(); sctx.globalCompositeOperation = 'lighter'; sctx.imageSmoothingEnabled = true;
+  sctx.save(); sctx.setTransform(1, 0, 0, 1, 0, 0); sctx.globalCompositeOperation = 'lighter'; sctx.imageSmoothingEnabled = true;
   sctx.globalAlpha = 0.5; sctx.drawImage(B.b, view.x, view.y, view.w, view.h);
   sctx.globalAlpha = 0.55; sctx.drawImage(B.c, view.x, view.y, view.w, view.h);
   sctx.restore();
   // vignette
   if (!B.vg || B.vgW !== view.w) { B.vgW = view.w; const v2 = document.createElement('canvas'); v2.width = 160; v2.height = 90; const x = v2.getContext('2d');
     const g = x.createRadialGradient(80, 45, 28, 80, 45, 95); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.55)'); x.fillStyle = g; x.fillRect(0, 0, 160, 90); B.vg = v2; }
-  sctx.save(); sctx.imageSmoothingEnabled = true; sctx.drawImage(B.vg, view.x, view.y, view.w, view.h); sctx.restore();
+  sctx.save(); sctx.setTransform(1, 0, 0, 1, 0, 0); sctx.imageSmoothingEnabled = true; sctx.drawImage(B.vg, view.x, view.y, view.w, view.h); sctx.restore();
 };
 
 // a servant's current frame: bats keep flapping their wings after death too
@@ -593,6 +625,8 @@ R.playerPanel = function (G, p, x, y, compact) {
     AH.drawSpr(ctx, p.portrait, x + 15 - p.portrait.w / 2, y + 5, false); ctx.restore();
     AH.text(ctx, x + 31, y + 3, p.ch.name.slice(0, 7), '#f2e3b3');
     AH.text(ctx, x + w - 4, y + 3, 'LV' + p.ch.level, '#8d8494', { align: 'right' });
+    // a seasonal hero wears the season's colour on its portrait corner
+    if (AH.Season && AH.Season.active && AH.Season.active(p.ch)) { const c = AH.Season.now(); AH.rect(ctx, x + 2, y + 2, 7, 7, '#1d1824'); AH.rect(ctx, x + 3, y + 3, 5, 5, c.theme.col); AH.rect(ctx, x + 4, y + 4, 3, 3, '#f2e3b3'); }
     AH.bar(ctx, x + 31, y + 13, w - 35, 4, p.hp / p.S.hp, '#d43c3c', '#3a1416', '#ff8a8a');
     const rg = AH.usesRage(p.ch.cls);
     AH.bar(ctx, x + 31, y + 20, w - 35, 3, p.mp / p.S.mp, rg ? '#d8642a' : '#4a7bd1', rg ? '#2a1610' : '#141a2a', rg ? '#ffb07a' : '#9ec0ff');

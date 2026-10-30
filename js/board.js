@@ -97,7 +97,7 @@
     if (n.p.lb || n.p.rb || n.dx) { m.tab = (m.tab + (n.p.rb || n.dx > 0 ? 1 : -1) + B.TABS.length) % B.TABS.length; m.scroll = 0; AH.Audio.sfx('move'); }
     if (n.dy) m.scroll = Math.max(0, m.scroll + n.dy);
     if (n.p.y) { m.cls = m.cls + 1 >= AH.CLASS_KEYS.length ? -1 : m.cls + 1; m.scroll = 0; AH.Audio.sfx('move'); }
-    if (n.p.x && m.p && !m.p.remote) { const code = B.seasonCode(m.p); if (code) B.submit(G, m, code); }
+    if (n.p.x && m.p && !m.p.remote) { const o = AH.options; if (B.seasonCode(m.p) && !o.nick) { U.askName(G, m, 'PLAYER NAME', '', v => { o.nick = v; AH.Save.setOptions(o); B.submit(G, m, B.seasonCode(m.p)); }, { note: 'YOUR NAME ON THE LEADERBOARD. YOUR HERO NAME IS ADDED BY ITSELF.' }); return; } const code = B.seasonCode(m.p); if (code) B.submit(G, m, code); else { AH.Audio.sfx('error'); G.toast(m.p, 'ONLY SEASONAL HEROES GO ON THE SEASON BOARD', '#ff8a8a'); } }
     if (n.p.a) B.load(true);
     if (n.p.b || n.p.start) G.closeMenu();
   };

@@ -299,6 +299,7 @@ U.draw.confirm = function (G, ctx, m) {
 U.NAMES = ['ALDRIC', 'SERA', 'RENN', 'MIRA', 'BRAN', 'ODA', 'KAEL', 'IVY', 'TOVA', 'GARR', 'ELKA', 'DUNN', 'VEX', 'NELL', 'ROWAN', 'ISLA'];
 U.init.create = function (G, m) {
   m.step = 0; m.cls = 0; m.name = AH.rand.pick(U.NAMES); m.pet = 1; m.hc = 0; m.gridSel = 0; m.sel = 0;
+  m.seasonal = !!(AH.Season && AH.Season.now()); // while a season runs, a new hero joins it unless switched to normal
   m.keyHandler = e => {
     if (G.menu !== m || m.step !== 1) return;
     if (document.activeElement && document.activeElement.id === 'nameInput') return;

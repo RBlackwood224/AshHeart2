@@ -7,7 +7,7 @@ AH.SS = 1;
 AH.px = v => Math.round(v * AH.SS) / AH.SS;
 AH.UW = 480; AH.UH = 270;     // menu resolution
 AH.T = 16;                    // tile size
-AH.VERSION = '0.3.1';
+AH.VERSION = '0.3.3';
 
 AH.mulberry = function (seed) {
   let a = (seed >>> 0) || 1;
