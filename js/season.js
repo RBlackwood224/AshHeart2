@@ -7,10 +7,10 @@
   const DAY = 864e5, LEN = 56 * DAY;
   const START = Date.UTC(2026, 9, 26); // Monday 26 October 2026: season 1
   AH.SEASON_THEMES = [
-    { id: 's_winter', name: 'ASHEN WINTER', col: '#9ef0ff', desc: 'COLD CREEPS THROUGH THE MINE: YOUR FIRE BURNS TWICE AS HOT.', item: { name: 'FROSTFIRE CROWN', base: 'helm', legend: 'burnground' } },
+    { id: 's_winter', name: 'ASHEN WINTER', col: '#9ef0ff', desc: 'COLD CREEPS THROUGH THE MINE: STAY NEAR THE FIRE. YOUR OWN FIRE BURNS HOTTER.', item: { name: 'FROSTFIRE CROWN', base: 'helm', legend: 'burnground' } },
     { id: 's_bloodmoon', name: 'BLOOD MOON', col: '#ff5a5a', desc: 'MONSTERS ARE STRONGER, BUT DROP MORE TREASURE.', item: { name: 'MOONFANG', base: 'dagger', legend: 'emberheart' } },
     { id: 's_bones', name: 'SEASON OF BONES', col: '#e2dcc8', desc: 'SOME SLAIN MONSTERS RISE AND FIGHT FOR YOU.', item: { name: 'THE OSSUARY KEY', base: 'amulet', legend: 'thirst' } },
-    { id: 's_gold', name: 'GOLD RUSH', col: '#f2c94c', desc: 'DOUBLE GOLD EVERYWHERE, BUT MONSTERS STEAL FROM YOU.', item: { name: 'MIDAS GRIP', base: 'gloves', legend: 'goldheal' } },
+    { id: 's_gold', name: 'GOLD RUSH', col: '#f2c94c', desc: 'MORE GOLD EVERYWHERE, BUT THIEVES AND HEAVY POCKETS.', item: { name: 'MIDAS GRIP', base: 'gloves', legend: 'goldheal' } },
     { id: 's_shadow', name: 'TIME OF SHADOWS', col: '#a07ad8', desc: 'MANY MONSTERS HIDE IN THE DARK. EVERY HERO HAS THE CANARY\'S EYE.', item: { name: 'NIGHTGLASS CLOAK', base: 'cloak', legend: 'frostdodge' } },
     { id: 's_depth', name: 'CALL OF THE DEEP', col: '#6fd6e8', desc: 'A LEGENDARY BEAST WAITS HALFWAY THROUGH EVERY TEN FLOORS.', item: { name: 'DEEPCALLER', base: 'greatsword', legend: 'triple' } },
     { id: 's_storm', name: 'STORM SEASON', col: '#ffe04a', desc: 'LIGHTNING STRIKES THE MINE. IT HURTS MONSTERS MOST.', item: { name: 'STORMCROWN', base: 'greathelm', legend: 'chaincrit' } },
@@ -98,7 +98,7 @@
   AH.spawnSeasonHeart = function (G, x, y) {
     const c = S.now(), cut = 1 - Math.min(0.5, S.shaft() / 2000);
     const def = { name: 'HEART OF ' + (c ? c.theme.name : 'ASH'), spr: 'heart', pal: {}, ai: 'spit', hp: 700, dmg: 55, spd: 0.3, xp: 1500, minion: 'HELL IMP', proj: c ? c.theme.col : '#ff8a2e' };
-    const e = new AH.Enemy(def, x, y, G.floorNo, { boss: true, hpMult: 5 * cut, scale: 2.3, players: G.players.length, legend: { abil: ['nova', 'spit3', 'summon', 'enrage'] }, name: def.name, noHide: true });
+    const e = new AH.Enemy(def, x, y, G.floorNo, { boss: true, hpMult: 5 * cut * (AH.SPA ? AH.SPA.HARD : 1), dmgMult: AH.SPA ? AH.SPA.HARD : 1, scale: 2.3, players: G.players.length, legend: { abil: ['nova', 'spit3', 'summon', 'enrage'] }, name: def.name, noHide: true });
     e.seasonHeart = true; e.title = 'THE SEASON\'S HEART'; e.aggro = true;
     G.enemies.push(e); return e;
   };
@@ -207,13 +207,13 @@
 
 AH.addI18n(`
 ASHEN WINTER|HIVER DE CENDRE|HAMVAS TÉL
-COLD CREEPS THROUGH THE MINE: YOUR FIRE BURNS TWICE AS HOT.|LE FROID ENVAHIT LA MINE : TON FEU BRÛLE DEUX FOIS PLUS FORT.|HIDEG KÚSZIK A BÁNYÁBAN: A TÜZED KÉTSZER OLYAN FORRÓ.
+COLD CREEPS THROUGH THE MINE: STAY NEAR THE FIRE. YOUR OWN FIRE BURNS HOTTER.|LE FROID ENVAHIT LA MINE : RESTE PRÈS DU FEU. TON PROPRE FEU BRÛLE PLUS FORT.|HIDEG KÚSZIK A BÁNYÁBAN: MARADJ A TŰZ KÖZELÉBEN. A SAJÁT TÜZED FORRÓBB.
 BLOOD MOON|LUNE DE SANG|VÉRHOLD
 MONSTERS ARE STRONGER, BUT DROP MORE TREASURE.|LES MONSTRES SONT PLUS FORTS, MAIS LAISSENT PLUS DE TRÉSORS.|A SZÖRNYEK ERŐSEBBEK, DE TÖBB KINCSET DOBNAK.
 SEASON OF BONES|SAISON DES OS|CSONTOK SZEZONJA
 SOME SLAIN MONSTERS RISE AND FIGHT FOR YOU.|CERTAINS MONSTRES TUÉS SE RELÈVENT ET COMBATTENT POUR TOI.|NÉHÁNY MEGÖLT SZÖRNY FELKEL ÉS NEKED HARCOL.
 GOLD RUSH|RUÉE VERS L'OR|ARANYLÁZ
-DOUBLE GOLD EVERYWHERE, BUT MONSTERS STEAL FROM YOU.|OR DOUBLÉ PARTOUT, MAIS LES MONSTRES TE VOLENT.|MINDENHOL DUPLA ARANY, DE A SZÖRNYEK LOPNAK TŐLED.
+MORE GOLD EVERYWHERE, BUT THIEVES AND HEAVY POCKETS.|PLUS D'OR PARTOUT, MAIS DES VOLEURS ET DES POCHES LOURDES.|MINDENHOL TÖBB ARANY, DE TOLVAJOK ÉS NEHÉZ ZSEBEK.
 TIME OF SHADOWS|TEMPS DES OMBRES|ÁRNYAK IDEJE
 MANY MONSTERS HIDE IN THE DARK. EVERY HERO HAS THE CANARY'S EYE.|BEAUCOUP DE MONSTRES SE CACHENT DANS LE NOIR. CHAQUE HÉROS A L'ŒIL DU CANARI.|SOK SZÖRNY BÚJIK MEG A SÖTÉTBEN. MINDEN HŐSNEK KANÁRISZEME VAN.
 CALL OF THE DEEP|APPEL DES PROFONDEURS|MÉLYSÉG HÍVÁSA

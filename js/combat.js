@@ -421,7 +421,7 @@ GP.dropItem = function (x, y, item, owner) {
 };
 GP.dropGold = function (x, y, n, owner) {
   if (AH.rule('dblgold')) n *= 2;
-  if (AH.rule('s_gold')) n *= 2;
+  if (AH.rule('s_gold')) n *= 1.5;
   this.drops.push({ id: AH.uid(), x, y, vx: AH.rand.range(-25, 25), vy: AH.rand.range(-20, 10), z: 0, vz: 40, gold: Math.max(1, Math.round(n)), owner, t: 0 });
 };
 GP.rollLoot = function (x, y, src, p) {

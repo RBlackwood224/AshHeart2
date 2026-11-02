@@ -51,7 +51,7 @@ AH.ruleStats = function (S, ch) {
   if (r('freeze')) S.freeze += 15;
   if (r('haste')) S.move += 25;
   if (r('thorns')) S.thorns += 6 + ch.level * 2;
-  if (r('s_winter')) { S.firePct += 60; S.fire += 4 + ch.level; }
+  if (r('s_winter')) { S.firePct += 30; S.fire += 2 + Math.round(ch.level / 2); }
 };
 // what the active rules do to a monster as it is made
 AH.ruleFoe = function (e) {

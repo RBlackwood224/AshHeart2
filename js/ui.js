@@ -341,7 +341,7 @@ U.nameInput = function (G, m, show) {
 };
 U.update.create = function (G, m, dt) {
   const n = U.nav(G, m, dt);
-  const clsKeys = AH.CLASS_KEYS, pets = ['canary', 'dog', 'rat'], NC = clsKeys.length;
+  const clsKeys = AH.CLASS_KEYS, pets = ['canary', 'dog', 'rat'], NC = clsKeys.length + 1; // the last card: a random hero
   if (m.skipA) { m.skipA = false; n.p.a = false; }
   if (m.skipB) { m.skipB = false; n.p.b = false; n.p.start = false; }
   if (m.step !== 1 || G.menu !== m) U.nameInput(G, m, false);
@@ -387,8 +387,11 @@ U.update.create = function (G, m, dt) {
     if (m.sel === 1 && (n.dx || n.p.a)) { m.hc = 1 - m.hc; AH.Audio.sfx('move'); }
     else if (SN && m.sel === 2 && (n.dx || n.p.a)) { m.seasonal = !m.seasonal; AH.Audio.sfx('move'); }
     else if (m.sel === rows - 1 && n.p.a) {
-      const ch = AH.newCharacter(clsKeys[m.cls], m.name || 'HERO', pets[m.pet], m.hc);
+      // the question-mark card: the dice pick any class but the priest
+      const rnd = m.cls >= clsKeys.length, cls = rnd ? AH.rand.pick(clsKeys.filter(k => !AH.CLASSES[k].coop)) : clsKeys[m.cls];
+      const ch = AH.newCharacter(cls, m.name || 'HERO', pets[m.pet], m.hc);
       if (SN && m.seasonal) ch.season = SN.n;
+      if (rnd) setTimeout(() => { if (AH.game) AH.game.banner('THE DICE HAVE SPOKEN!', AH.CLASSES[cls].color, AH.CLASSES[cls].name); AH.Audio.sfx('levelup'); }, 400);
       const slots = AH.Save.load();
       if (slots.length >= AH.Save.MAX) { G.toast(null, 'ALL SLOTS ARE FULL', '#ff8a8a'); return; }
       slots.push({ ch, world: AH.Save.newWorld() }); AH.Save.store(slots);
@@ -401,14 +404,14 @@ U.update.create = function (G, m, dt) {
     if (n.p.b || n.p.start) { m.step = 1; m.kbTyping = false; AH.Audio.sfx('back'); }
   }
 };
-U.CARD_W = 74; U.CARD_X = i => 6 + i * 79;
+U.CARD_W = 64; U.CARD_X = i => 4 + i * 68;
 U.draw.create = function (G, ctx, m) {
   U.bg(ctx, false);
   const clsKeys = AH.CLASS_KEYS;
   U.title(ctx, ['CHOOSE A CLASS', 'NAME YOUR HERO', 'COMPANION'][m.step], 14);
   if (!U.previews) U.previews = clsKeys.map(k => { const ch = AH.newCharacter(k, 'X', 'dog'); return new AH.Player(0, ch, null); });
   // cards grow with the longest description in the current language
-  const lines = Math.max(...clsKeys.map(k => AH.wrap(AH.CLASSES[k].desc, U.CARD_W - 8).length));
+  const lines = Math.max(AH.wrap('THE DICE PICK YOUR CLASS. ANY CLASS BUT THE PRIEST.', U.CARD_W - 8).length, ...clsKeys.map(k => AH.wrap(AH.CLASSES[k].desc, U.CARD_W - 8).length));
   const cardH = m.step >= 1 ? 68 : Math.max(162, 120 + lines * 10);
   clsKeys.forEach((k, i) => {
     const x = U.CARD_X(i), y = 44, on = i === m.cls, W = U.CARD_W, cx = x + W / 2;
@@ -422,6 +425,15 @@ U.draw.create = function (G, ctx, m) {
     if (m.step === 0) AH.wrap(AH.CLASSES[k].desc, W - 8).forEach((l, j) => AH.text(ctx, cx, y + 116 + j * 10, l, '#6f6880', { align: 'center' }));
     if (AH.CLASSES[k].coop && AH.coopStamp) AH.coopStamp(ctx, x + W - 37, y + 3);
   });
+  {
+    // the random hero
+    const i = clsKeys.length, x = U.CARD_X(i), y = 44, on = i === m.cls, W = U.CARD_W, cx = x + W / 2;
+    AH.frame(ctx, x, y, W, cardH, on ? { fill: '#211a28', edge: '#c9a24a', hi: '#f2e3b3' } : {});
+    const bob = on ? Math.round(Math.sin(G.time * 4) * 2) : 0;
+    AH.text(ctx, cx, (m.step >= 1 ? y + 14 : y + 34) + bob, '?', on ? '#ffb347' : '#6f6880', { align: 'center', scale: m.step >= 1 ? 4 : 7 });
+    AH.text(ctx, cx, m.step >= 1 ? y + 56 : y + 101, 'RANDOM', on ? '#ffb347' : '#8d8494', { align: 'center', maxW: W - 6 });
+    if (m.step === 0) AH.wrap('THE DICE PICK YOUR CLASS. ANY CLASS BUT THE PRIEST.', W - 8).forEach((l, j) => AH.text(ctx, cx, y + 116 + j * 10, l, '#6f6880', { align: 'center' }));
+  }
   if (m.step >= 1) {
     AH.frame(ctx, 40, 118, 400, 137, { fill: '#120e14', edge: '#c9a24a', hi: '#f2e3b3' });
     if (m.step === 1) {
