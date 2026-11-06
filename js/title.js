@@ -287,11 +287,11 @@
     TA.ash = TA.ash.filter(a => a.life > 0 && a.y < UH);
     TA.boltT -= dt;
     if (TA.boltT <= 0) {
-      TA.boltT = 4 + Math.random() * 6;
+      TA.boltT = 8 + Math.random() * 8;
       const pts = []; let bx = 40 + Math.random() * 400, by = 0;
       while (by < 120 + Math.random() * 40) { pts.push([bx, by]); bx += (Math.random() - 0.5) * 18; by += 4 + Math.random() * 8; }
       TA.bolt = { pts, life: 0.35 };
-      if (AH.Audio && AH.Audio.sfx) try { AH.Audio.sfx('thunder'); } catch (e) { }
+      if (AH.Audio && AH.Audio.sfx) try { AH.Audio.sfx('thunderSoft'); } catch (e) { }
     }
     if (TA.bolt) { TA.bolt.life -= dt; if (TA.bolt.life <= 0) TA.bolt = null; }
   };

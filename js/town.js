@@ -260,6 +260,22 @@
   U.init.resident = function (G, m) { m.sel = 0; m.r = AH.resDef(m.npc.res); m.st = G.resState(m.npc.res); m.say = U.resLine(G, m); };
   U.resTier = f => f >= 100 ? 3 : f >= 60 ? 2 : f >= 25 ? 1 : 0;
   U.resLine = (G, m) => m.r.lines[U.resTier(m.st.f)];
+  // every talk says something new: the weather, the town, the season, how deep you went, or a bit of gossip
+  U.CHATTER = ['HAVE YOU EATEN TODAY?', 'THE WELL WATER TASTES OF IRON LATELY.', 'MY KNEES TELL ME WINTER IS COMING.', 'DID YOU HEAR? THE TAVERN HAS NEW ALE.', 'COME BACK SAFE. THAT IS ALL I ASK.', 'SOME NIGHTS I HEAR DIGGING UNDER MY HOUSE.'];
+  U.WEATHER_TALK = { snow: 'SNOW AGAIN. MY BOOTS NEVER DRY.', rain: 'THIS RAIN WILL FLOOD THE LOWER SHAFTS.', fog: 'I CANNOT SEE MY OWN HANDS IN THIS FOG.', storm: 'HEAR THAT THUNDER? EVEN THE SKY IS ANGRY.', clear: 'A FINE DAY. ALMOST MAKES YOU FORGET THE MINE.' };
+  U.resTalk = function (G, m, n) {
+    const W = G.world, tier = U.resTier(m.st.f), k = n % 5;
+    if (k === 1) return U.resLine(G, m) + (W.trust < 35 ? ' ' + AH.tr('BUT I AM SCARED. MANY ARE LEAVING.') : '');
+    if (k === 2) return AH.tr(U.WEATHER_TALK[W.weather] || U.WEATHER_TALK.clear);
+    if (k === 3) {
+      const id = AH.seasonTheme && AH.seasonTheme(G);
+      if (id && AH.SEASON_PLAY[id]) return AH.tr(AH.SEASON_PLAY[id].say);
+      return AH.tr(W.trust < 35 ? 'PEOPLE WHISPER ABOUT LEAVING. GIVE THEM HOPE.' : W.trust > 70 ? 'THE TOWN FEELS ALIVE AGAIN. THANKS TO YOU.' : 'WE GET BY. ONE DAY AT A TIME.');
+    }
+    if (k === 4) { const d = m.p.ch.deepest || 0; if (d >= 5) return AH.tr('FLOOR ' + d + '? THAT IS DEEPER THAN MY GRANDFATHER EVER WENT.'); }
+    if (k === 0 && tier > 0) return AH.tr(m.r.lines[AH.rand.int(0, tier - 1)]);
+    return AH.tr(AH.rand.pick(U.CHATTER));
+  };
   U.resRows = function (G, m) {
     const st = m.st, t = st.task;
     return [{ id: 'talk', label: 'TALK' }, { id: 'gift', label: 'GIVE A GIFT', right: st.giftDay === G.world.day ? 'TOMORROW' : '' },
@@ -283,7 +299,7 @@
     }
     U.listUpdate(G, m, dt, U.resRows(G, m), it => {
       if (it.id === 'leave') { G.closeMenu(); G.saveAll(); return; }
-      if (it.id === 'talk') { if (!m.talked) { m.talked = 1; if (st.talkDay !== G.world.day) { st.talkDay = G.world.day; st.f = Math.min(100, st.f + 1); } } m.say = U.resLine(G, m) + (G.world.trust < 35 ? ' ' + AH.tr('BUT I AM SCARED. MANY ARE LEAVING.') : ''); return; }
+      if (it.id === 'talk') { if (!m.talked) { m.talked = 1; if (st.talkDay !== G.world.day) { st.talkDay = G.world.day; st.f = Math.min(100, st.f + 1); } } m.talkN = (m.talkN || 0) + 1; m.say = U.resTalk(G, m, m.talkN); AH.Audio.sfx('select'); return; }
       if (it.id === 'gift') { if (st.giftDay === G.world.day) { m.say = AH.tr('ONE GIFT A DAY IS PLENTY, DEAR.'); return; } m.mode = 'gift'; m.sel = 0; m.say = AH.tr('I LIKE') + ': ' + r.like.map(l => AH.tr(AH.CONSUMABLES[l] ? AH.CONSUMABLES[l].name : AH.GEMS[l.slice(2)] ? AH.GEMS[l.slice(2)].name : l)).join(', '); return; }
       if (it.id === 'task') {
         const t = st.task;
@@ -480,4 +496,22 @@ DONATE 1000 GOLD|DONNER 1000 OR|1000 ARANY ADOMÁNY
 TOWN|VILLE|VÁROS
 TASK|TÂCHE|FELADAT
 LIKES IT|AIME ÇA|SZERETI
+`);
+
+AH.addI18n(`
+HAVE YOU EATEN TODAY?|AS-TU MANGÉ AUJOURD'HUI ?|ETTÉL MA MÁR VALAMIT?
+THE WELL WATER TASTES OF IRON LATELY.|L'EAU DU PUITS A UN GOÛT DE FER CES TEMPS-CI.|A KÚT VIZE MOSTANÁBAN VASÍZŰ.
+MY KNEES TELL ME WINTER IS COMING.|MES GENOUX ME DISENT QUE L'HIVER ARRIVE.|A TÉRDEM SZERINT JÖN A TÉL.
+DID YOU HEAR? THE TAVERN HAS NEW ALE.|TU AS ENTENDU ? LA TAVERNE A UNE NOUVELLE BIÈRE.|HALLOTTAD? ÚJ SÖR VAN A KOCSMÁBAN.
+COME BACK SAFE. THAT IS ALL I ASK.|REVIENS SAIN ET SAUF. C'EST TOUT CE QUE JE DEMANDE.|GYERE VISSZA ÉPEN. CSAK ENNYIT KÉREK.
+SOME NIGHTS I HEAR DIGGING UNDER MY HOUSE.|CERTAINES NUITS, J'ENTENDS CREUSER SOUS MA MAISON.|NÉHA ÉJJEL ÁSÁST HALLOK A HÁZAM ALATT.
+SNOW AGAIN. MY BOOTS NEVER DRY.|ENCORE DE LA NEIGE. MES BOTTES NE SÈCHENT JAMAIS.|MEGINT HÓ. SOSEM SZÁRAD KI A CSIZMÁM.
+THIS RAIN WILL FLOOD THE LOWER SHAFTS.|CETTE PLUIE VA INONDER LES PUITS DU BAS.|EZ AZ ESŐ ELÁRASZTJA AZ ALSÓ TÁRNÁKAT.
+I CANNOT SEE MY OWN HANDS IN THIS FOG.|JE NE VOIS MÊME PAS MES MAINS DANS CE BROUILLARD.|EBBEN A KÖDBEN A SAJÁT KEZEMET SEM LÁTOM.
+HEAR THAT THUNDER? EVEN THE SKY IS ANGRY.|TU ENTENDS LE TONNERRE ? MÊME LE CIEL EST EN COLÈRE.|HALLOD A MENNYDÖRGÉST? MÉG AZ ÉG IS DÜHÖS.
+A FINE DAY. ALMOST MAKES YOU FORGET THE MINE.|UNE BELLE JOURNÉE. ON EN OUBLIERAIT PRESQUE LA MINE.|SZÉP NAP. SZINTE ELFELEJTI AZ EMBER A BÁNYÁT.
+PEOPLE WHISPER ABOUT LEAVING. GIVE THEM HOPE.|LES GENS PARLENT DE PARTIR. DONNE-LEUR DE L'ESPOIR.|AZ EMBEREK A KÖLTÖZÉSRŐL SUTTOGNAK. ADJ NEKIK REMÉNYT.
+THE TOWN FEELS ALIVE AGAIN. THANKS TO YOU.|LA VILLE REVIT ENFIN. GRÂCE À TOI.|A VÁROS ÚJRA ÉL. MIATTAD.
+WE GET BY. ONE DAY AT A TIME.|ON S'EN SORT. UN JOUR APRÈS L'AUTRE.|ELVAGYUNK. NAPRÓL NAPRA.
+FLOOR {0}? THAT IS DEEPER THAN MY GRANDFATHER EVER WENT.|L'ÉTAGE {0} ? C'EST PLUS PROFOND QUE MON GRAND-PÈRE N'EST JAMAIS ALLÉ.|A(Z) {0}. SZINT? MÉLYEBBEN JÁRTÁL, MINT A NAGYAPÁM VALAHA.
 `);

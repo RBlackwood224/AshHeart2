@@ -75,6 +75,7 @@ AH.Audio = (function () {
       case 'block': tone('square', 900, 700, 0.06, 0.1); noise(0.04, 0.1, 3000); break;
       case 'warn': tone('square', 220, 0, 0.3, 0.1); tone('square', 208, 0, 0.3, 0.1, 0.32); break;
       case 'thunder': noise(1.2, 0.3, 80); break;
+      case 'thunderSoft': noise(0.9, 0.09, 140); break; // far away, behind the title screen
       case 'dig': noise(0.08, 0.15, 500); noise(0.08, 0.15, 500, 0.14); break;
       case 'pick': tone('square', 1900, 1500, 0.05, 0.08); tone('triangle', 2600, 2200, 0.08, 0.05, 0.01); noise(0.06, 0.12, 900); break;
       case 'crumble': noise(0.45, 0.28, 260); noise(0.25, 0.15, 900, 0.12); tone('triangle', 90, 40, 0.35, 0.1); break;

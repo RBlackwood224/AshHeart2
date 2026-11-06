@@ -499,7 +499,8 @@ P.update = function (G, dt, pad) {
   // actions
   const inter = G.findInteract(this);
   this.interactable = inter;
-  if (pad.pressed('a')) {
+  // the button that closed a menu must not open it again (or swing) in the same moment
+  if (pad.pressed('a') && !(performance.now() - (G.menuClosedAt || -1e9) < 250)) {
     if (inter && this.state !== 'attack') { G.interact(this, inter); }
     else this.tryAttack(G);
   }

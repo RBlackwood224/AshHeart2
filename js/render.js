@@ -474,16 +474,23 @@ R.applyLightFancy = function (G, v, amb) {
 // glow: bright pixels bleed light (tiny canvases scaled up smoothly). Drawn into the world picture, not the big screen,
 // so the browser has only one large picture to scale each frame
 R.bloom = function (sctx, world, view) {
-  if (!this.bl) { const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }; this.bl = { a: AH.makeCanvas(80, 45, true), b: mk(40, 23), c: mk(20, 12), vg: null }; }
+  if (!this.bl) { const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }; this.bl = { a: AH.makeCanvas(80, 45, true), b: mk(40, 23), c: mk(20, 12), h1: mk(320, 180), h2: mk(160, 90), vg: null }; }
   const B = this.bl, a = B.a.getContext('2d'), b = B.b.getContext('2d'), c = B.c.getContext('2d');
-  a.globalCompositeOperation = 'copy'; a.imageSmoothingEnabled = true; a.drawImage(world, 0, 0, 80, 45);
+  // shrink in halves so every pixel is averaged: tiny bright dots (snow, sparks) then cannot make the glow jump around
+  let src = world;
+  for (const h of [B.h1, B.h2]) { if (src.width <= h.width) continue; const x = h.getContext('2d'); x.globalCompositeOperation = 'copy'; x.imageSmoothingEnabled = true; x.drawImage(src, 0, 0, h.width, h.height); src = h; }
+  a.globalCompositeOperation = 'copy'; a.imageSmoothingEnabled = true; a.drawImage(src, 0, 0, 80, 45);
   // only the bright parts glow (done by hand on 80x45 pixels: canvas filters are slow in some browsers)
   const id = a.getImageData(0, 0, 80, 45), d = id.data;
   for (let i = 0; i < d.length; i += 4) {
-    let r = (d[i] * 0.6 / 255 - 0.5) * 4 + 0.5, g = (d[i + 1] * 0.6 / 255 - 0.5) * 4 + 0.5, b = (d[i + 2] * 0.6 / 255 - 0.5) * 4 + 0.5;
+    let r = (d[i] * 0.75 / 255 - 0.5) * 4 + 0.5, g = (d[i + 1] * 0.75 / 255 - 0.5) * 4 + 0.5, b = (d[i + 2] * 0.75 / 255 - 0.5) * 4 + 0.5;
     r = r < 0 ? 0 : r > 1 ? 1 : r; g = g < 0 ? 0 : g > 1 ? 1 : g; b = b < 0 ? 0 : b > 1 ? 1 : b;
     const l = r * 0.2126 + g * 0.7152 + b * 0.0722;
-    d[i] = Math.max(0, Math.min(255, (l + (r - l) * 1.5) * 255)); d[i + 1] = Math.max(0, Math.min(255, (l + (g - l) * 1.5) * 255)); d[i + 2] = Math.max(0, Math.min(255, (l + (b - l) * 1.5) * 255));
+    // coloured light glows (fire, spells, crystals); pale white and grey (snow, stone) hardly at all
+    const mx = Math.max(d[i], d[i + 1], d[i + 2]), mn = Math.min(d[i], d[i + 1], d[i + 2]), sat = mx > 0 ? (mx - mn) / mx : 0;
+    const k = sat < 0.15 ? 0.2 : sat < 0.4 ? 0.2 + (sat - 0.15) * 3.2 : 1;
+    r *= k; g *= k; b *= k;
+    d[i] = Math.max(0, Math.min(255, (l * k + (r - l * k) * 1.5) * 255)); d[i + 1] = Math.max(0, Math.min(255, (l * k + (g - l * k) * 1.5) * 255)); d[i + 2] = Math.max(0, Math.min(255, (l * k + (b - l * k) * 1.5) * 255));
   }
   a.putImageData(id, 0, 0);
   b.globalCompositeOperation = 'copy'; b.imageSmoothingEnabled = true; b.drawImage(B.a, 0, 0, 40, 23);

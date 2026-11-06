@@ -11,8 +11,8 @@ GG.openMenu = function (type, p, data) {
   this.menu = m;
   AH.Audio.sfx('select');
 };
-GG.closeMenu = function () { this.menu = this.menus.pop() || null; AH.Audio.sfx('back'); };
-GG.closeAllMenus = function () { this.menu = null; this.menus = []; };
+GG.closeMenu = function () { this.menu = this.menus.pop() || null; AH.Audio.sfx('back'); if (!this.menu) this.menuClosedAt = performance.now(); };
+GG.closeAllMenus = function () { this.menu = null; this.menus = []; this.menuClosedAt = performance.now(); };
 
 U.init = {};
 U.update = {};

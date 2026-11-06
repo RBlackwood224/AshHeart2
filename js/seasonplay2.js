@@ -204,7 +204,7 @@
       for (let y = y0; y < v.camY + v.h; y += 2) for (let x = x0; x < v.camX + v.w; x += 2) {
         const tl = m.get(Math.floor(x / T), Math.floor(y / T)); if (tl !== AH.TILE.GRASS && tl !== AH.TILE.ROAD) continue;
         const h = ((x * 73856093) ^ (y * 19349663)) >>> 0;
-        if (h % 7 < (tl === AH.TILE.ROAD ? 1 : 3)) { ctx.fillStyle = h % 3 ? '#e8f0ff' : '#c8d8ec'; ctx.fillRect(x, y, h % 5 ? 1 : 2, 1); }
+        if (h % 9 < (tl === AH.TILE.ROAD ? 1 : 2)) { ctx.fillStyle = h % 3 ? '#e8f0ff' : '#c8d8ec'; ctx.fillRect(x, y, h % 5 ? 1 : 2, 1); }
       }
     }
     if (id === 's_depth' && m.board) {
