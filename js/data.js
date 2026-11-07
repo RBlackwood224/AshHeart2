@@ -262,7 +262,7 @@ AH.EVENTS = [
   { id: 'merchant', name: 'WANDERING MERCHANT', msg: 'A MERCHANT HAS SET UP SHOP DOWN HERE.', w: 6 },
   { id: 'shrine', name: 'ANCIENT SHRINE', msg: 'AN OLD SHRINE HUMS WITH POWER.', w: 8 },
   { id: 'ambush', name: 'AMBUSH', msg: 'YOU ARE SURROUNDED!', w: 7 },
-  { id: 'collapse', name: 'COLLAPSE', msg: 'THE CEILING IS COMING DOWN! REACH THE STAIRS!', w: 5 },
+  { id: 'collapse', name: 'COLLAPSE', msg: 'THE CEILING IS COMING DOWN! REACH THE STAIRS!', w: 10 },
   { id: 'vault', name: 'TREASURE VAULT', msg: 'A VAULT FULL OF CHESTS. SOME MAY BITE.', w: 6 },
   { id: 'gas', name: 'FOUL AIR', msg: 'POISON GAS SEEPS FROM THE CRACKS.', w: 5 },
   { id: 'horde', name: 'HORDE', msg: 'THE FLOOR IS CRAWLING WITH THEM.', w: 6 },

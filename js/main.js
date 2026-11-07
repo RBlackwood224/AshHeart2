@@ -2,7 +2,7 @@
 // Boot, main loop, scaling, device handling, saving
 (function () {
   // all game files must come from the same version: a half-updated browser cache breaks menus silently
-  const parts = { util: AH.px, data: AH.usesRage, input: AH.Input && AH.Input.label, items: AH.CONS_CAP, player: AH.autoTargetOn, ui: AH.UI && AH.UI.optRows, i18n2: AH.I18N && AH.I18N.hu && AH.I18N.hu['YOUR MANA IS FULL'], rules: AH.RULES, qr: AH.QR, extras: AH.heroCode, weekly: AH.Weekly, season: AH.Season, board: AH.Board, craft: AH.GEMS, priest: AH.SKILLS && AH.SKILLS.healray, town: AH.RESIDENTS, secrets: AH.SPR && AH.SPR.sheep, seasonplay: AH.SEASON_PLAY, seasonplay2: AH.sigIcon };
+  const parts = { util: AH.px, data: AH.usesRage, input: AH.Input && AH.Input.label, items: AH.CONS_CAP, player: AH.autoTargetOn, ui: AH.UI && AH.UI.optRows, i18n2: AH.I18N && AH.I18N.hu && AH.I18N.hu['YOUR MANA IS FULL'], rules: AH.RULES, qr: AH.QR, extras: AH.heroCode, weekly: AH.Weekly, season: AH.Season, board: AH.Board, craft: AH.GEMS, priest: AH.SKILLS && AH.SKILLS.healray, town: AH.RESIDENTS, secrets: AH.SPR && AH.SPR.sheep, seasonplay: AH.SEASON_PLAY, seasonplay2: AH.sigIcon, cleanse: AH.Game.prototype.judgeFloor };
   const stale = Object.keys(parts).filter(k => !parts[k]);
   if (stale.length) {
     const d = document.createElement('div');

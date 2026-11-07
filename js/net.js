@@ -336,7 +336,7 @@ GG.guestUpdate = function (dt) {
   if (this.scene === 'mine') this.checkBossIntro(dt);
   this.dt = dt;
   for (const t of this.toasts) t.t -= dt; this.toasts = this.toasts.filter(t => t.t > 0);
-  for (const b of this.banners) b.t -= dt; this.banners = this.banners.filter(b => b.t > 0);
+  for (const b of this.banners.slice(0, 2)) b.t -= dt; this.banners = this.banners.filter(b => b.t > 0);
   if (this.shakeT > 0) { this.shakeT -= dt; if (this.shakeT <= 0) this.shakeA = 0; }
   this.time += dt;
   // interpolate

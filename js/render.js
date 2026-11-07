@@ -900,7 +900,12 @@ R.drawGlobalHud = function (G, views) {
     if (G.mode === 'time') AH.text(ctx, fx, 22, AH.fmtTime(G.runTimer || 0), '#f2e3b3', { align: 'center' });
     if (G.mode === 'weekly' && AH.weeklyHud) AH.weeklyHud(this, G, ctx, RW);
     if (AH.pulseHud) AH.pulseHud(G, ctx, RW, RH);
-    if (G.event === 'collapse' && G.collapseT > 0) AH.text(ctx, fx, 22, 'COLLAPSE ' + Math.ceil(G.collapseT), '#ff8a8a', { align: 'center' });
+    // the floor's event stays on screen the whole floor, and how much of the floor you have cleared
+    if (views.length === 1) {
+      let ey = AH.diffNow() !== AH.DIFFS[0] || G.mode === 'time' ? 31 : 22;
+      if (G.event) { const ev = AH.EVENTS.find(x => x.id === G.event); if (ev) { const col = G.event === 'collapse' ? '#ff8a8a' : ['merchant', 'shrine', 'vault', 'goldrat'].indexOf(G.event) >= 0 ? '#8ae08e' : '#f2d36a'; AH.text(ctx, fx, ey, G.event === 'collapse' && G.collapseT > 0 ? 'COLLAPSE ' + Math.ceil(G.collapseT) : ev.name, col, { align: 'center' }); ey += 9; } }
+      if (G.clearTotal > 0 && !G.isRun()) { const pc = Math.min(100, Math.floor(100 * G.clearKills / G.clearTotal)); AH.text(ctx, fx, ey, 'CLEARED ' + pc + '%', pc >= 100 ? '#f2c94c' : pc >= 80 ? '#8ae08e' : pc < 30 ? '#c86a6a' : '#a39bb0', { align: 'center' }); }
+    } else if (G.event === 'collapse' && G.collapseT > 0) AH.text(ctx, fx, 22, 'COLLAPSE ' + Math.ceil(G.collapseT), '#ff8a8a', { align: 'center' });
     // quest tracker under the minimap
     if (views.length === 1 && G.activeQuests) {
       let ty = 64;
@@ -948,7 +953,7 @@ R.drawGlobalHud = function (G, views) {
   if (p0 && views.length === 1) { AH.coinIcon(ctx, 3, RH - 9); AH.text(ctx, 10, RH - 10, '' + p0.ch.gold, '#f2c94c'); }
   // banners
   let by = 46;
-  for (const b of G.banners) {
+  for (const b of G.banners.slice(0, 2)) {
     if (b.t < 0.4 && Math.floor(b.t * 20) % 2) { by += 22; continue; }
     const lines = AH.wrap(b.sub, 280);
     const w = Math.max(AH.textW(b.msg), ...lines.map(l => AH.textW(l))) + 16, h = 14 + lines.length * 9;

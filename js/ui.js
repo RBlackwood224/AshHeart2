@@ -1381,6 +1381,18 @@ U.update.stash = function (G, m, dt) {
   if (n.p.a) {
     const from = m.side ? st : ch.bag, to = m.side ? ch.bag : st;
     const it = from[m.i]; if (!it) return;
+    // potions taken from the stash obey the same carry limit as everywhere else
+    if (m.side && it.kind === 'cons' && AH.CONS_CAP[it.cons]) {
+      const room = AH.CONS_CAP[it.cons] - m.p.countCons(it.cons);
+      if (room <= 0) { G.toast(m.p, AH.capMsg(it.cons), '#ff8a8a'); AH.Audio.sfx('error'); return; }
+      if (it.stack > room) {
+        const part = Object.assign({}, it, { id: AH.uid(), stack: room });
+        if (!m.p.addItem(part)) { G.toast(m.p, 'NO ROOM', '#ff8a8a'); return; }
+        it.stack -= room; AH.Audio.sfx('pickup'); G.toast(m.p, AH.capMsg(it.cons), '#f2c94c'); return;
+      }
+      if (!m.p.addItem(it)) { G.toast(m.p, 'NO ROOM', '#ff8a8a'); return; }
+      from[m.i] = null; AH.Audio.sfx('pickup'); return;
+    }
     const j = to.indexOf(null); if (j < 0) { G.toast(m.p, 'NO ROOM', '#ff8a8a'); return; }
     to[j] = it; from[m.i] = null; AH.Audio.sfx('pickup');
   }

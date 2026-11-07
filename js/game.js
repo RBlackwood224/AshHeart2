@@ -18,7 +18,8 @@ GG.toast = function (p, msg, col) {
   if (this.toasts.length > 12) this.toasts.shift();
   if (p && p.remote && this.netToast) this.netToast(p, msg, col);
 };
-GG.banner = function (msg, col, sub) { this.banners.push({ msg, col: col || '#f2c94c', sub: sub || '', t: 3.2 }); if (this.banners.length > 2) this.banners.shift(); if (this.netBanner) this.netBanner(msg, col, sub); };
+// banners queue up: two show at a time, the rest wait their turn instead of being thrown away
+GG.banner = function (msg, col, sub) { if (this.banners.some(b => b.msg === msg && b.sub === (sub || ''))) return; this.banners.push({ msg, col: col || '#f2c94c', sub: sub || '', t: 3.2 }); if (this.banners.length > 8) this.banners.splice(2, 1); if (this.netBanner) this.netBanner(msg, col, sub); };
 GG.shake = function (n) { if (AH.options && !AH.options.shake) return; this.shakeA = Math.max(this.shakeA, n); this.shakeT = 0.18; };
 GG.moveEntity = function (e, dx, dy, r, noclip) {
   const m = this.map; if (!m) return;
@@ -151,7 +152,7 @@ GG.enterMine = function (floor, mode) {
   const rng = AH.mulberry(seed);
   const isBoss = floor % 10 === 0;
   this.event = null;
-  if (!isBoss && floor > 3 && rng() < 0.3) this.event = rng.weighted(AH.EVENTS, 'w').id;
+  if (!isBoss && floor > 3 && rng() < 0.4) this.event = rng.weighted(AH.EVENTS, 'w').id;
   if (this.netEventSeed) this.netEventSeed(seed, floor, this.event);
   this.map = AH.genFloor(seed, floor, this.event);
   AH.renderMap(this.map);
@@ -233,7 +234,7 @@ GG.nextFloor = function () {
 GG.leaveMine = function (why) {
   if (why !== 'death') {
     const W = this.world;
-    for (const p of this.players) if (p.ch.deepest > (p.ch.lastTrustDepth || 0)) { const gain = Math.min(10, Math.floor((p.ch.deepest - (p.ch.lastTrustDepth || 0)) / 3) + 1); p.ch.lastTrustDepth = p.ch.deepest; this.changeTrust(gain, 'DUNMERE TAKES HEART'); }
+    for (const p of this.players) if (p.ch.deepest > (p.ch.lastTrustDepth || 0)) { const gain = Math.min(5, Math.floor((p.ch.deepest - (p.ch.lastTrustDepth || 0)) / 6) + 1); p.ch.lastTrustDepth = p.ch.deepest; this.changeTrust(gain, 'DUNMERE TAKES HEART'); }
   }
   this.enterTown(why === 'death' ? 'death' : 'return');
 };
@@ -607,7 +608,7 @@ GG.update = function (dt) {
   this.dt = dt; this.time += dt;
   if (this.shakeT > 0) { this.shakeT -= dt; if (this.shakeT <= 0) this.shakeA = 0; }
   for (const t of this.toasts) t.t -= dt; this.toasts = this.toasts.filter(t => t.t > 0);
-  for (const b of this.banners) b.t -= dt; this.banners = this.banners.filter(b => b.t > 0);
+  for (const b of this.banners.slice(0, 2)) b.t -= dt; this.banners = this.banners.filter(b => b.t > 0);
   if (this.scene === 'title') return;
   const menuPause = this.menu && !this.net;
   this.paused = !!menuPause;

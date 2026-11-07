@@ -11,7 +11,7 @@ AH.HEADS = {
   crown: ["...g.g.g......", "...ggggggg....", "...grgggrg....", "...hffffh.....", "...fefeFf.....", "...fFffFf.....", "....ffff......"],
   bare: ["..............", "....hhhh......", "...hhhhhh.....", "...hffffh.....", "...fefeFf.....", "...fFffFf.....", "....ffff......"],
   wild: ["....hh.h......", "...hhhhhh.....", "..hhhhhhhh....", "..hhffffhh....", "..hfefeFfh....", "...xffffx.....", "....xxxx......"],
-  horned: ["..o......o....", "..oo.WWW.oo...", "...oWWWWwo....", "...WWwwwwk....", "...WfefeFk....", "...xffffFk....", "....xxxx......"],
+  horned: ["..o......o....", "..oo.WWW.oo...", "...oWWWWwo....", "...WWwwwwk....", "...WfefeFk....", "...yffffFk....", "....yyyy......"],
   beard: [".......q......", "......qU......", ".....qUuu.....", "....qUUuuu....", "..qqUUUuuuuq..", "...qfefeFF....", "...xxxxxxX...."],
 };
 AH.TORSOS = {

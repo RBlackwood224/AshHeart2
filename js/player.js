@@ -124,7 +124,8 @@ P.buildLook = function () {
   if (head) {
     const b = AH.ARMORS[head.base]; look.head = b.look;
     if (b.look === 'hat' && ch.cls === 'wizard') look.head = 'beard';
-    const mat = AH.MATERIALS[head.tier].metal;
+    // plain copper is almost skin coloured: a darker, redder copper with a dark rim reads as a helmet
+    const mat = head.tier === 0 ? ['#c06a34', '#8e4a1e', '#4e2610'] : AH.MATERIALS[head.tier].metal;
     if (b.look === 'helm' || b.look === 'greathelm' || b.look === 'horned') {
       pal.W = mat[0]; pal.w = mat[1]; pal.k = mat[2]; pal.K = AH.shade(mat[2], 0.7);
       const plume = { necro: '#3a5a34', wizard: '#3d4fa8', rogue: '#4a5a3a', barb: '#7a3a22' }[ch.cls];
@@ -132,6 +133,8 @@ P.buildLook = function () {
       if (ch.cls === 'necro') { pal.v = '#0a0a0e'; look.emissive = 'e'; } // green eyes glow behind the visor
       if (head.rarity) { pal.p = rarCol(head.rarity); pal.P = AH.shade(pal.p, 0.6); }
     }
+    // horns and beard of the horned helm on every class (only the barbarian palette had them)
+    if (b.look === 'horned') { pal.o = '#e8dcc0'; pal.y = ch.cls === 'barb' ? pal.x : AH.shade(pal.h || '#6a3a20', 0.9); }
     if (b.look === 'hood') { const hc = head.rarity ? rarCol(head.rarity) : AH.CLASS_PAL[ch.cls === 'necro' ? 'necro' : 'rogue'].h; pal.h = hc; pal.H = AH.shade(hc, 0.6); }
     if (b.look === 'hat') { const hc = head.rarity ? rarCol(head.rarity) : AH.CLASS_PAL.wizard.U; pal.U = hc; pal.u = AH.shade(hc, 1.3); pal.q = AH.shade(hc, 0.6); }
     if (head.rarity === 4) look.head = 'crown';
